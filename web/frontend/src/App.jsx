@@ -1,6 +1,8 @@
-import React from 'react'
-import { Navigate, Route, Routes, Link, useLocation } from 'react-router-dom'
+import React, { createContext, useContext, useState, useEffect } from 'react'
+import { Navigate, Route, Routes, Link, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth.jsx'
+import { ToastProvider, useToast } from './context/ToastContext.jsx'
+
 import LoginPage from './pages/LoginPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import EventsPage from './pages/EventsPage.jsx'
@@ -8,47 +10,111 @@ import ClaimsPage from './pages/ClaimsPage.jsx'
 import RewardsPage from './pages/RewardsPage.jsx'
 import AdminPage from './pages/AdminPage.jsx'
 
+// Prototype Styles
+import './styles/base.css'
+import './styles/style.css'
+import './styles/components.css'
+
 function Layout({ children }) {
   const { user, logout } = useAuth()
   const loc = useLocation()
+  const nav = useNavigate()
+
+  if (!user) return <>{children}</>
+
+  const isAdmin = user.role === 'admin'
+  const isVerifier = user.role === 'verifier'
 
   return (
-    <div>
-      <nav className="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div className="container-fluid">
-          <span className="navbar-brand">ULSA Green Credit (Demo)</span>
-          {user && (
-            <>
-              <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
-                <span className="navbar-toggler-icon"></span>
+    <div className="bg-surface text-on-surface min-h-screen font-body">
+      
+      {/* Student/Verifier Topnav (1:1 Prototype HTML) */}
+      {user.role === 'student' && (
+        <header id="studentNav" className="w-full py-5 bg-[#f3fcef] shadow-[0_8px_32px_rgba(22,29,22,0.06)] sticky top-0 z-50 glass-header">
+          <nav className="flex justify-between items-center px-8 lg:px-12 max-w-[1600px] mx-auto w-full">
+            <div className="flex items-center gap-3 cursor-pointer" onClick={() => nav('/dashboard')}>
+              <div className="w-8 h-8 rounded-full editorial-gradient flex items-center justify-center">
+                <span className="material-symbols-outlined text-white text-base">eco</span>
+              </div>
+              <span className="text-xl font-black tracking-tight text-primary font-headline">ULSA Green Credit</span>
+            </div>
+
+            <div className="hidden md:flex items-center gap-6 font-headline text-sm tracking-wide font-medium">
+              <Link className={"nav-link px-3 py-1 " + (loc.pathname === '/dashboard' ? 'active' : 'text-[#161d16]/60')} to="/dashboard">Dashboard</Link>
+              <Link className={"nav-link px-3 py-1 " + (loc.pathname === '/events' ? 'active' : 'text-[#161d16]/60')} to="/events">Hoạt động</Link>
+              <Link className={"nav-link px-3 py-1 " + (loc.pathname === '/claims' ? 'active' : 'text-[#161d16]/60')} to="/claims">Ghi nhận</Link>
+              <Link className={"nav-link px-3 py-1 " + (loc.pathname === '/rewards' ? 'active' : 'text-[#161d16]/60')} to="/rewards">Đổi ưu đãi</Link>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium text-on-surface-variant hidden md:block">{user.full_name || 'Sinh viên'}</span>
+              <button onClick={logout} className="text-sm font-semibold text-on-surface-variant hover:text-error transition-colors">
+                <span className="material-symbols-outlined text-lg align-middle">logout</span>
               </button>
-              <div className="collapse navbar-collapse" id="nav">
-                <ul className="navbar-nav me-auto mb-2 mb-lg-0">
-                  <li className="nav-item"><Link className={"nav-link" + (loc.pathname==='/dashboard'?' active':'')} to="/dashboard">Dashboard</Link></li>
-                  <li className="nav-item"><Link className={"nav-link" + (loc.pathname==='/events'?' active':'')} to="/events">Hoạt động</Link></li>
-                  <li className="nav-item"><Link className={"nav-link" + (loc.pathname==='/claims'?' active':'')} to="/claims">Ghi nhận</Link></li>
-                  <li className="nav-item"><Link className={"nav-link" + (loc.pathname==='/rewards'?' active':'')} to="/rewards">Đổi ưu đãi</Link></li>
-                  {user.role === 'admin' && (
-                    <li className="nav-item"><Link className={"nav-link" + (loc.pathname==='/admin'?' active':'')} to="/admin">Admin</Link></li>
-                  )}
-                </ul>
-                <div className="d-flex align-items-center gap-3">
-                  <span className="text-light small">
-                    {user.full_name} ({user.role})
-                  </span>
-                  <button className="btn btn-outline-light btn-sm" onClick={logout}>Đăng xuất</button>
+            </div>
+          </nav>
+        </header>
+      )}
+
+      {/* Admin/Verifier Sidebar (1:1 Prototype HTML) */}
+      {user.role !== 'student' && (
+        <aside id="adminSidebar" className="fixed left-0 top-0 h-screen w-72 bg-white border-r border-outline-variant/20 z-[60] py-8 px-6 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+          <div className="flex items-center gap-3 mb-12 px-2">
+            <div className="w-9 h-9 rounded-xl bg-inverse-surface flex items-center justify-center">
+              <span className="material-symbols-outlined text-white text-xl">admin_panel_settings</span>
+            </div>
+            <span className="text-lg font-black tracking-tight text-inverse-surface font-headline leading-tight">ULSA <span className="text-primary">{isAdmin ? 'Admin' : 'Verifier'}</span></span>
+          </div>
+
+          <nav className="flex-grow space-y-2">
+            <Link className={"sidebar-link " + (loc.pathname === '/dashboard' ? 'active' : '')} to="/dashboard">
+              <span className="material-symbols-outlined">dashboard</span> Dashboard
+            </Link>
+            <Link className={"sidebar-link " + (loc.pathname === '/events' ? 'active' : '')} to="/events">
+              <span className="material-symbols-outlined">event_note</span> Quản lý Hoạt động
+            </Link>
+            <Link className={"sidebar-link " + (loc.pathname === '/claims' ? 'active' : '')} to="/claims">
+              <span className="material-symbols-outlined">verified</span> Phê duyệt Claims
+            </Link>
+            <Link className={"sidebar-link " + (loc.pathname === '/rewards' ? 'active' : '')} to="/rewards">
+              <span className="material-symbols-outlined">redeem</span> Ưu đãi &amp; Quà tặng
+            </Link>
+            {isAdmin && (
+              <Link className={"sidebar-link " + (loc.pathname === '/admin' ? 'active' : '')} to="/admin">
+                <span className="material-symbols-outlined">settings_suggest</span> Hệ thống Stats
+              </Link>
+            )}
+          </nav>
+
+          <div className="mt-auto pt-8 border-t border-outline-variant/10">
+            <div className="bg-surface-container rounded-2xl p-4 mb-6">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-8 h-8 rounded-full editorial-gradient flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white text-base">person</span>
+                </div>
+                <div className="overflow-hidden">
+                  <p className="text-xs font-bold text-on-surface truncate">{user.full_name}</p>
+                  <p className="text-[10px] text-on-surface-variant truncate opacity-70">{user.role?.toUpperCase()}</p>
                 </div>
               </div>
-            </>
-          )}
-        </div>
-      </nav>
-      <div className="container my-4">
+            </div>
+            <button onClick={logout} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-outline-variant/30 text-sm font-bold text-on-surface-variant hover:bg-error/5 hover:border-error/20 hover:text-error transition-all">
+              <span className="material-symbols-outlined text-lg">logout</span> Đăng xuất
+            </button>
+          </div>
+        </aside>
+      )}
+
+      <div className={"transition-all duration-300 " + (user.role !== 'student' ? "pl-72" : "")}>
         {children}
+        
+        <footer className="mt-10 py-8 text-center border-t border-outline-variant/10">
+          <p className="text-on-surface-variant/50 text-[11px] leading-relaxed">
+            © 2024 ULSA Green Credit. Phát triển bởi Ban Công nghệ Thông tin.<br/>
+            Demo chạy local: Web (3000) • API (8080) • Hardhat RPC (8545)
+          </p>
+        </footer>
       </div>
-      <footer className="container my-5 text-muted small">
-        Demo chạy local: Web (3000) • API (8080) • Hardhat RPC (8545) • Postgres (5432)
-      </footer>
     </div>
   )
 }
@@ -62,18 +128,20 @@ function RequireAuth({ children }) {
 export default function App() {
   return (
     <AuthProvider>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
-          <Route path="/events" element={<RequireAuth><EventsPage /></RequireAuth>} />
-          <Route path="/claims" element={<RequireAuth><ClaimsPage /></RequireAuth>} />
-          <Route path="/rewards" element={<RequireAuth><RewardsPage /></RequireAuth>} />
-          <Route path="/admin" element={<RequireAuth><AdminPage /></RequireAuth>} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </Layout>
+      <ToastProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
+            <Route path="/events" element={<RequireAuth><EventsPage /></RequireAuth>} />
+            <Route path="/claims" element={<RequireAuth><ClaimsPage /></RequireAuth>} />
+            <Route path="/rewards" element={<RequireAuth><RewardsPage /></RequireAuth>} />
+            <Route path="/admin" element={<RequireAuth><AdminPage /></RequireAuth>} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </Layout>
+      </ToastProvider>
     </AuthProvider>
   )
 }
