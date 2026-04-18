@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:16
+    container_name: ugc_db
+    environment:
+      POSTGRES_USER: ugc
+      POSTGRES_PASSWORD: ugc
+      POSTGRES_DB: ugc
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ugc -d ugc"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  blockchain:
+    build:
+      context: ./blockchain
+    container_name: ugc_blockchain
+    environment:
+      MNEMONIC: "test test test test test test test test test test test junk"
+    # Không dùng volumes cho blockchain để tránh lỗi đồng bộ file từ Mac
+    ports:
+      - "8545:8545"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8545 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    container_name: ugc_backend
+    environment:
+      PORT: "8080"
+      DATABASE_URL: "postgres://ugc:ugc@db:5432/ugc"
+      JWT_SECRET: "change-me-in-production"
+      MNEMONIC: "test test test test test test test test test test test junk"
+      RPC_URL: "http://blockchain:8545"
+      CONTRACTS_PATH: "/app/shared/contracts.json"
+      UPLOAD_DIR: "/app/uploads"
+      CORS_ORIGIN: "http://localhost:3000"
+    volumes:
+      - ./shared:/app/shared:ro
+      - uploads_data:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      blockchain:
+        condition: service_started
+
+  web:
+    build:
+      context: ./web
+    container_name: ugc_web
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
+  uploads_data:

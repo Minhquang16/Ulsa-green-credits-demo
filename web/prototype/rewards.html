@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Đổi ưu đãi — ULSA Green Credit</title>
+  <meta name="description" content="Đổi tín chỉ xanh lấy các phần thưởng độc quyền."/>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+  <link rel="stylesheet" href="css/base.css"/>
+  <link rel="stylesheet" href="css/components.css"/>
+  <link rel="stylesheet" href="css/rewards.css"/>
+</head>
+<body>
+
+<header class="topnav" id="topnav">
+  <div class="topnav__inner">
+    <a class="topnav__brand" href="dashboard.html">
+      <div class="topnav__logo"><span class="material-symbols-outlined">eco</span></div>
+      <span class="topnav__brand-name">ULSA Green Credit</span>
+    </a>
+    <nav class="topnav__links">
+      <a class="topnav__link" href="dashboard.html">Dashboard</a>
+      <a class="topnav__link" href="events.html">Hoạt động</a>
+      <a class="topnav__link" href="claims.html">Ghi nhận</a>
+      <a class="topnav__link topnav__link--active" href="rewards.html">Đổi ưu đãi</a>
+    </nav>
+    <div class="topnav__actions">
+      <span class="topnav__username" data-user-name>Sinh viên</span>
+      <button class="topnav__logout-btn" onclick="logout()" type="button">
+        <span class="material-symbols-outlined">logout</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<aside class="sidebar" id="sidebar" hidden>
+  <div class="sidebar__brand">
+    <div class="sidebar__logo"><span class="material-symbols-outlined">admin_panel_settings</span></div>
+    <span class="sidebar__brand-name">ULSA <span>Admin</span></span>
+  </div>
+  <nav class="sidebar__nav">
+    <a class="sidebar__link" href="dashboard.html"><span class="material-symbols-outlined">dashboard</span> Dashboard</a>
+    <a class="sidebar__link" href="events.html"><span class="material-symbols-outlined">event_note</span> Quản lý Hoạt động</a>
+    <a class="sidebar__link" href="claims.html"><span class="material-symbols-outlined">verified</span> Phê duyệt Claims</a>
+    <a class="sidebar__link sidebar__link--active" href="rewards.html"><span class="material-symbols-outlined">redeem</span> Ưu đãi &amp; Quà tặng</a>
+    <a class="sidebar__link" href="admin.html"><span class="material-symbols-outlined">settings_suggest</span> Hệ thống Stats</a>
+  </nav>
+  <div class="sidebar__footer">
+    <div class="sidebar__user-card">
+      <div class="sidebar__user-avatar"><span class="material-symbols-outlined">person</span></div>
+      <div>
+        <p class="sidebar__user-name" data-user-name>Admin</p>
+        <p class="sidebar__user-role" data-user-role>ADMIN</p>
+      </div>
+    </div>
+    <button class="sidebar__logout-btn" onclick="logout()" type="button">
+      <span class="material-symbols-outlined">logout</span> Đăng xuất
+    </button>
+  </div>
+</aside>
+
+<div class="u-page-wrapper" id="pageWrapper">
+<main class="rewards-page u-animate-in">
+
+  
+  <section class="rewards-hero">
+    <div class="rewards-hero__text">
+      <p class="rewards-hero__eyebrow">Sustainable Marketplace</p>
+      <h1 class="rewards-hero__title">Đổi Ưu đãi <span>Xanh.</span></h1>
+      <p class="rewards-hero__desc">
+        Chuyển tín chỉ xanh của bạn thành các phần thưởng độc quyền.
+        <em>Reward là quyền lợi nội bộ, không quy đổi tiền.</em>
+      </p>
+      
+      <div class="rewards-hero__admin-note" data-show-role="admin">
+        📌 Tạo reward mới trong tab <a href="admin.html">Admin</a>.
+      </div>
+    </div>
+
+    <div class="balance-summary">
+      <div>
+        <p class="balance-summary__balance-label">Số dư của bạn</p>
+        <p class="balance-summary__balance-value">42 UGC</p>
+      </div>
+      <div class="balance-summary__divider"></div>
+      <div>
+        <p class="balance-summary__tier-label">Cấp độ</p>
+        <p class="balance-summary__tier-value">Emerald Elite</p>
+      </div>
+    </div>
+  </section>
+
+  
+  <section>
+    <div class="rewards-grid">
+
+      
+      <article class="reward-card">
+        <div class="reward-card__image-wrapper">
+          <img class="reward-card__image"
+            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBVLas-0p_8LS621wPq7p3fazbwxRKGDGUPqbpaxyx0zXEJWc4o943CB5q-nSS1NDQtG6_wb1gF5i6uOHP8pceeDKRptMEw9sozZMd720SVY_gfBVt_RgSh2PutsDpdjl1veWlyJccX89edsDBvr_2b6U6FnJhPmgp4hJhIQ79-T6WyIk_yr6mixg9rJfAEC89NVsWgmBRTkkpvZJYPLQVCLyiCRnjEBaCfF9JdweFun46utWctBWb565fZm87aee6c1L1UWO2Tg6w"
+            alt="Voucher căn-tin"/>
+          <div class="reward-card__image-badges">
+            <span class="badge badge--active">active</span>
+            <span class="reward-card__stock-badge reward-card__stock-badge--available">Stock: 100</span>
+          </div>
+        </div>
+        <div class="reward-card__body">
+          <h3 class="reward-card__title">Voucher căn-tin</h3>
+          <p class="reward-card__desc">Voucher giảm giá tại căn-tin trường. Áp dụng cho tất cả món ăn trong ngày.</p>
+          <div class="reward-card__footer">
+            <div>
+              <p class="reward-card__cost-label">Credits cần</p>
+              <p class="reward-card__cost-value">5 UGC</p>
+            </div>
+            <button class="btn btn--primary btn--sm" onclick="handleRedeem(this,'Voucher căn-tin',5)" data-show-role="student" type="button">
+              Redeem (burn)
+            </button>
+          </div>
+        </div>
+      </article>
+
+      
+      <article class="reward-card">
+        <div class="reward-card__image-wrapper">
+          <img class="reward-card__image"
+            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBnQ-yBHMy3_LXoDwcjUWMV0XwglM3fbz3jGVkLpvwQT3d1q3ZRwdvzQXzGHR5tVRxAaU3mOe1Zp5SPrAjA5WWihN3tW9Fe6VS8XeB9aRHon_9RMpK5ewfJD1qtvIn6v_D7vuo2y2Ka96qH_UR9Mb3JOMNm3-pmrsIhMpIwk77qcXsQe_xNRxh15cmVCByRgXPT2lJo6UTgkogt6z1f2NYfAuJ2bWK-Wv_UAOaYrMz-Qbs6jbQLrEmFc40-k5uEzIiKHjcBzckXIhM"
+            alt="Xe đạp share"/>
+          <div class="reward-card__image-badges">
+            <span class="badge badge--active">active</span>
+            <span class="reward-card__stock-badge reward-card__stock-badge--available">Unlimited</span>
+          </div>
+        </div>
+        <div class="reward-card__body">
+          <h3 class="reward-card__title">Vé xe đạp chia sẻ</h3>
+          <p class="reward-card__desc">Sử dụng miễn phí xe đạp chia sẻ campus trong 1 tuần. Thân thiện môi trường!</p>
+          <div class="reward-card__footer">
+            <div>
+              <p class="reward-card__cost-label">Credits cần</p>
+              <p class="reward-card__cost-value">8 UGC</p>
+            </div>
+            <button class="btn btn--primary btn--sm" onclick="handleRedeem(this,'Vé xe đạp chia sẻ',8)" data-show-role="student" type="button">
+              Redeem (burn)
+            </button>
+          </div>
+        </div>
+      </article>
+
+      
+      <article class="reward-card reward-card--inactive">
+        <div class="reward-card__image-wrapper">
+          <img class="reward-card__image"
+            src="https://lh3.googleusercontent.com/aida-public/AB6AXuASbTw2MIk51T-jpYZbt6rW1sPu778IKUCOpwqko-fhNDuV-EHc4bLEKyi_nyUFIqDW_INz1FKU6-NHWK8KDgxb9s_GSECknM62UlWRDOzAxGs1c_VVEOqw2MSZ0YhOmsW6USQXooHW4RmmfWS5AiGupcDuDlg3jzbYXsbztgdwOirFD1kF1OJiXQxzpmuV-h7K8EyHj1k3Nho7csdiSeXRw7K-whdHSL7hE7H7nHz2pwIk9i7A7_kPIuGSymP7SZG5kT_ChHRILIU"
+            alt="Áo xanh"/>
+          <div class="reward-card__image-badges">
+            <span class="badge badge--inactive">inactive</span>
+            <span class="reward-card__stock-badge reward-card__stock-badge--out">Hết stock</span>
+          </div>
+        </div>
+        <div class="reward-card__body">
+          <h3 class="reward-card__title">Áo đồng phục xanh</h3>
+          <p class="reward-card__desc">Áo thun sinh viên chính hãng ULSA làm từ vải tái chế. Hiện đã hết hàng.</p>
+          <div class="reward-card__footer">
+            <div>
+              <p class="reward-card__cost-label">Credits cần</p>
+              <p class="reward-card__cost-value reward-card__cost-value--inactive">15 UGC</p>
+            </div>
+            <button class="btn btn--secondary btn--sm" disabled type="button">Hết stock</button>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  
+  <section class="retire-section" data-show-role="student">
+    <div class="retire-card">
+      <div class="retire-card__decor" aria-hidden="true"></div>
+      <div class="retire-card__inner">
+        <div>
+          <h2 class="retire-card__title">Retire tín chỉ</h2>
+          <p class="retire-card__desc">
+            Burn type = RETIRE. Dùng khi tín chỉ đã "ghi nhận / khóa sổ". Hành động này sẽ ghi giao dịch BURN (RETIRE) lên blockchain và không thể hoàn tác.
+          </p>
+          <div class="retire-card__features">
+            <div class="retire-card__feature">
+              <span class="material-symbols-outlined retire-card__feature-icon">verified</span>
+              <span>Xác nhận trên blockchain</span>
+            </div>
+            <div class="retire-card__feature">
+              <span class="material-symbols-outlined retire-card__feature-icon">public</span>
+              <span>Ghi nhận khóa sổ vĩnh viễn</span>
+            </div>
+          </div>
+        </div>
+        <form class="retire-form" onsubmit="handleRetire(event)">
+          <div class="form-field">
+            <label class="form-field__label">Amount (credits)</label>
+            <div class="retire-form__amount-wrapper">
+              <input class="retire-form__amount-input" id="retireAmount" type="number" min="1" max="42" placeholder="1"/>
+              <span class="retire-form__amount-unit">UGC</span>
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="form-field__label">Reason</label>
+            <input class="form-field__input" id="retireReason" placeholder="Đã sử dụng cho mục đích ghi nhận..."/>
+          </div>
+          <button class="btn btn--dark btn--full" type="submit">Retire</button>
+          <p class="retire-form__warning">Hành động này không thể hoàn tác.</p>
+        </form>
+      </div>
+    </div>
+  </section>
+
+</main>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="js/auth.js"></script>
+<script src="js/ui.js"></script>
+<script>
+  const user = requireAuth();
+  if (user) {
+    populateUserInfo(user);
+    applyRoleVisibility(user);
+    const topnav  = document.getElementById('topnav');
+    const sidebar = document.getElementById('sidebar');
+    const wrapper = document.getElementById('pageWrapper');
+    if (user.role === 'student') {
+      topnav.hidden = false; sidebar.hidden = true;
+    } else {
+      topnav.hidden = true; sidebar.hidden = false;
+      wrapper.classList.add('u-page-wrapper--with-sidebar');
+      const adminLink = sidebar.querySelector('a[href="admin.html"]');
+      if (adminLink && user.role !== 'admin') adminLink.hidden = true;
+    }
+  }
+
+  function handleRedeem(btn, name, cost) {
+    withLoading(btn, 'Đang xử lý...', 1200, () => {
+      showToast(`🎁 Đã redeem "${name}" (${cost} UGC). Giao dịch BURN ghi lên blockchain!`);
+    });
+  }
+
+  function handleRetire(e) {
+    e.preventDefault();
+    const amount = document.getElementById('retireAmount').value;
+    const reason = document.getElementById('retireReason').value;
+    if (!amount || amount < 1) { showToast('⚠️ Nhập số lượng tín chỉ cần retire.'); return; }
+    showToast(`🔥 Đã retire ${amount} UGC. Giao dịch BURN (RETIRE) ghi lên blockchain!`);
+    e.target.reset();
+  }
+</script>
+</body>
+</html>

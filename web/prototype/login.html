@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Đăng nhập — ULSA Green Credit</title>
+  <meta name="description" content="Đăng nhập vào hệ thống quản lý tín chỉ xanh ULSA."/>
+
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+  
+  <link rel="stylesheet" href="css/base.css"/>
+  <link rel="stylesheet" href="css/components.css"/>
+  <link rel="stylesheet" href="css/login.css"/>
+</head>
+<body>
+
+<section class="login-page">
+  
+  <div class="login-page__bg" aria-hidden="true">
+    <div class="login-page__bg-overlay"></div>
+    <img class="login-page__bg-img"
+      src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPgvW8QIZYVe_-wITFrg7vO7vc0-0pd7--S_QZjOQjrD90bxzPst6lmAbgpOOGedAasIUZJrauGiCmohZARTpWxXQiw71shtL37xL68yVizrH2orVabn_ONQeFn1jPfFMcPHPbu8xvLgdo2cboMUfpWJFmjq3bq9fdcxnbZa_ZGfIYq6vqbGS2_ClQOLvPu1l_f_3iMrRQAwqsmGhxgpmFZgOcbnw34BpzzcLybXZnVUdXJbrtUjVkEEtJ2qG2SkbrLXcHUIscSjQ"
+      alt=""/>
+  </div>
+
+  <div class="login-page__content">
+
+    
+    <header class="login-brand">
+      <div class="login-brand__icon">
+        <span class="material-symbols-outlined">eco</span>
+      </div>
+      <h1 class="login-brand__title">ULSA Green Credit</h1>
+      <p class="login-brand__subtitle">Hệ thống quản lý tín chỉ xanh bền vững</p>
+    </header>
+
+    
+    <div class="login-card">
+      <div class="login-card__decor" aria-hidden="true"></div>
+
+      <h2 class="login-card__heading">Chào mừng trở lại</h2>
+      <p class="login-card__subheading">Đăng nhập để truy cập hệ thống</p>
+
+      
+      <div id="loginError" class="login-error" hidden>
+        <span class="material-symbols-outlined">error</span>
+        <span>Sai tên đăng nhập hoặc mật khẩu.</span>
+      </div>
+
+      
+      <form class="login-form" id="loginForm" onsubmit="doLogin(event)">
+
+        
+        <div class="form-field">
+          <label class="form-field__label" for="username">Tên đăng nhập</label>
+          <div class="form-field__icon-wrapper">
+            <span class="material-symbols-outlined form-field__icon">person</span>
+            <input
+              class="form-field__input form-field__input--with-icon"
+              id="username"
+              name="username"
+              type="text"
+              placeholder="admin / verifier / student1"
+              autocomplete="username"
+            />
+          </div>
+        </div>
+
+        
+        <div class="form-field">
+          <label class="form-field__label" for="password">Mật khẩu</label>
+          <div class="form-field__icon-wrapper">
+            <span class="material-symbols-outlined form-field__icon">lock</span>
+            <input
+              class="form-field__input form-field__input--with-icon"
+              id="password"
+              name="password"
+              type="password"
+              placeholder="••••••••"
+              autocomplete="current-password"
+            />
+          </div>
+        </div>
+
+        
+        <button class="login-form__submit" id="loginBtn" type="submit">
+          Truy cập hệ thống
+          <span class="material-symbols-outlined">arrow_forward</span>
+        </button>
+
+      </form>
+    </div>
+
+    
+    <section class="quick-roles" aria-label="Truy cập nhanh theo vai trò">
+      <div class="quick-roles__divider">
+        <div class="quick-roles__divider-line"></div>
+        <span class="quick-roles__divider-text">Truy cập nhanh theo vai trò</span>
+        <div class="quick-roles__divider-line"></div>
+      </div>
+
+      <div class="quick-roles__grid">
+        <button class="quick-roles__item" onclick="quickLogin('student1')" type="button">
+          <div class="quick-roles__icon">
+            <span class="material-symbols-outlined">school</span>
+          </div>
+          <span class="quick-roles__label">Student</span>
+        </button>
+
+        <button class="quick-roles__item" onclick="quickLogin('verifier')" type="button">
+          <div class="quick-roles__icon">
+            <span class="material-symbols-outlined">verified_user</span>
+          </div>
+          <span class="quick-roles__label">Verifier</span>
+        </button>
+
+        <button class="quick-roles__item" onclick="quickLogin('admin')" type="button">
+          <div class="quick-roles__icon">
+            <span class="material-symbols-outlined">admin_panel_settings</span>
+          </div>
+          <span class="quick-roles__label">Admin</span>
+        </button>
+      </div>
+    </section>
+
+    
+    <div class="demo-hint" role="note">
+      <p class="demo-hint__title">Tài khoản demo:</p>
+      <p>• Admin: <code class="demo-hint__code">admin / admin123</code></p>
+      <p>• Verifier: <code class="demo-hint__code">verifier / verifier123</code></p>
+      <p>• Student: <code class="demo-hint__code">student1 / student123</code></p>
+    </div>
+
+    
+    <footer class="login-footer">
+      <p>© 2024 ULSA Green Credit. Phát triển bởi Ban Công nghệ Thông tin.</p>
+      <p>Demo: Web (3000) · API (8080) · Hardhat RPC (8545)</p>
+    </footer>
+
+  </div>
+</section>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="js/auth.js"></script>
+<script src="js/ui.js"></script>
+<script>
+  // Nếu đã đăng nhập rồi thì redirect thẳng
+  if (getUser()) window.location.href = 'dashboard.html';
+</script>
+</body>
+</html>
