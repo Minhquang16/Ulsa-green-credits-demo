@@ -1,0 +1,128 @@
+/*
+ * GlobalStyles.css — Typography & Design Tokens
+ * ULSA Green Credit System
+ * Font: Be Vietnam Pro (body/UI), Manrope (headline)
+ * ------------------------------------------------
+ * H1  = 24px  | H2 = 20px | H3 = 16px
+ * Body = 14px | Stats = 36px bold
+ */
+
+/* ── Google Fonts fallback (loaded in index.html) ─── */
+:root {
+  --font-headline: 'Manrope', 'Be Vietnam Pro', sans-serif;
+  --font-body:     'Be Vietnam Pro', 'Inter', sans-serif;
+
+  /* Typography scale */
+  --text-xs:   11px;
+  --text-sm:   13px;
+  --text-base: 14px;   /* Body mặc định */
+  --text-lg:   16px;   /* H3 */
+  --text-xl:   18px;
+  --text-2xl:  20px;   /* H2 */
+  --text-3xl:  24px;   /* H1 */
+  --text-stat: 36px;   /* Stats numbers */
+
+  /* Line heights */
+  --leading-tight:  1.2;
+  --leading-snug:   1.35;
+  --leading-normal: 1.6;
+}
+
+/* ── Base reset ───────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: var(--text-base);
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Headings ─────────────────────────────────────── */
+h1, .h1 {
+  font-family: var(--font-headline);
+  font-size: var(--text-3xl);   /* 24px */
+  font-weight: 800;
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+}
+
+h2, .h2 {
+  font-family: var(--font-headline);
+  font-size: var(--text-2xl);   /* 20px */
+  font-weight: 700;
+  line-height: var(--leading-snug);
+  letter-spacing: -0.015em;
+}
+
+h3, .h3 {
+  font-family: var(--font-headline);
+  font-size: var(--text-lg);    /* 16px */
+  font-weight: 700;
+  line-height: var(--leading-snug);
+}
+
+h4, h5, h6 {
+  font-family: var(--font-headline);
+  font-weight: 600;
+}
+
+/* ── Body text ───────────────────────────────────── */
+p, span, div, li, td, th, label, input, select, textarea, button {
+  font-family: var(--font-body);
+}
+
+/* Smaller helper text */
+small, .text-small {
+  font-size: var(--text-sm);    /* 13px */
+}
+
+/* Caption / label */
+.text-caption {
+  font-size: var(--text-xs);    /* 11px */
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+/* ── Stats numbers ───────────────────────────────── */
+.stat-number,
+.stats-value {
+  font-family: var(--font-headline);
+  font-size: var(--text-stat);  /* 36px */
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+/* Tailwind overrides for consistent base font */
+.font-headline {
+  font-family: var(--font-headline) !important;
+}
+
+.font-body,
+.font-label {
+  font-family: var(--font-body) !important;
+}
+
+/* ── Vietnamese text optimization ───────────────── */
+/* Be Vietnam Pro renders diacritics sharper */
+[lang="vi"], .vn-text {
+  font-family: 'Be Vietnam Pro', var(--font-body);
+  font-feature-settings: "kern" 1, "liga" 1;
+}
+
+/* ── Utility classes ─────────────────────────────── */
+.text-h1   { font-size: var(--text-3xl); font-weight: 800; }
+.text-h2   { font-size: var(--text-2xl); font-weight: 700; }
+.text-h3   { font-size: var(--text-lg);  font-weight: 700; }
+.text-body { font-size: var(--text-base); }
+.text-stat { font-size: var(--text-stat); font-weight: 800; letter-spacing: -0.03em; }

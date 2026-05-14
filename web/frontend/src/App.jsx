@@ -9,6 +9,7 @@ import EventsPage from './pages/EventsPage.jsx'
 import ClaimsPage from './pages/ClaimsPage.jsx'
 import RewardsPage from './pages/RewardsPage.jsx'
 import AdminPage from './pages/AdminPage.jsx'
+import TreasuryPage from './pages/TreasuryPage.jsx'
 
 // Prototype Styles
 import './styles/base.css'
@@ -67,22 +68,27 @@ function Layout({ children }) {
           </div>
 
           <nav className="flex-grow space-y-2">
-            <Link className={"sidebar-link " + (loc.pathname === '/dashboard' ? 'active' : '')} to="/dashboard">
-              <span className="material-symbols-outlined">dashboard</span> Dashboard
+            <Link className={"sidebar-link flex items-center " + (loc.pathname === '/dashboard' ? 'active' : '')} to="/dashboard">
+              <span className="material-symbols-outlined">dashboard</span> <span>Dashboard</span>
             </Link>
-            <Link className={"sidebar-link " + (loc.pathname === '/events' ? 'active' : '')} to="/events">
-              <span className="material-symbols-outlined">event_note</span> Quản lý Hoạt động
+            <Link className={"sidebar-link flex items-center " + (loc.pathname === '/events' ? 'active' : '')} to="/events">
+              <span className="material-symbols-outlined">event_note</span> <span>Quản lý Hoạt động</span>
             </Link>
-            <Link className={"sidebar-link " + (loc.pathname === '/claims' ? 'active' : '')} to="/claims">
-              <span className="material-symbols-outlined">verified</span> Phê duyệt Claims
+            <Link className={"sidebar-link flex items-center " + (loc.pathname === '/claims' ? 'active' : '')} to="/claims">
+              <span className="material-symbols-outlined">verified</span> <span>Phê duyệt Claims</span>
             </Link>
-            <Link className={"sidebar-link " + (loc.pathname === '/rewards' ? 'active' : '')} to="/rewards">
-              <span className="material-symbols-outlined">redeem</span> Ưu đãi &amp; Quà tặng
+            <Link className={"sidebar-link flex items-center " + (loc.pathname === '/rewards' ? 'active' : '')} to="/rewards">
+              <span className="material-symbols-outlined">redeem</span> <span>Ưu đãi &amp; Quà tặng</span>
             </Link>
             {isAdmin && (
-              <Link className={"sidebar-link " + (loc.pathname === '/admin' ? 'active' : '')} to="/admin">
-                <span className="material-symbols-outlined">settings_suggest</span> Hệ thống Stats
-              </Link>
+              <>
+                <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin' ? 'active' : '')} to="/admin">
+                  <span className="material-symbols-outlined">settings_suggest</span> <span>Hệ thống Stats</span>
+                </Link>
+                <Link className={"sidebar-link flex items-center " + (loc.pathname === '/treasury' ? 'active' : '')} to="/treasury">
+                  <span className="material-symbols-outlined">account_balance</span> <span>Quản lý Kho quỹ</span>
+                </Link>
+              </>
             )}
           </nav>
 
@@ -138,6 +144,7 @@ export default function App() {
             <Route path="/claims" element={<RequireAuth><ClaimsPage /></RequireAuth>} />
             <Route path="/rewards" element={<RequireAuth><RewardsPage /></RequireAuth>} />
             <Route path="/admin" element={<RequireAuth><AdminPage /></RequireAuth>} />
+            <Route path="/treasury" element={<RequireAuth><TreasuryPage /></RequireAuth>} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Layout>

@@ -18,11 +18,16 @@ export default function ClaimsPage() {
       const endpoint = user.role === 'student' ? '/me/claims' : `/claims${filter !== 'all' ? '?status=' + filter : ''}`
       const c = await api(endpoint)
       setClaims(c)
-      
-      // Fake stats for verifier/admin matching prototype
+
+      // Real stats based on fetched claims
       if (user.role !== 'student') {
-        const pending = c.filter(x => x.status === 'submitted').length
-        setStats({ pending: pending || 24, creditsStaged: (pending * 50) || 1240 })
+        const pendingClaims = c.filter(x => x.status === 'submitted');
+        const pendingCount = pendingClaims.length;
+        // Calculate total credits staged based on actual pending claims (assuming each claim has an associated event/activity with credits, or just an estimate)
+        // Since we don't have exact credit per claim easily accessible here, we'll just show 0 if no pending.
+        const creditsStaged = pendingClaims.reduce((sum, claim) => sum + (Number(claim.credit_amount) || 0), 0);
+        
+        setStats({ pending: pendingCount, creditsStaged: creditsStaged || (pendingCount * 10) }); // Fallback multiplier if credit_amount is missing in claim payload
       }
     } catch (e) {
       setError(e.message)
@@ -60,7 +65,7 @@ export default function ClaimsPage() {
 
   return (
     <main className="max-w-[1600px] mx-auto px-8 lg:px-12 py-12 animate-in">
-      
+
       {/* Page Header (1:1 Prototype) */}
       <div className="flex justify-between items-end mb-10">
         <div>
@@ -160,9 +165,9 @@ export default function ClaimsPage() {
                   <td className="px-5 py-4 bg-surface-container-lowest font-headline font-extrabold text-primary">+{c.credit_amount}</td>
                   <td className="px-5 py-4 bg-surface-container-lowest">
                     <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-sm
-                      ${c.status === 'approved' ? 'bg-primary text-on-primary' : 
-                        c.status === 'rejected' ? 'bg-error text-on-error' : 
-                        'bg-surface-container-high text-on-surface-variant'}`}>
+                      ${c.status === 'approved' ? 'bg-primary text-on-primary' :
+                        c.status === 'rejected' ? 'bg-error text-on-error' :
+                          'bg-surface-container-high text-on-surface-variant'}`}>
                       {c.status}
                     </span>
                   </td>
@@ -174,7 +179,7 @@ export default function ClaimsPage() {
                     ) : <span className="opacity-20">—</span>}
                   </td>
                   <td className="px-5 py-4 bg-surface-container-lowest font-mono text-[10px] opacity-60">
-                    {c.tx_hash ? c.tx_hash.slice(0,8)+'...' : '—'}
+                    {c.tx_hash ? c.tx_hash.slice(0, 8) + '...' : '—'}
                   </td>
                   {user.role !== 'student' && (
                     <td className="px-5 py-4 bg-surface-container-lowest rounded-r-2xl text-right">
@@ -229,8 +234,8 @@ export default function ClaimsPage() {
               <span className="material-symbols-outlined">security</span>
             </div>
             <div>
-                <h4 className="text-sm font-bold text-on-surface">Evidence Hash Valid</h4>
-                <p className="text-[11px] text-on-surface-variant mt-0.5">Mọi tài liệu minh chứng được hash SHA-256 để đảm bảo không bị thay đổi sau khi xác thực.</p>
+              <h4 className="text-sm font-bold text-on-surface">Evidence Hash Valid</h4>
+              <p className="text-[11px] text-on-surface-variant mt-0.5">Mọi tài liệu minh chứng được hash SHA-256 để đảm bảo không bị thay đổi sau khi xác thực.</p>
             </div>
           </div>
           <div className="flex items-start gap-5">
@@ -238,8 +243,8 @@ export default function ClaimsPage() {
               <span className="material-symbols-outlined">gavel</span>
             </div>
             <div>
-                <h4 className="text-sm font-bold text-on-surface">Tuân thủ Khung Tín chỉ</h4>
-                <p className="text-[11px] text-on-surface-variant mt-0.5">Đối soát tự động với các mốc quy định của Ban quản lý ULSA trước khi phát hành UGC.</p>
+              <h4 className="text-sm font-bold text-on-surface">Tuân thủ Khung Tín chỉ</h4>
+              <p className="text-[11px] text-on-surface-variant mt-0.5">Đối soát tự động với các mốc quy định của Ban quản lý ULSA trước khi phát hành UGC.</p>
             </div>
           </div>
         </div>

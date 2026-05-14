@@ -11,11 +11,15 @@ const { ethers } = require("ethers");
 const { v4: uuidv4 } = require("uuid");
 
 const PORT = Number(process.env.PORT || 8080);
-const DATABASE_URL = process.env.DATABASE_URL || "postgres://ugc:ugc@localhost:5432/ugc";
+const DATABASE_URL = process.env.DATABASE_URL || "postgres://ugc:ugc@localhost:5434/ugc";
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 const MNEMONIC = process.env.MNEMONIC || "test test test test test test test test test test test junk";
 const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:8545";
-const CONTRACTS_PATH = process.env.CONTRACTS_PATH || path.join(__dirname, "..", "shared", "contracts.json");
+const CONTRACTS_PATH = process.env.CONTRACTS_PATH || (
+  fs.existsSync(path.join(__dirname, "../shared/contracts.json")) 
+    ? path.join(__dirname, "../shared/contracts.json")
+    : path.join(__dirname, "../../shared/contracts.json")
+);
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, "..", "uploads");
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
 
@@ -25,7 +29,8 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 
 const app = express();
 app.use(cors({ origin: CORS_ORIGIN }));
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use("/uploads", express.static(UPLOAD_DIR));
 
 const pool = new Pool({ connectionString: DATABASE_URL });
@@ -94,11 +99,16 @@ function getSignerForRole(role) {
   return deriveWallet(idx).connect(provider);
 }
 
+let treasuryContract;
+let treasuryAbi;
+let treasuryAddress;
+
 async function initBlockchain() {
   await waitForFile(CONTRACTS_PATH);
   const contractsRaw = fs.readFileSync(CONTRACTS_PATH, "utf8");
   const contractsJson = JSON.parse(contractsRaw);
   ugcAddress = contractsJson?.contracts?.ULSAGreenCredit?.address;
+  treasuryAddress = contractsJson?.contracts?.UGC_Treasury?.address;
   if (!ugcAddress) throw new Error("Missing ULSAGreenCredit address in contracts.json");
 
   const abiPath = path.join(path.dirname(CONTRACTS_PATH), "ULSAGreenCredit.abi.json");
@@ -107,6 +117,30 @@ async function initBlockchain() {
 
   provider = new ethers.JsonRpcProvider(RPC_URL);
   ugcContract = new ethers.Contract(ugcAddress, ugcAbi, provider);
+
+  if (treasuryAddress) {
+    const treasuryAbiPath = path.join(path.dirname(CONTRACTS_PATH), "UGC_Treasury.abi.json");
+    if (fs.existsSync(treasuryAbiPath)) {
+      treasuryAbi = JSON.parse(fs.readFileSync(treasuryAbiPath, "utf8"));
+      treasuryContract = new ethers.Contract(treasuryAddress, treasuryAbi, provider);
+      
+      // Blockchain Watcher
+      treasuryContract.on("ProposalExecuted", async (idEvent) => {
+        const id = Number(idEvent);
+        console.log(`[Watcher] ProposalExecuted detected for ID: ${id}`);
+        try {
+          await pool.query(
+            "UPDATE treasury_proposals SET status='Successful', updated_at=NOW() WHERE onchain_id=$1",
+            [id]
+          );
+          console.log(`[Watcher] Updated DB for proposal ${id} to Successful`);
+        } catch (e) {
+          console.error(`[Watcher] Failed to update DB for proposal ${id}:`, e);
+        }
+      });
+      console.log("✅ Treasury Blockchain Watcher ready.");
+    }
+  }
 
   console.log("✅ Blockchain ready. Contract:", ugcAddress);
 }
@@ -149,15 +183,55 @@ function requireRole(...roles) {
 
 // -------------------- seed data --------------------
 async function seedIfNeeded() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS treasury_proposals (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      onchain_id INT,
+      proposer_id UUID REFERENCES users(id),
+      target_address TEXT NOT NULL,
+      amount INT NOT NULL,
+      transaction_type TEXT NOT NULL CHECK (transaction_type IN ('MINT','BURN')),
+      reason TEXT,
+      status TEXT NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending','Successful')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS reward_categories (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      description TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS rewards (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      title TEXT NOT NULL,
+      description TEXT,
+      cost_credits INT NOT NULL CHECK (cost_credits >= 0),
+      stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0),
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive')),
+      image_url TEXT,
+      created_by UUID REFERENCES users(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    ALTER TABLE rewards ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES reward_categories(id);
+    ALTER TABLE rewards ADD COLUMN IF NOT EXISTS limit_per_student INT DEFAULT 1;
+    ALTER TABLE rewards ADD COLUMN IF NOT EXISTS start_date DATE;
+    ALTER TABLE rewards ADD COLUMN IF NOT EXISTS expiry_date DATE;
+  `);
+
   // users
   const uCount = await pool.query("SELECT COUNT(*)::int AS n FROM users");
   if (uCount.rows[0].n === 0) {
     console.log("Seeding users...");
     const users = [
-      { username: "admin", full_name: "Admin ULSA", role: "admin", wallet_index: 0, password: "admin123" },
-      { username: "verifier", full_name: "Verifier (Đoàn/Hội)", role: "verifier", wallet_index: 1, password: "verifier123" },
-      { username: "student1", full_name: "Sinh viên 1", role: "student", wallet_index: 2, password: "student123" },
-      { username: "student2", full_name: "Sinh viên 2", role: "student", wallet_index: 3, password: "student123" }
+      { username: "admin",    full_name: "Admin ULSA (Hội đồng 1)", role: "admin", wallet_index: 0, password: "admin123" },
+      { username: "admin2",   full_name: "Admin ULSA (Hội đồng 2)", role: "admin", wallet_index: 1, password: "admin456" },
+      { username: "verifier", full_name: "Verifier (Đoàn/Hội)", role: "verifier", wallet_index: 2, password: "verifier123" },
+      { username: "student1", full_name: "Sinh viên 1", role: "student", wallet_index: 3, password: "student123" },
+      { username: "student2", full_name: "Sinh viên 2", role: "student", wallet_index: 4, password: "student123" }
     ];
 
     for (const u of users) {
@@ -190,11 +264,26 @@ async function seedIfNeeded() {
     }
   }
 
+  // reward categories
+  const catCount = await pool.query("SELECT COUNT(*)::int AS n FROM reward_categories");
+  if (catCount.rows[0].n === 0) {
+    console.log("Seeding reward categories...");
+    const cats = [
+      { name: "Voucher", description: "Phiếu giảm giá, mã quà tặng điện tử." },
+      { name: "Vật phẩm", description: "Quà tặng hiện vật, đồ lưu niệm." },
+      { name: "Dịch vụ", description: "Các dịch vụ ưu đãi nội bộ." }
+    ];
+    for (const c of cats) {
+      await pool.query("INSERT INTO reward_categories(name, description) VALUES($1,$2)", [c.name, c.description]);
+    }
+  }
+
   // rewards
   const rCount = await pool.query("SELECT COUNT(*)::int AS n FROM rewards");
   if (rCount.rows[0].n === 0) {
     console.log("Seeding rewards...");
     const admin = (await pool.query("SELECT id FROM users WHERE role='admin' LIMIT 1")).rows[0];
+    const voucherCat = (await pool.query("SELECT id FROM reward_categories WHERE name='Voucher' LIMIT 1")).rows[0];
 
     const rewards = [
       { title: "Voucher căn-tin", description: "Voucher giảm giá tại căn-tin ULSA.", cost_credits: 5, stock: 100 },
@@ -204,8 +293,8 @@ async function seedIfNeeded() {
 
     for (const rw of rewards) {
       await pool.query(
-        "INSERT INTO rewards(title, description, cost_credits, stock, status, created_by) VALUES($1,$2,$3,$4,$5,$6)",
-        [rw.title, rw.description, rw.cost_credits, rw.stock, "active", admin.id]
+        "INSERT INTO rewards(title, description, cost_credits, stock, status, created_by, category_id) VALUES($1,$2,$3,$4,$5,$6,$7)",
+        [rw.title, rw.description, rw.cost_credits, rw.stock, "active", admin.id, voucherCat?.id]
       );
     }
   }
@@ -217,15 +306,19 @@ async function seedIfNeeded() {
     const verifier = (await pool.query("SELECT id FROM users WHERE role='verifier' LIMIT 1")).rows[0];
     const hiemMau = (await pool.query("SELECT id FROM activity_types WHERE name='Hiến máu' LIMIT 1")).rows[0];
 
-    const qr_token = crypto.randomBytes(16).toString("hex");
-    const now = new Date();
-    const start = new Date(now.getTime() + 60 * 60 * 1000);
-    const end = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+    if (!verifier || !hiemMau) {
+      console.log("Could not find verifier or 'Hiến máu' activity type. Skipping demo event seeding.");
+    } else {
+      const qr_token = crypto.randomBytes(16).toString("hex");
+      const now = new Date();
+      const start = new Date(now.getTime() + 60 * 60 * 1000);
+      const end = new Date(now.getTime() + 3 * 60 * 60 * 1000);
 
-    await pool.query(
-      "INSERT INTO events(activity_type_id, title, description, organizer_id, start_at, end_at, location, qr_token, status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
-      [hiemMau.id, "Sự kiện hiến máu (demo)", "Quét QR để ghi nhận tham gia và nhận tín chỉ xanh.", verifier.id, start, end, "Khu A - Hội trường", qr_token, "published"]
-    );
+      await pool.query(
+        "INSERT INTO events(activity_type_id, title, description, organizer_id, start_at, end_at, location, qr_token, status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        [hiemMau.id, "Sự kiện hiến máu (demo)", "Quét QR để ghi nhận tham gia và nhận tín chỉ xanh.", verifier.id, start, end, "Khu A - Hội trường", qr_token, "published"]
+      );
+    }
   }
 }
 
@@ -241,6 +334,11 @@ const upload = multer({ storage });
 
 // -------------------- routes --------------------
 app.get("/health", (req, res) => res.json({ ok: true }));
+
+app.post("/upload", authRequired, upload.single("file"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "no file" });
+  res.json({ url: `/uploads/${req.file.filename}` });
+});
 
 app.post("/auth/login", async (req, res) => {
   const { username, password } = req.body || {};
@@ -288,10 +386,57 @@ app.post("/activity-types", authRequired, requireRole("admin"), async (req, res)
   res.json(rs.rows[0]);
 });
 
+app.put("/activity-types/:id", authRequired, requireRole("admin"), async (req, res) => {
+  const { name, description, credit_amount, evidence_required } = req.body || {};
+  const rs = await pool.query(
+    `UPDATE activity_types 
+     SET name=COALESCE($1, name), 
+         description=COALESCE($2, description), 
+         credit_amount=COALESCE($3, credit_amount), 
+         evidence_required=COALESCE($4, evidence_required)
+     WHERE id=$5 RETURNING *`,
+    [name, description, credit_amount !== undefined ? Number(credit_amount) : undefined, evidence_required, req.params.id]
+  );
+  if (rs.rows.length === 0) return res.status(404).json({ error: "Not found" });
+  res.json(rs.rows[0]);
+});
+
+// Treasury
+app.get("/treasury/proposals", authRequired, requireRole("admin"), async (req, res) => {
+  const rs = await pool.query(
+    `SELECT t.*, u.full_name as proposer_name 
+     FROM treasury_proposals t
+     JOIN users u ON u.id = t.proposer_id
+     ORDER BY t.created_at DESC`
+  );
+  res.json(rs.rows);
+});
+
+app.post("/treasury/proposals", authRequired, requireRole("admin"), async (req, res) => {
+  const { onchain_id, target_address, amount, transaction_type, reason } = req.body || {};
+  if (onchain_id === undefined || !target_address || !amount || !transaction_type) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  const rs = await pool.query(
+    "INSERT INTO treasury_proposals(onchain_id, proposer_id, target_address, amount, transaction_type, reason) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",
+    [onchain_id, req.user.id, target_address, amount, transaction_type, reason]
+  );
+  res.json(rs.rows[0]);
+});
+
+app.get("/config", (req, res) => {
+  res.json({
+    ugcAddress,
+    treasuryAddress,
+    rpcUrl: RPC_URL
+  });
+});
+
 // events
 app.get("/events", authRequired, async (req, res) => {
   const rs = await pool.query(
-    `SELECT e.*, a.name AS activity_name, a.credit_amount
+    `SELECT e.*, a.name AS activity_name, a.credit_amount, a.description AS activity_description
      FROM events e
      JOIN activity_types a ON a.id = e.activity_type_id
      ORDER BY e.created_at DESC`
@@ -300,8 +445,21 @@ app.get("/events", authRequired, async (req, res) => {
 });
 
 app.post("/events", authRequired, requireRole("admin","verifier"), async (req, res) => {
-  const { activity_type_id, title, description, start_at, end_at, location } = req.body || {};
-  if (!activity_type_id || !title) return res.status(400).json({ error: "activity_type_id & title required" });
+  let { activity_type_id, activity_name, credit_amount, title, description, start_at, end_at, location } = req.body || {};
+
+  if (!activity_type_id) {
+    if (!activity_name || credit_amount === undefined) {
+      return res.status(400).json({ error: "activity_type_id OR (activity_name & credit_amount) required" });
+    }
+    // Create new activity type on the fly
+    const rsAct = await pool.query(
+      "INSERT INTO activity_types(name, description, credit_amount, evidence_required, created_by) VALUES($1,$2,$3,$4,$5) RETURNING id",
+      [activity_name, "", Number(credit_amount), true, req.user.id]
+    );
+    activity_type_id = rsAct.rows[0].id;
+  }
+
+  if (!title) return res.status(400).json({ error: "title required" });
 
   const qr_token = crypto.randomBytes(16).toString("hex");
   const rs = await pool.query(
@@ -311,6 +469,48 @@ app.post("/events", authRequired, requireRole("admin","verifier"), async (req, r
     [activity_type_id, title, description || "", req.user.id, start_at || null, end_at || null, location || "", qr_token, "published"]
   );
   res.json(rs.rows[0]);
+});
+
+app.put("/events/:id", authRequired, requireRole("admin","verifier"), async (req, res) => {
+  try {
+    let { activity_name, credit_amount, title, description, start_at, end_at, location } = req.body || {};
+    if (!title) return res.status(400).json({ error: "title required" });
+
+    const evRs = await pool.query("SELECT activity_type_id FROM events WHERE id=$1", [req.params.id]);
+    if (evRs.rows.length === 0) return res.status(404).json({ error: "Event not found" });
+
+    let activity_type_id = evRs.rows[0].activity_type_id;
+
+    if (activity_name && credit_amount !== undefined) {
+       const rsAct = await pool.query(
+        "INSERT INTO activity_types(name, description, credit_amount, evidence_required, created_by) VALUES($1,$2,$3,$4,$5) RETURNING id",
+        [activity_name, "", Number(credit_amount), true, req.user.id]
+       );
+       activity_type_id = rsAct.rows[0].id;
+    }
+
+    const rs = await pool.query(
+      `UPDATE events SET activity_type_id=$1, title=$2, description=$3, start_at=$4, end_at=$5, location=$6
+       WHERE id=$7 RETURNING *`,
+      [activity_type_id, title, description || "", start_at || null, end_at || null, location || "", req.params.id]
+    );
+    res.json(rs.rows[0]);
+  } catch (e) {
+    console.error("PUT /events error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/events/:id", authRequired, requireRole("admin","verifier"), async (req, res) => {
+  try {
+    console.log("Attempting to delete event:", req.params.id);
+    const result = await pool.query("DELETE FROM events WHERE id=$1", [req.params.id]);
+    console.log("Delete result:", result.rowCount);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("DELETE /events error:", e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get("/events/:id", authRequired, async (req, res) => {
@@ -326,6 +526,46 @@ app.get("/events/:id", authRequired, async (req, res) => {
   res.json(event);
 });
 
+app.get("/events/:id/qr", authRequired, requireRole("admin", "verifier"), async (req, res) => {
+  const rs = await pool.query("SELECT qr_token FROM events WHERE id=$1", [req.params.id]);
+  if (rs.rows.length === 0) return res.status(404).json({ error: "Event not found" });
+  res.json({ token: rs.rows[0].qr_token });
+});
+
+app.post("/checkin", authRequired, requireRole("student"), async (req, res) => {
+  const { event_id, token, latitude, longitude } = req.body || {};
+  if (!event_id || !token) return res.status(400).json({ error: "event_id & token required" });
+
+  const eventRs = await pool.query("SELECT qr_token, start_at, end_at FROM events WHERE id=$1", [event_id]);
+  const event = eventRs.rows[0];
+  if (!event) return res.status(404).json({ error: "Event not found" });
+
+  const now = new Date();
+  if (event.start_at && now < new Date(event.start_at)) {
+    return res.status(400).json({ error: "Sự kiện chưa diễn ra" });
+  }
+  if (event.end_at && now > new Date(event.end_at)) {
+    return res.status(400).json({ error: "Sự kiện đã kết thúc" });
+  }
+
+  if (token !== event.qr_token) {
+    return res.status(400).json({ error: "Invalid QR token" });
+  }
+
+  try {
+    await pool.query(
+      "INSERT INTO checkins(event_id, student_id, latitude, longitude) VALUES($1,$2,$3,$4)",
+      [event_id, req.user.id, latitude || null, longitude || null]
+    );
+    res.json({ ok: true, message: "Check-in successful" });
+  } catch (e) {
+    if (e.code === '23505') { // unique_violation
+      return res.status(400).json({ error: "Already checked in for this event" });
+    }
+    throw e;
+  }
+});
+
 // claims
 app.post("/events/:id/claims", authRequired, requireRole("student"), upload.single("evidence"), async (req, res) => {
   const eventId = req.params.id;
@@ -338,6 +578,12 @@ app.post("/events/:id/claims", authRequired, requireRole("student"), upload.sing
   // QR token check (optional for demo)
   if (token && token !== event.qr_token) {
     return res.status(400).json({ error: "Invalid QR token" });
+  }
+
+  // Check if student has checked in
+  const checkinRs = await pool.query("SELECT 1 FROM checkins WHERE event_id=$1 AND student_id=$2", [eventId, req.user.id]);
+  if (checkinRs.rows.length === 0) {
+    return res.status(403).json({ error: "You must check-in via QR code before submitting a claim" });
   }
 
   let evidence_path = null;
@@ -466,6 +712,30 @@ app.post("/claims/:id/reject", authRequired, requireRole("admin","verifier"), as
   res.json(update.rows[0]);
 });
 
+// wallets management (admin)
+app.get("/wallets/all", authRequired, requireRole("admin"), async (req, res) => {
+  try {
+    const usersRes = await pool.query(
+      "SELECT id, username, full_name, role, wallet_address, wallet_index, created_at FROM users ORDER BY role, full_name"
+    );
+    const users = usersRes.rows;
+
+    // Fetch on-chain balances in parallel
+    const withBalances = await Promise.all(users.map(async (u) => {
+      try {
+        const bal = await ugcContract.balanceOf(u.wallet_address);
+        return { ...u, ugc_balance: Number(bal) };
+      } catch {
+        return { ...u, ugc_balance: 0 };
+      }
+    }));
+
+    res.json(withBalances);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // wallet
 app.get("/wallet/balance", authRequired, async (req, res) => {
   const address = req.user.wallet_address;
@@ -516,23 +786,110 @@ app.get("/wallet/history", authRequired, async (req, res) => {
   res.json(items);
 });
 
-// rewards
-app.get("/rewards", authRequired, async (req, res) => {
-  const where = req.user.role === "admin" ? "" : "WHERE status='active'";
-  const rs = await pool.query(`SELECT * FROM rewards ${where} ORDER BY created_at DESC`);
+// reward categories
+app.get("/reward-categories", authRequired, async (req, res) => {
+  const rs = await pool.query("SELECT * FROM reward_categories ORDER BY name ASC");
   res.json(rs.rows);
 });
 
+app.post("/reward-categories", authRequired, requireRole("admin"), async (req, res) => {
+  const { name, description } = req.body || {};
+  if (!name) return res.status(400).json({ error: "name required" });
+  const rs = await pool.query("INSERT INTO reward_categories(name, description) VALUES($1,$2) RETURNING *", [name, description || ""]);
+  res.json(rs.rows[0]);
+});
+
+app.delete("/reward-categories/:id", authRequired, requireRole("admin"), async (req, res) => {
+  try {
+    await pool.query("DELETE FROM reward_categories WHERE id=$1", [req.params.id]);
+    res.json({ message: "Deleted" });
+  } catch (e) {
+    res.status(400).json({ error: "Cannot delete category as it is being used by rewards." });
+  }
+});
+
+// rewards
+app.get("/rewards", authRequired, async (req, res) => {
+  const where = req.user.role === "admin" ? "" : "WHERE r.status='active'";
+  const rs = await pool.query(`
+    SELECT r.*, c.name as category_name 
+    FROM rewards r 
+    LEFT JOIN reward_categories c ON r.category_id = c.id 
+    ${where} 
+    ORDER BY r.created_at DESC
+  `);
+  res.json(rs.rows);
+});
+
+app.get("/rewards/stats", authRequired, requireRole("admin"), async (req, res) => {
+  try {
+    const [totalRes, ugcRes, popularRes, lowStockRes] = await Promise.all([
+      pool.query("SELECT COUNT(*) FROM rewards"),
+      pool.query("SELECT COALESCE(SUM(cost_credits), 0) AS total FROM redemptions"),
+      pool.query(`
+        SELECT r.id, r.title, COUNT(rd.id) AS redeem_count
+        FROM rewards r
+        LEFT JOIN redemptions rd ON rd.reward_id = r.id
+        GROUP BY r.id, r.title
+        ORDER BY redeem_count DESC
+        LIMIT 1
+      `),
+      pool.query("SELECT COUNT(*) FROM rewards WHERE stock <= 5 AND status = 'active'")
+    ]);
+
+    res.json({
+      total: parseInt(totalRes.rows[0].count, 10),
+      total_ugc_redeemed: parseInt(ugcRes.rows[0].total, 10),
+      most_popular: popularRes.rows[0] || null,
+      low_stock: parseInt(lowStockRes.rows[0].count, 10)
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Lỗi server" });
+  }
+});
+
 app.post("/rewards", authRequired, requireRole("admin"), async (req, res) => {
-  const { title, description, cost_credits, stock, status } = req.body || {};
+  const { title, description, cost_credits, stock, category_id, limit_per_student, status, image_url, start_date, expiry_date } = req.body || {};
   if (!title || cost_credits === undefined) return res.status(400).json({ error: "title & cost_credits required" });
 
   const rs = await pool.query(
-    `INSERT INTO rewards(title, description, cost_credits, stock, status, created_by)
-     VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [title, description || "", Number(cost_credits), Number(stock || 0), status || "active", req.user.id]
+    `INSERT INTO rewards(title, description, cost_credits, stock, category_id, limit_per_student, status, created_by, image_url, start_date, expiry_date)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    [title, description || "", Number(cost_credits), Number(stock || 0), category_id || null, Number(limit_per_student || 1), status || "active", req.user.id, image_url || null, start_date || null, expiry_date || null]
   );
   res.json(rs.rows[0]);
+});
+
+app.put("/rewards/:id", authRequired, requireRole("admin"), async (req, res) => {
+  const { title, description, cost_credits, stock, category_id, limit_per_student, status, image_url, start_date, expiry_date } = req.body || {};
+  if (!title || cost_credits === undefined) return res.status(400).json({ error: "title & cost_credits required" });
+
+  try {
+    const rs = await pool.query(
+      `UPDATE rewards 
+       SET title=$1, description=$2, cost_credits=$3, stock=$4, category_id=$5, limit_per_student=$6, status=$7, image_url=$8, start_date=$9, expiry_date=$10
+       WHERE id=$11 RETURNING *`,
+      [title, description || "", Number(cost_credits), Number(stock || 0), category_id || null, Number(limit_per_student || 1), status || "active", image_url || null, start_date || null, expiry_date || null, req.params.id]
+    );
+    if (rs.rows.length === 0) return res.status(404).json({ error: "Reward not found" });
+    res.json(rs.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/rewards/:id", authRequired, requireRole("admin"), async (req, res) => {
+  try {
+    const rs = await pool.query("DELETE FROM rewards WHERE id=$1 RETURNING *", [req.params.id]);
+    if (rs.rows.length === 0) return res.status(404).json({ error: "Reward not found" });
+    res.json({ success: true, deleted: rs.rows[0] });
+  } catch (e) {
+    if (e.code === '23503') { // Foreign key violation
+      return res.status(400).json({ error: "Không thể xóa vì đã có sinh viên đổi phần thưởng này." });
+    }
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post("/rewards/:id/redeem", authRequired, requireRole("student"), async (req, res) => {
@@ -627,6 +984,61 @@ app.get("/analytics/overview", authRequired, requireRole("admin"), async (req, r
       totalSupply: supply
     }
   });
+});
+
+// dashboard stats (admin)
+app.get("/dashboard/stats", authRequired, requireRole("admin"), async (req, res) => {
+  try {
+    const [pendingRes, studentRes, supplyRes, recentClaimsRes, topEventsRes, txHistoryRes] = await Promise.all([
+      pool.query("SELECT COUNT(*)::int AS n FROM claims WHERE status='submitted'"),
+      pool.query("SELECT COUNT(*)::int AS n FROM users WHERE role='student'"),
+      Promise.resolve(Number(await ugcContract.totalSupply())),
+      pool.query(`
+        SELECT c.id, c.status, c.created_at, c.credit_amount,
+               u.full_name AS student_name,
+               e.title AS event_title,
+               a.name AS activity_name
+        FROM claims c
+        JOIN users u ON u.id = c.student_id
+        JOIN events e ON e.id = c.event_id
+        JOIN activity_types a ON a.id = e.activity_type_id
+        WHERE c.status = 'submitted'
+        ORDER BY c.created_at DESC LIMIT 5
+      `),
+      pool.query(`
+        SELECT e.title, a.name AS activity_name,
+               COUNT(c.id)::int AS participant_count,
+               e.status
+        FROM events e
+        JOIN activity_types a ON a.id = e.activity_type_id
+        LEFT JOIN claims c ON c.event_id = e.id
+        GROUP BY e.id, e.title, a.name, e.status
+        ORDER BY participant_count DESC LIMIT 5
+      `),
+      pool.query(`
+        SELECT DATE(created_at) AS day, SUM(amount)::int AS total_ugc
+        FROM retirements
+        WHERE created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY DATE(created_at) ORDER BY day
+      `)
+    ]);
+
+    const blockNumber = await ethers.provider.getBlockNumber();
+
+    res.json({
+      pendingClaims: pendingRes.rows[0].n,
+      totalStudents: studentRes.rows[0].n,
+      totalSupply: supplyRes,
+      ugcContractAddress: ugcAddress,
+      recentClaims: recentClaimsRes.rows,
+      topEvents: topEventsRes.rows,
+      txHistory: txHistoryRes.rows,
+      blockNumber,
+    });
+  } catch (e) {
+    console.error("Dashboard stats error:", e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // -------------------- start --------------------

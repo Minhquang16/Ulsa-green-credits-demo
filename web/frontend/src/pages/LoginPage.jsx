@@ -12,6 +12,8 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
+  const [showPassword, setShowPassword] = useState(false)
+
   async function handleLogin(e) {
     if (e) e.preventDefault()
     setError('')
@@ -87,9 +89,13 @@ export default function LoginPage() {
                   <label className="font-label text-[10px] uppercase font-bold tracking-widest text-on-surface-variant px-1" htmlFor="password">Mật khẩu</label>
                   <div className="relative group">
                     <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">lock</span>
-                    <input className="w-full bg-surface-container-high border-none rounded-xl py-3.5 pl-12 pr-4 text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary/40 transition-all outline-none"
-                      id="password" name="password" placeholder="••••••••" type="password" autoComplete="current-password"
+                    <input className="w-full bg-surface-container-high border-none rounded-xl py-3.5 pl-12 pr-12 text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary/40 transition-all outline-none"
+                      id="password" name="password" placeholder="••••••••" type={showPassword ? "text" : "password"} autoComplete="current-password"
                       value={pass} onChange={e => setPass(e.target.value)} />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-primary transition-colors">
+                      <span className="material-symbols-outlined text-lg">{showPassword ? 'visibility_off' : 'visibility'}</span>
+                    </button>
                   </div>
                 </div>
                 <button id="loginBtn" className="w-full editorial-gradient text-on-primary font-headline font-bold py-4 rounded-xl shadow-lg shadow-primary/15 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2" 
@@ -134,7 +140,8 @@ export default function LoginPage() {
 
           <div className="mt-6 w-full p-4 rounded-2xl bg-surface-container-low text-[11px] text-on-surface-variant leading-relaxed">
             <p className="font-bold text-on-surface mb-1">Tài khoản demo:</p>
-            <p>• Admin: <code className="font-mono text-primary">admin / admin123</code></p>
+            <p>• Admin 1: <code className="font-mono text-primary">admin / admin123</code></p>
+            <p>• Admin 2: <code className="font-mono text-primary">admin2 / admin456</code> <span className="text-[9px] text-emerald-600 font-bold">→ dùng test Multi-Sig</span></p>
             <p>• Verifier: <code className="font-mono text-primary">verifier / verifier123</code></p>
             <p>• Student: <code className="font-mono text-primary">student1 / student123</code></p>
           </div>

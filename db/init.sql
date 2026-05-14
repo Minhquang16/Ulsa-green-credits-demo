@@ -54,13 +54,25 @@ CREATE INDEX IF NOT EXISTS idx_claims_status ON claims(status);
 CREATE INDEX IF NOT EXISTS idx_claims_student ON claims(student_id);
 CREATE INDEX IF NOT EXISTS idx_claims_event ON claims(event_id);
 
+CREATE TABLE IF NOT EXISTS reward_categories (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  description TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS rewards (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
   description TEXT,
   cost_credits INT NOT NULL CHECK (cost_credits >= 0),
   stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0),
+  category_id UUID REFERENCES reward_categories(id),
+  limit_per_student INT DEFAULT 1,
+  start_date DATE,
+  expiry_date DATE,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive')),
+  image_url TEXT,
   created_by UUID REFERENCES users(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
