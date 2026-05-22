@@ -6,8 +6,14 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   full_name TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin','verifier','student')),
-  wallet_index INT NOT NULL,
-  wallet_address TEXT NOT NULL,
+  wallet_index INT,
+  wallet_address TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled', 'pending', 'rejected')),
+  student_id TEXT UNIQUE,
+  class_name TEXT,
+  cohort TEXT,
+  birth_date TEXT,
+  student_card_image TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

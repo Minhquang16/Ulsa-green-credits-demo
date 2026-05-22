@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './auth.jsx'
 import { ToastProvider, useToast } from './context/ToastContext.jsx'
 
 import LoginPage from './pages/LoginPage.jsx'
+import RegisterPage from './pages/RegisterPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import EventsPage from './pages/EventsPage.jsx'
 import ClaimsPage from './pages/ClaimsPage.jsx'
@@ -83,7 +84,7 @@ function Layout({ children }) {
             {isAdmin && (
               <>
                 <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin' ? 'active' : '')} to="/admin">
-                  <span className="material-symbols-outlined">settings_suggest</span> <span>Hệ thống Stats</span>
+                  <span className="material-symbols-outlined">manage_accounts</span> <span>Quản trị Users & Stats</span>
                 </Link>
                 <Link className={"sidebar-link flex items-center " + (loc.pathname === '/treasury' ? 'active' : '')} to="/treasury">
                   <span className="material-symbols-outlined">account_balance</span> <span>Quản lý Kho quỹ</span>
@@ -139,6 +140,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
             <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
             <Route path="/events" element={<RequireAuth><EventsPage /></RequireAuth>} />
             <Route path="/claims" element={<RequireAuth><ClaimsPage /></RequireAuth>} />

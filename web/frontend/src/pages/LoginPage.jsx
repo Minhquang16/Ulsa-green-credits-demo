@@ -42,13 +42,12 @@ export default function LoginPage() {
 
   return (
     <div id="page-login" className="page active">
-      <section className="min-h-screen bg-surface flex items-center justify-center p-6 relative overflow-hidden">
+      <section className="min-h-screen bg-surface flex items-stretch md:items-center justify-center font-body p-0 md:p-6 relative overflow-hidden">
         
         {/* Background Texture */}
-        <div className="fixed top-0 right-0 w-1/2 h-full -z-10 pointer-events-none">
+        <div className="hidden md:block fixed top-0 right-0 w-1/2 h-full -z-10 pointer-events-none">
           <div className="absolute inset-0 bg-gradient-to-l from-surface to-transparent z-10"></div>
-          <img alt="Leaf texture" className="w-full h-full object-cover grayscale opacity-20"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPgvW8QIZYVe_-wITFrg7vO7vc0-0pd7--S_QZjOQjrD90bxzPst6lmAbgpOOGedAasIUZJrauGiCmohZARTpWxXQiw71shtL37xL68yVizrH2orVabn_ONQeFn1jPfFMcPHPbu8xvLgdo2cboMUfpWJFmjq3bq9fdcxnbZa_ZGfIYq6vqbGS2_ClQOLvPu1l_f_3iMrRQAwqsmGhxgpmFZgOcbnw34BpzzcLybXZnVUdXJbrtUjVkEEtJ2qG2SkbrLXcHUIscSjQ"/>
+          <div className="absolute inset-0 bg-[url('https://lh3.googleusercontent.com/aida-public/AB6AXuDPgvW8QIZYVe_-wITFrg7vO7vc0-0pd7--S_QZjOQjrD90bxzPst6lmAbgpOOGedAasIUZJrauGiCmohZARTpWxXQiw71shtL37xL68yVizrH2orVabn_ONQeFn1jPfFMcPHPbu8xvLgdo2cboMUfpWJFmjq3bq9fdcxnbZa_ZGfIYq6vqbGS2_ClQOLvPu1l_f_3iMrRQAwqsmGhxgpmFZgOcbnw34BpzzcLybXZnVUdXJbrtUjVkEEtJ2qG2SkbrLXcHUIscSjQ')] w-full h-full bg-cover grayscale opacity-10"></div>
         </div>
 
         <main className="w-full max-w-[480px] flex flex-col items-center animate-in">
@@ -104,6 +103,13 @@ export default function LoginPage() {
                   <span className="material-symbols-outlined text-lg" style={{fontVariationSettings:"'wght' 600"}}>arrow_forward</span>
                 </button>
               </form>
+
+              <div className="mt-5 text-center text-xs">
+                <span className="text-on-surface-variant">Bạn là sinh viên mới? </span>
+                <button onClick={() => nav('/register')} className="font-bold text-primary hover:underline transition-all">
+                  Đăng ký tài khoản
+                </button>
+              </div>
             </div>
           </div>
 
@@ -138,13 +144,6 @@ export default function LoginPage() {
             </div>
           </section>
 
-          <div className="mt-6 w-full p-4 rounded-2xl bg-surface-container-low text-[11px] text-on-surface-variant leading-relaxed">
-            <p className="font-bold text-on-surface mb-1">Tài khoản demo:</p>
-            <p>• Admin 1: <code className="font-mono text-primary">admin / admin123</code></p>
-            <p>• Admin 2: <code className="font-mono text-primary">admin2 / admin456</code> <span className="text-[9px] text-emerald-600 font-bold">→ dùng test Multi-Sig</span></p>
-            <p>• Verifier: <code className="font-mono text-primary">verifier / verifier123</code></p>
-            <p>• Student: <code className="font-mono text-primary">student1 / student123</code></p>
-          </div>
         </main>
       </section>
     </div>

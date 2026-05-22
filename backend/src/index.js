@@ -222,6 +222,26 @@ async function seedIfNeeded() {
     ALTER TABLE rewards ADD COLUMN IF NOT EXISTS expiry_date DATE;
   `);
 
+  // Make sure users table has status column & other registration fields
+  await pool.query("ALTER TABLE users ALTER COLUMN wallet_index DROP NOT NULL;");
+  await pool.query("ALTER TABLE users ALTER COLUMN wallet_address DROP NOT NULL;");
+  await pool.query("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_status_check;");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';");
+  await pool.query("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_status_check;");
+  await pool.query("ALTER TABLE users ADD CONSTRAINT users_status_check CHECK (status IN ('active', 'disabled', 'pending', 'rejected'));");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS student_id TEXT;");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS class_name TEXT;");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS cohort TEXT;");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date TEXT;");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS student_card_image TEXT;");
+  
+  // Make student_id unique but handle potential error if duplicates exist (should not exist on fresh/reset systems, but if they do, we log and ignore)
+  try {
+    await pool.query("ALTER TABLE users ADD CONSTRAINT users_student_id_key UNIQUE (student_id);");
+  } catch (e) {
+    console.log("Migration warning (student_id unique constraint):", e.message);
+  }
+
   // users
   const uCount = await pool.query("SELECT COUNT(*)::int AS n FROM users");
   if (uCount.rows[0].n === 0) {
@@ -351,6 +371,10 @@ app.post("/auth/login", async (req, res) => {
   const ok = bcrypt.compareSync(password, user.password_hash);
   if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
+  if (user.status === "disabled") return res.status(403).json({ error: "Tài khoản của bạn đã bị khóa." });
+  if (user.status === "pending") return res.status(403).json({ error: "Tài khoản của bạn đang chờ phê duyệt thẻ sinh viên bởi Admin." });
+  if (user.status === "rejected") return res.status(403).json({ error: "Yêu cầu đăng ký tài khoản của bạn đã bị từ chối." });
+
   const token = signToken(user);
   res.json({
     token,
@@ -362,6 +386,68 @@ app.post("/auth/login", async (req, res) => {
       wallet_address: user.wallet_address
     }
   });
+});
+
+app.post("/auth/register", upload.single("student_card"), async (req, res) => {
+  const { username, password, full_name, student_id } = req.body || {};
+  
+  if (!username || !password || !full_name || !student_id) {
+    return res.status(400).json({ error: "Vui lòng nhập đầy đủ các trường thông tin bắt buộc." });
+  }
+  if (!req.file) {
+    return res.status(400).json({ error: "Vui lòng tải lên ảnh chụp thẻ sinh viên để xác thực." });
+  }
+
+  try {
+    // Check duplicate username
+    const dupUser = await pool.query("SELECT 1 FROM users WHERE username=$1", [username]);
+    if (dupUser.rows.length > 0) {
+      return res.status(400).json({ error: "Tên đăng nhập đã tồn tại trên hệ thống." });
+    }
+
+    // Check duplicate student_id
+    const dupStudent = await pool.query("SELECT 1 FROM users WHERE student_id=$1", [student_id]);
+    if (dupStudent.rows.length > 0) {
+      return res.status(400).json({ error: "Mã sinh viên này đã được đăng ký tài khoản." });
+    }
+
+    const password_hash = bcrypt.hashSync(password, 10);
+    const cardImagePath = `/uploads/${req.file.filename}`;
+
+    const rs = await pool.query(
+      `INSERT INTO users(username, password_hash, full_name, role, status, student_id, student_card_image) 
+       VALUES($1, $2, $3, 'student', 'pending', $4, $5) 
+       RETURNING id, username, full_name, student_id, status`,
+      [username, password_hash, full_name, student_id, cardImagePath]
+    );
+
+    res.json({
+      message: "Đăng ký thành công! Vui lòng chờ Admin phê duyệt tài khoản.",
+      user: rs.rows[0]
+    });
+  } catch (e) {
+    console.error("Registration error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/me/claims", authRequired, async (req, res) => {
+  try {
+    const rs = await pool.query(
+      `SELECT c.*, e.title AS event_title, a.name AS activity_name, a.credit_amount,
+              u.full_name AS student_name
+       FROM claims c
+       JOIN events e ON e.id = c.event_id
+       JOIN activity_types a ON a.id = e.activity_type_id
+       JOIN users u ON u.id = c.student_id
+       WHERE c.student_id=$1
+       ORDER BY c.created_at DESC`,
+      [req.user.id]
+    );
+    res.json(rs.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get("/me", authRequired, async (req, res) => {
@@ -710,6 +796,170 @@ app.post("/claims/:id/reject", authRequired, requireRole("admin","verifier"), as
   );
 
   res.json(update.rows[0]);
+});
+
+// -------------------- users management (admin) --------------------
+app.get("/admin/users", authRequired, requireRole("admin"), async (req, res) => {
+  try {
+    const rs = await pool.query("SELECT id, username, full_name, role, wallet_address, status, student_id, student_card_image, created_at FROM users ORDER BY created_at DESC");
+    const users = rs.rows;
+    // Fetch on-chain balances
+    const withBalances = await Promise.all(users.map(async (u) => {
+      try {
+        if (!u.wallet_address) return { ...u, ugc_balance: 0 };
+        const bal = await ugcContract.balanceOf(u.wallet_address);
+        return { ...u, ugc_balance: Number(bal) };
+      } catch {
+        return { ...u, ugc_balance: 0 };
+      }
+    }));
+    res.json(withBalances);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/admin/users", authRequired, requireRole("admin"), async (req, res) => {
+  const { username, password, full_name, role } = req.body || {};
+  if (!username || !password || !full_name || !role) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+  try {
+    const dup = await pool.query("SELECT 1 FROM users WHERE username=$1", [username]);
+    if (dup.rows.length > 0) return res.status(400).json({ error: "Username already exists" });
+
+    const rsMax = await pool.query("SELECT MAX(wallet_index) as m FROM users");
+    const maxIdx = rsMax.rows[0].m !== null ? rsMax.rows[0].m : -1;
+    const nextIdx = maxIdx + 1;
+    
+    const wallet = deriveWallet(nextIdx);
+    const password_hash = bcrypt.hashSync(password, 10);
+    
+    const rs = await pool.query(
+      "INSERT INTO users(username, password_hash, full_name, role, wallet_index, wallet_address) VALUES($1,$2,$3,$4,$5,$6) RETURNING id, username, full_name, role, wallet_address, status, created_at",
+      [username, password_hash, full_name, role, nextIdx, wallet.address]
+    );
+    res.json(rs.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/admin/users/:id", authRequired, requireRole("admin"), async (req, res) => {
+  const { full_name, role, status, password } = req.body || {};
+  try {
+    const userRs = await pool.query("SELECT * FROM users WHERE id=$1", [req.params.id]);
+    if (userRs.rows.length === 0) return res.status(404).json({ error: "User not found" });
+    const user = userRs.rows[0];
+
+    if (req.user.id === user.id) {
+      if (status && status === 'disabled') return res.status(400).json({ error: "Không thể tự khóa tài khoản của bản thân" });
+      if (role && role !== 'admin') return res.status(400).json({ error: "Không thể tự hạ quyền của bản thân" });
+    }
+
+    let pHash = user.password_hash;
+    if (password && password.trim() !== "") {
+      pHash = bcrypt.hashSync(password, 10);
+    }
+
+    const newFullName = full_name || user.full_name;
+    const newRole = role || user.role;
+    const newStatus = status || user.status || 'active';
+
+    const updateRs = await pool.query(
+      "UPDATE users SET full_name=$1, role=$2, status=$3, password_hash=$4 WHERE id=$5 RETURNING id, username, full_name, role, wallet_address, status, created_at",
+      [newFullName, newRole, newStatus, pHash, req.params.id]
+    );
+    res.json(updateRs.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/admin/users/:id", authRequired, requireRole("admin"), async (req, res) => {
+  try {
+    const userRs = await pool.query("SELECT * FROM users WHERE id=$1", [req.params.id]);
+    if (userRs.rows.length === 0) return res.status(404).json({ error: "User not found" });
+    if (req.user.id === userRs.rows[0].id) return res.status(400).json({ error: "Không thể xóa chính bản thân" });
+
+    // Try hard delete first, if failed because of foreign key, then soft delete
+    try {
+      await pool.query("DELETE FROM users WHERE id=$1", [req.params.id]);
+    } catch (dbErr) {
+      // 23503 is foreign_key_violation in pg
+      if (dbErr.code === '23503') {
+        await pool.query("UPDATE users SET status='disabled' WHERE id=$1", [req.params.id]);
+        return res.json({ message: "User disabled due to existing related records" });
+      } else {
+        throw dbErr;
+      }
+    }
+    res.json({ message: "User deleted successfully" });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/admin/users/:id/approve", authRequired, requireRole("admin"), async (req, res) => {
+  const userId = req.params.id;
+  try {
+    const userRs = await pool.query("SELECT * FROM users WHERE id=$1", [userId]);
+    if (userRs.rows.length === 0) return res.status(404).json({ error: "User not found" });
+    const user = userRs.rows[0];
+
+    if (user.status !== "pending") {
+      return res.status(400).json({ error: "Tài khoản này không ở trạng thái Chờ duyệt." });
+    }
+
+    // Calculate next wallet index
+    const rsMax = await pool.query("SELECT MAX(wallet_index) as m FROM users");
+    const maxIdx = rsMax.rows[0].m !== null ? rsMax.rows[0].m : -1;
+    const nextIdx = maxIdx + 1;
+
+    const wallet = deriveWallet(nextIdx);
+
+    const updateRs = await pool.query(
+      `UPDATE users 
+       SET status='active', wallet_index=$1, wallet_address=$2 
+       WHERE id=$3 
+       RETURNING id, username, full_name, role, wallet_address, status, student_id, student_card_image, created_at`,
+      [nextIdx, wallet.address, userId]
+    );
+
+    res.json({
+      message: "Phê duyệt tài khoản sinh viên thành công!",
+      user: updateRs.rows[0]
+    });
+  } catch (e) {
+    console.error("Approve student error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/admin/users/:id/reject", authRequired, requireRole("admin"), async (req, res) => {
+  const userId = req.params.id;
+  try {
+    const userRs = await pool.query("SELECT * FROM users WHERE id=$1", [userId]);
+    if (userRs.rows.length === 0) return res.status(404).json({ error: "User not found" });
+    const user = userRs.rows[0];
+
+    if (user.status !== "pending") {
+      return res.status(400).json({ error: "Tài khoản này không ở trạng thái Chờ duyệt." });
+    }
+
+    const updateRs = await pool.query(
+      "UPDATE users SET status='rejected' WHERE id=$1 RETURNING id, username, full_name, status, created_at",
+      [userId]
+    );
+
+    res.json({
+      message: "Đã từ chối duyệt tài khoản sinh viên.",
+      user: updateRs.rows[0]
+    });
+  } catch (e) {
+    console.error("Reject student error:", e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // wallets management (admin)
