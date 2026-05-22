@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth.jsx'
 import { useToast } from '../context/ToastContext.jsx'
+import ulsaLogo from '../ulsa_logo.png'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -47,13 +48,13 @@ export default function LoginPage() {
         {/* Background Texture */}
         <div className="hidden md:block fixed top-0 right-0 w-1/2 h-full -z-10 pointer-events-none">
           <div className="absolute inset-0 bg-gradient-to-l from-surface to-transparent z-10"></div>
-          <div className="absolute inset-0 bg-[url('https://lh3.googleusercontent.com/aida-public/AB6AXuDPgvW8QIZYVe_-wITFrg7vO7vc0-0pd7--S_QZjOQjrD90bxzPst6lmAbgpOOGedAasIUZJrauGiCmohZARTpWxXQiw71shtL37xL68yVizrH2orVabn_ONQeFn1jPfFMcPHPbu8xvLgdo2cboMUfpWJFmjq3bq9fdcxnbZa_ZGfIYq6vqbGS2_ClQOLvPu1l_f_3iMrRQAwqsmGhxgpmFZgOcbnw34BpzzcLybXZnVUdXJbrtUjVkEEtJ2qG2SkbrLXcHUIscSjQ')] w-full h-full bg-cover grayscale opacity-10"></div>
+          <div className="absolute inset-0 bg-[url('https://lh3.googleusercontent.com/aida-public/AB6AXuDPgvW8QIZYVe_-wITFrg7vO7vc0-0pd7--S_QZjOQjrD90bxzPst6lmAbgpOOGedAasIUZJrauGiCmohZARTpWxXQiw71shtL37xL68yVizrH2orVabn_ONQeFm1jPfFMcPHPbu8xvLgdo2cboMUfpWJFmjq3bq9fdcxnbZa_ZGfIYq6vqbGS2_ClQOLvPu1l_f_3iMrRQAwqsmGhxgpmFZgOcbnw34BpzzcLybXZnVUdXJbrtUjVkEEtJ2qG2SkbrLXcHUIscSjQ')] w-full h-full bg-cover grayscale opacity-10"></div>
         </div>
 
         <main className="w-full max-w-[480px] flex flex-col items-center animate-in">
           <header className="mb-10 text-center">
-            <div className="w-14 h-14 rounded-2xl editorial-gradient flex items-center justify-center mx-auto mb-4 shadow-lg">
-              <span className="material-symbols-outlined text-white text-3xl">eco</span>
+            <div className="w-20 h-20 flex items-center justify-center mx-auto mb-4 drop-shadow-xl">
+              <img src={ulsaLogo} alt="ULSA Logo" className="w-full h-full object-contain" />
             </div>
             <h1 className="font-headline text-3xl font-black tracking-tight text-primary mb-1">ULSA Green Credit</h1>
             <p className="text-on-surface-variant/75 text-sm">Hệ thống quản lý tín chỉ xanh bền vững</p>

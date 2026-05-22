@@ -352,6 +352,22 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+// Memory-based multer for AI verify (no disk write needed)
+const memUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
+
+// -------------------- Gemini AI (optional) --------------------
+let genAI = null;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+if (GEMINI_API_KEY) {
+  try {
+    const { GoogleGenerativeAI } = require("@google/generative-ai");
+    genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    console.log("✅ Gemini AI ready for student card verification.");
+  } catch (e) {
+    console.warn("⚠️  Could not init Gemini AI:", e.message);
+  }
+}
+
 // -------------------- routes --------------------
 app.get("/health", (req, res) => res.json({ ok: true }));
 
@@ -386,6 +402,89 @@ app.post("/auth/login", async (req, res) => {
       wallet_address: user.wallet_address
     }
   });
+});
+
+// -------------------- AI Verify Student Card --------------------
+app.post("/auth/verify-student-card", memUpload.single("student_card"), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "Vui lòng tải ảnh thẻ sinh viên." });
+  }
+
+  // If Gemini not configured, skip gracefully
+  if (!genAI) {
+    return res.json({
+      verified: null,
+      skipped: true,
+      message: "AI chưa được cấu hình — bỏ qua bước xác thực.",
+      extracted: null
+    });
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+    const base64Image = req.file.buffer.toString("base64");
+    const mimeType = req.file.mimetype || "image/jpeg";
+
+    const prompt = `Phân tích ảnh thẻ sinh viên đại học Việt Nam. Đọc thông tin trên thẻ và trả về JSON thuần (không markdown, không ký tự thừa):
+{
+  "student_id": "mã sinh viên (chỉ chữ số)",
+  "full_name": "họ và tên đầy đủ viết hoa",
+  "birth_date": "ngày sinh dd/mm/yyyy hoặc null",
+  "class_name": "lớp hoặc null",
+  "confidence": 0.95,
+  "is_student_card": true
+}
+Nếu ảnh không rõ hoặc không phải thẻ sinh viên: is_student_card=false, confidence=0.`;
+
+    const result = await model.generateContent([
+      { inlineData: { mimeType, data: base64Image } },
+      prompt
+    ]);
+
+    const text = result.response.text().trim();
+    const jsonMatch = text.match(/\{[\s\S]*?\}/);
+    if (!jsonMatch) {
+      return res.json({ verified: false, message: "Không đọc được thông tin từ ảnh.", extracted: null });
+    }
+
+    const extracted = JSON.parse(jsonMatch[0]);
+
+    if (!extracted.is_student_card || extracted.confidence < 0.4) {
+      return res.json({
+        verified: false,
+        message: "Ảnh không rõ hoặc không phải thẻ sinh viên hợp lệ.",
+        extracted
+      });
+    }
+
+    // Compare with form data
+    const { student_id: providedId, full_name: providedName } = req.body || {};
+
+    const normId  = (s) => (s || "").replace(/\s/g, "");
+    const normName = (s) => (s || "").normalize("NFC").toUpperCase().replace(/\s+/g, " ").trim();
+
+    const idMatch = !providedId || normId(extracted.student_id) === normId(providedId);
+    const nameMatch = !providedName ||
+      normName(extracted.full_name).includes(normName(providedName)) ||
+      normName(providedName).includes(normName(extracted.full_name));
+
+    const verified = idMatch && nameMatch;
+
+    res.json({
+      verified,
+      extracted,
+      matchDetails: { idMatch, nameMatch },
+      message: verified
+        ? "Thẻ sinh viên hợp lệ — thông tin khớp."
+        : !idMatch
+          ? `Mã sinh viên không khớp. Thẻ ghi: ${extracted.student_id}`
+          : `Họ tên không khớp. Thẻ ghi: ${extracted.full_name}`
+    });
+
+  } catch (e) {
+    console.error("Gemini verify error:", e);
+    res.status(500).json({ error: "Lỗi xác thực AI: " + e.message });
+  }
 });
 
 app.post("/auth/register", upload.single("student_card"), async (req, res) => {
@@ -1273,7 +1372,7 @@ app.get("/dashboard/stats", authRequired, requireRole("admin"), async (req, res)
       `)
     ]);
 
-    const blockNumber = await ethers.provider.getBlockNumber();
+    const blockNumber = await provider.getBlockNumber();
 
     res.json({
       pendingClaims: pendingRes.rows[0].n,

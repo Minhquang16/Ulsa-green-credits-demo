@@ -6,7 +6,7 @@ COPY package.json package-lock.json* ./
 RUN npm install
 
 COPY . .
-RUN apt-get update && apt-get install -y dos2unix \
+RUN apt-get update && apt-get install -y dos2unix curl \
     && dos2unix entrypoint.sh \
     && chmod +x entrypoint.sh
 

@@ -35,8 +35,8 @@ function Layout({ children }) {
         <header id="studentNav" className="w-full py-5 bg-[#f3fcef] shadow-[0_8px_32px_rgba(22,29,22,0.06)] sticky top-0 z-50 glass-header">
           <nav className="flex justify-between items-center px-8 lg:px-12 max-w-[1600px] mx-auto w-full">
             <div className="flex items-center gap-3 cursor-pointer" onClick={() => nav('/dashboard')}>
-              <div className="w-8 h-8 rounded-full editorial-gradient flex items-center justify-center">
-                <span className="material-symbols-outlined text-white text-base">eco</span>
+              <div className="w-8 h-8 flex items-center justify-center">
+                <img src={new URL('./ulsa_logo.png', import.meta.url).href} alt="ULSA Logo" className="w-full h-full object-contain" />
               </div>
               <span className="text-xl font-black tracking-tight text-primary font-headline">ULSA Green Credit</span>
             </div>
@@ -62,8 +62,8 @@ function Layout({ children }) {
       {user.role !== 'student' && (
         <aside id="adminSidebar" className="fixed left-0 top-0 h-screen w-72 bg-white border-r border-outline-variant/20 z-[60] py-8 px-6 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
           <div className="flex items-center gap-3 mb-12 px-2">
-            <div className="w-9 h-9 rounded-xl bg-inverse-surface flex items-center justify-center">
-              <span className="material-symbols-outlined text-white text-xl">admin_panel_settings</span>
+            <div className="w-9 h-9 flex items-center justify-center">
+              <img src={new URL('./ulsa_logo.png', import.meta.url).href} alt="ULSA Logo" className="w-full h-full object-contain" />
             </div>
             <span className="text-lg font-black tracking-tight text-inverse-surface font-headline leading-tight">ULSA <span className="text-primary">{isAdmin ? 'Admin' : 'Verifier'}</span></span>
           </div>
