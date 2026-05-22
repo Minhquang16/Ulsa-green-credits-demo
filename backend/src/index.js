@@ -1244,7 +1244,7 @@ app.get("/dashboard/stats", authRequired, requireRole("admin"), async (req, res)
       pool.query("SELECT COUNT(*)::int AS n FROM users WHERE role='student'"),
       Promise.resolve(Number(await ugcContract.totalSupply())),
       pool.query(`
-        SELECT c.id, c.status, c.created_at, c.credit_amount,
+        SELECT c.id, c.status, c.created_at, a.credit_amount,
                u.full_name AS student_name,
                e.title AS event_title,
                a.name AS activity_name
