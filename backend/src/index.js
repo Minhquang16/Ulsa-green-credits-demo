@@ -1335,9 +1335,41 @@ app.get("/analytics/overview", authRequired, requireRole("admin"), async (req, r
   });
 });
 
+
+// analytics weekly claims (admin)
+app.get("/analytics/weekly-claims", authRequired, requireRole("admin"), async (req, res) => {
+  try {
+    const rs = await pool.query(`
+      SELECT 
+        TO_CHAR(DATE(c.decided_at), 'DD/MM') AS day,
+        DATE(c.decided_at) AS date,
+        COUNT(*)::int AS count,
+        COALESCE(SUM(a.credit_amount), 0)::int AS total_credits
+      FROM claims c
+      JOIN events e ON e.id = c.event_id
+      JOIN activity_types a ON a.id = e.activity_type_id
+      WHERE c.status = 'approved'
+        AND c.decided_at >= NOW() - INTERVAL '28 days'
+      GROUP BY DATE(c.decided_at), TO_CHAR(DATE(c.decided_at), 'DD/MM')
+      ORDER BY date ASC
+    `);
+    res.json(rs.rows);
+  } catch (e) {
+    console.error("weekly-claims error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // dashboard stats (admin)
+
 app.get("/dashboard/stats", authRequired, requireRole("admin"), async (req, res) => {
   try {
+    const period = req.query.period || 'month';
+    let interval = '30 days';
+    if (period === 'week') interval = '7 days';
+    else if (period === 'quarter') interval = '90 days';
+    else if (period === 'year') interval = '365 days';
+
     const [pendingRes, studentRes, supplyRes, recentClaimsRes, topEventsRes, txHistoryRes] = await Promise.all([
       pool.query("SELECT COUNT(*)::int AS n FROM claims WHERE status='submitted'"),
       pool.query("SELECT COUNT(*)::int AS n FROM users WHERE role='student'"),
@@ -1367,7 +1399,7 @@ app.get("/dashboard/stats", authRequired, requireRole("admin"), async (req, res)
       pool.query(`
         SELECT DATE(created_at) AS day, SUM(amount)::int AS total_ugc
         FROM retirements
-        WHERE created_at >= NOW() - INTERVAL '7 days'
+        WHERE created_at >= NOW() - INTERVAL '${interval}'
         GROUP BY DATE(created_at) ORDER BY day
       `)
     ]);

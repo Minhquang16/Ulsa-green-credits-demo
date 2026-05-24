@@ -36,7 +36,7 @@ function Layout({ children }) {
           <nav className="flex justify-between items-center px-8 lg:px-12 max-w-[1600px] mx-auto w-full">
             <div className="flex items-center gap-3 cursor-pointer" onClick={() => nav('/dashboard')}>
               <div className="w-8 h-8 flex items-center justify-center">
-                <img src={new URL('./ulsa_logo.png', import.meta.url).href} alt="ULSA Logo" className="w-full h-full object-contain" />
+                <img src={new URL('./logo_web.png', import.meta.url).href} alt="ULSA Logo" className="w-full h-full object-contain" />
               </div>
               <span className="text-xl font-black tracking-tight text-primary font-headline">ULSA Green Credit</span>
             </div>
@@ -60,12 +60,9 @@ function Layout({ children }) {
 
       {/* Admin/Verifier Sidebar (1:1 Prototype HTML) */}
       {user.role !== 'student' && (
-        <aside id="adminSidebar" className="fixed left-0 top-0 h-screen w-72 bg-white border-r border-outline-variant/20 z-[60] py-8 px-6 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
-          <div className="flex items-center gap-3 mb-12 px-2">
-            <div className="w-9 h-9 flex items-center justify-center">
-              <img src={new URL('./ulsa_logo.png', import.meta.url).href} alt="ULSA Logo" className="w-full h-full object-contain" />
-            </div>
-            <span className="text-lg font-black tracking-tight text-inverse-surface font-headline leading-tight">ULSA <span className="text-primary">{isAdmin ? 'Admin' : 'Verifier'}</span></span>
+        <aside id="adminSidebar" className="fixed left-0 top-0 h-screen w-72 bg-white border-r border-outline-variant/20 z-[60] pt-2 pb-8 px-6 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+          <div className="flex justify-center items-center pb-4 mb-2 border-b border-gray-200 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => nav('/dashboard')}>
+            <img src={new URL('./logo_web.png', import.meta.url).href} alt="UGC Logo" className="w-auto object-contain" style={{ maxHeight: '77px' }} />
           </div>
 
           <nav className="flex-grow space-y-2">
@@ -82,33 +79,19 @@ function Layout({ children }) {
               <span className="material-symbols-outlined">redeem</span> <span>Ưu đãi &amp; Quà tặng</span>
             </Link>
             {isAdmin && (
-              <>
+              <div className="pt-2 mt-4 border-t border-gray-200">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 mt-2 px-3">Quản trị hệ thống</p>
                 <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin' ? 'active' : '')} to="/admin">
                   <span className="material-symbols-outlined">manage_accounts</span> <span>Quản trị Users & Stats</span>
                 </Link>
                 <Link className={"sidebar-link flex items-center " + (loc.pathname === '/treasury' ? 'active' : '')} to="/treasury">
                   <span className="material-symbols-outlined">account_balance</span> <span>Quản lý Kho quỹ</span>
                 </Link>
-              </>
+              </div>
             )}
           </nav>
 
-          <div className="mt-auto pt-8 border-t border-outline-variant/10">
-            <div className="bg-surface-container rounded-2xl p-4 mb-6">
-              <div className="flex items-center gap-3 mb-1">
-                <div className="w-8 h-8 rounded-full editorial-gradient flex items-center justify-center">
-                  <span className="material-symbols-outlined text-white text-base">person</span>
-                </div>
-                <div className="overflow-hidden">
-                  <p className="text-xs font-bold text-on-surface truncate">{user.full_name}</p>
-                  <p className="text-[10px] text-on-surface-variant truncate opacity-70">{user.role?.toUpperCase()}</p>
-                </div>
-              </div>
-            </div>
-            <button onClick={logout} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-outline-variant/30 text-sm font-bold text-on-surface-variant hover:bg-error/5 hover:border-error/20 hover:text-error transition-all">
-              <span className="material-symbols-outlined text-lg">logout</span> Đăng xuất
-            </button>
-          </div>
+
         </aside>
       )}
 

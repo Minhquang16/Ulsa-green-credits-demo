@@ -58,8 +58,34 @@ function LineSparkline({ value, positive = true }) {
   )
 }
 
+function renderTrend(trend, pos, isBottom = false) {
+  if (trend === '● Đang kết nối') {
+    return <span className={`text-[10px] font-bold ${isBottom ? 'text-black' : 'text-green-600'}`}>{trend}</span>
+  }
+  if (trend === 'Tất cả đã duyệt') {
+    return <span className="text-[10px] font-bold text-black">{trend}</span>
+  }
+  if (trend === 'Cần xử lý ngay') {
+    return <span className="text-[10px] font-bold text-red-500">{trend}</span>
+  }
+  
+  const match = trend?.match(/^(\+\d+(?:\.\d+)?%)(.*)$/)
+  if (match) {
+    const pct = match[1]
+    const rest = match[2]
+    return (
+      <span className="text-[10px] font-bold text-green-600">
+        {pct}
+        {rest && <span className="text-black">{rest}</span>}
+      </span>
+    )
+  }
+  
+  return <span className={`text-[10px] font-bold ${pos ? 'text-green-600' : 'text-red-500'}`}>{trend}</span>
+}
+
 export default function DashboardPage() {
-  const { api, user } = useAuth()
+  const { api, user, logout } = useAuth()
   const { showToast } = useToast()
   const nav = useNavigate()
   const [stats, setStats] = useState(null)
@@ -70,14 +96,41 @@ export default function DashboardPage() {
   const [wallets, setWallets] = useState([])
   const [walletSearch, setWalletSearch] = useState('')
   const [walletRole, setWalletRole] = useState('all')
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
+  const [showNotif, setShowNotif] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
+  const [timePeriod, setTimePeriod] = useState('month')
+  const [showTimePicker, setShowTimePicker] = useState(false)
   const isAdmin = user.role === 'admin' || user.role === 'verifier'
+
+  const timePeriodLabel = { week: '7 ngày qua', month: 'Tháng này', quarter: 'Quý này', year: 'Năm nay' }[timePeriod]
+
+  function exportCSV() {
+    if (!wallets.length) { showToast('Không có dữ liệu để xuất'); return }
+    const headers = ['Họ và tên', 'Tên đăng nhập', 'Vai trò', 'Địa chỉ ví', 'Số dư UGC']
+    const rows = wallets.map(w => [
+      w.full_name || '',
+      w.username || '',
+      w.role === 'admin' ? 'Quản trị viên' : w.role === 'verifier' ? 'Người duyệt' : 'Sinh viên',
+      w.wallet_address || '',
+      w.ugc_balance ?? 0
+    ])
+    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url
+    a.download = `ugc-wallets-${new Date().toISOString().slice(0,10)}.csv`
+    a.click(); URL.revokeObjectURL(url)
+    showToast('✅ Đã xuất file CSV thành công!')
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       if (isAdmin) {
         const [s, b, c, w] = await Promise.all([
-          api('/dashboard/stats').catch(() => null),
+          api(`/dashboard/stats?period=${timePeriod}`).catch(() => null),
           api('/wallet/balance').catch(() => ({ balance: null })),
           api('/wallet/contract').catch(() => ({ address: '' })),
           api('/wallets/all').catch(() => []),
@@ -91,7 +144,7 @@ export default function DashboardPage() {
         setBalance(b?.balance ?? null); setContract(c?.address || '')
       }
     } catch { showToast('⚠️ Lỗi tải dashboard') } finally { setLoading(false) }
-  }, [api, isAdmin, showToast])
+  }, [api, isAdmin, showToast, timePeriod])
 
   useEffect(() => { load() }, [load])
 
@@ -103,7 +156,7 @@ export default function DashboardPage() {
 
   // --- STUDENT VIEW ---
   if (!isAdmin) return (
-    <div style={{ background: '#f0f7f0' }} className="min-h-screen p-8">
+    <div style={{ background: '#ffffff' }} className="min-h-screen p-8">
       <div className="max-w-2xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-black text-gray-800">Xin chào, {user.full_name?.split(' ').pop()} 👋</h1>
@@ -153,24 +206,229 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div style={{ background: '#f2f7f2' }} className="min-h-screen">
-      <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-8 space-y-7">
-
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-black text-gray-800">Xin chào, {user.full_name?.split(' ')[0]} 👋</h1>
-            <p className="text-gray-500 text-sm mt-0.5">Tổng quan hoạt động và hiệu suất hệ thống ULSA Green Credit</p>
+    <div style={{ background: '#ffffff' }} className="min-h-screen">
+      {/* ===== MODALS & DROPDOWNS — outside layout flow ===== */}
+        {/* Help Modal */}
+        {showHelp && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setShowHelp(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-black text-gray-800">Trợ giúp & Hướng dẫn</h2>
+                <button onClick={() => setShowHelp(false)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-gray-500">close</span>
+                </button>
+              </div>
+              <div className="space-y-3">
+                {[
+                  { icon: 'dashboard', title: 'Dashboard', desc: 'Tổng quan số liệu: tổng UGC, sinh viên, claims cần duyệt.' },
+                  { icon: 'pending_actions', title: 'Claims', desc: 'Xem và duyệt các yêu cầu tín chỉ từ sinh viên.' },
+                  { icon: 'eco', title: 'Sự kiện', desc: 'Quản lý các hoạt động xanh đang diễn ra.' },
+                  { icon: 'account_balance', title: 'Ngân sách', desc: 'Phát hành và theo dõi tổng cung UGC token.' },
+                  { icon: 'redeem', title: 'Đổi thưởng', desc: 'Xem các phần thưởng sinh viên có thể đổi bằng UGC.' },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50">
+                    <div className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
+                      <span className="material-symbols-outlined text-green-600 text-lg">{item.icon}</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-800">{item.title}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => { load(); showToast('✅ Đã làm mới!') }}
-              className="flex items-center gap-2 bg-white text-gray-600 border border-gray-200 rounded-xl px-4 py-2 text-sm font-semibold hover:border-green-300 hover:text-green-700 transition-all shadow-sm">
-              <span className={`material-symbols-outlined text-base ${loading ? 'animate-spin' : ''}`}>refresh</span> Làm mới
-            </button>
-            <button onClick={() => showToast('Đang xuất báo cáo...')}
-              className="flex items-center gap-2 bg-white text-gray-600 border border-gray-200 rounded-xl px-4 py-2 text-sm font-semibold hover:border-green-300 hover:text-green-700 transition-all shadow-sm">
-              <span className="material-symbols-outlined text-base">upload</span> Xuất báo cáo
-            </button>
+        )}
+
+        {/* Notification Panel */}
+        {showNotif && (
+          <div className="fixed inset-0 z-50" onClick={() => setShowNotif(false)}>
+            <div className="absolute top-16 right-6 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 w-[380px] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+              
+              {/* Header */}
+              <div className="px-4 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white">
+                <h3 className="font-bold text-[15px] text-gray-800">Thông báo</h3>
+                <button className="text-[13px] text-gray-500 hover:text-gray-800 font-medium transition-colors">
+                  Đánh dấu tất cả đã đọc
+                </button>
+              </div>
+
+              {/* Body (Scrollable list) */}
+              <div className="max-h-[400px] overflow-y-auto">
+                <div className="flex flex-col">
+                  {(stats?.pendingClaims ?? 0) > 0 ? (
+                    <>
+                      {/* Notification Item 1 (Unread) */}
+                      <div className="flex gap-3 p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-50 transition-colors bg-blue-50/30">
+                        <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 border border-orange-200">
+                          <span className="material-symbols-outlined text-orange-600 text-[20px]">pending_actions</span>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-[13px] text-gray-800 leading-snug font-bold">
+                            Hệ thống cần bạn xử lý
+                          </p>
+                          <p className="text-[13px] text-gray-600 leading-snug mt-0.5">
+                            Bạn có <span className="font-bold text-orange-600">{stats?.pendingClaims} claims</span> mới đang chờ phê duyệt. Vui lòng kiểm tra và xử lý ngay.
+                          </p>
+                          <p className="text-[12px] text-gray-500 mt-1 font-medium text-blue-600">1 giờ trước</p>
+                        </div>
+                        <div className="w-2 h-2 bg-blue-500 rounded-full mt-1 flex-shrink-0"></div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="py-12 flex flex-col items-center justify-center text-center px-4">
+                      {/* Empty state (when there are no notifications) */}
+                      <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                        <span className="material-symbols-outlined text-[32px] text-gray-300">notifications_off</span>
+                      </div>
+                      <p className="text-[14px] font-medium text-gray-600">Bạn không có thông báo nào</p>
+                      <p className="text-[13px] text-gray-400 mt-1">Khi có cập nhật mới, thông báo sẽ hiển thị tại đây.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-3 border-t border-gray-100 bg-gray-50">
+                <button 
+                  onClick={(e) => { e.preventDefault(); setShowNotif(false); }}
+                  className="w-full py-2 text-[13px] font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-sm"
+                >
+                  Xem tất cả thông báo
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* Profile Dropdown */}
+        {showProfile && (
+          <div className="fixed inset-0 z-50" onClick={() => setShowProfile(false)}>
+            <div className="absolute top-16 right-6 bg-white rounded-2xl shadow-2xl border border-gray-100 w-64 overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="p-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full overflow-hidden">
+                    <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Avatar" className="w-full h-full object-cover" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm text-gray-800">{user.full_name}</p>
+                    <p className="text-xs text-gray-500">{user.role === 'admin' ? 'Quản trị viên' : user.role === 'verifier' ? 'Người duyệt' : 'Sinh viên'}</p>
+                    <p className="text-xs text-gray-400 font-mono">@{user.username}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-2">
+                <button onClick={() => { setShowProfile(false); showToast('Tính năng đang phát triển') }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 transition-colors">
+                  <span className="material-symbols-outlined text-gray-400 text-lg">manage_accounts</span> Cài đặt tài khoản
+                </button>
+                <button onClick={() => { logout(); nav('/login') }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-red-50 text-sm text-red-600 transition-colors">
+                  <span className="material-symbols-outlined text-red-400 text-lg">logout</span> Đăng xuất
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Time Picker Dropdown */}
+        {showTimePicker && (
+          <div className="fixed inset-0 z-50" onClick={() => setShowTimePicker(false)}>
+            <div className="absolute top-32 right-6 bg-white rounded-2xl shadow-2xl border border-gray-100 w-48 overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="p-2">
+                {[['week','7 ngày qua'],['month','Tháng này'],['quarter','Quý này'],['year','Năm nay']].map(([val, label]) => (
+                  <button key={val} onClick={() => { setTimePeriod(val); setShowTimePicker(false); showToast(`Đang xem: ${label}`) }}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors flex items-center justify-between ${
+                      timePeriod === val ? 'bg-green-50 text-green-700 font-bold' : 'hover:bg-gray-50 text-gray-700'
+                    }`}>
+                    {label}
+                    {timePeriod === val && <span className="material-symbols-outlined text-green-600 text-base">check</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+      {/* ===== MAIN CONTENT ===== */}
+      <div className="max-w-[1280px] mx-auto px-6 lg:px-8 pt-4 pb-8 space-y-7">
+
+        {/* Header Area */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-gray-200">
+          <div>
+            <h1 className="text-3xl font-black text-gray-800 tracking-tight">Tổng quan Dashboard</h1>
+            <p className="text-gray-500 text-sm mt-0.5">Cập nhật trạng thái hệ thống ULSA Green Credit.</p>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            {/* Top Row */}
+            <div className="flex items-center gap-2">
+              {/* Search */}
+              <div className={`flex items-center bg-white border border-gray-200 rounded-2xl overflow-hidden h-9 shadow-sm transition-all duration-300 ${isSearchOpen ? 'w-[290px]' : 'w-9'}`}>
+                <button
+                  onClick={() => { setIsSearchOpen(!isSearchOpen); if (!isSearchOpen) setTimeout(() => document.getElementById('headerSearch')?.focus(), 50) }}
+                  className="w-9 h-9 flex-shrink-0 flex items-center justify-center"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-gray-600" style={{fontVariationSettings:"'wght' 300"}}>search</span>
+                </button>
+                <input
+                  id="headerSearch"
+                  type="text"
+                  placeholder="Tìm kiếm..."
+                  value={walletSearch}
+                  onChange={e => setWalletSearch(e.target.value)}
+                  className={`w-full outline-none focus:ring-0 caret-gray-800 text-[13px] text-gray-700 bg-transparent placeholder-gray-400 pr-3 transition-opacity duration-200 ${isSearchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                  onBlur={() => { if (!walletSearch) setIsSearchOpen(false) }}
+                />
+              </div>
+
+              {/* Help */}
+              <button onClick={() => setShowHelp(true)}
+                className="w-9 h-9 flex-shrink-0 rounded-2xl bg-white border border-gray-200 shadow-sm flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all duration-150">
+                <span className="material-symbols-outlined text-[20px] text-gray-600" style={{fontVariationSettings:"'wght' 300"}}>help_outline</span>
+              </button>
+
+              {/* Notifications */}
+              <button onClick={() => { setShowNotif(!showNotif); setShowProfile(false); setShowTimePicker(false) }}
+                className={`w-9 h-9 flex-shrink-0 rounded-2xl border shadow-sm flex items-center justify-center relative active:scale-95 transition-all duration-150 ${showNotif ? 'bg-green-50 border-green-300' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                <span className={`material-symbols-outlined text-[20px] ${showNotif ? 'text-green-600' : 'text-gray-600'}`} style={{fontVariationSettings:"'wght' 300"}}>notifications</span>
+                {(stats?.pendingClaims ?? 0) > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white px-1">
+                    {stats.pendingClaims}
+                  </span>
+                )}
+              </button>
+
+              {/* Profile — circle avatar + chevron only, no text */}
+              <div onClick={() => { setShowProfile(!showProfile); setShowNotif(false); setShowTimePicker(false) }}
+                className={`flex flex-shrink-0 items-center gap-1 rounded-2xl border shadow-sm cursor-pointer h-9 pl-1 pr-2 active:scale-95 transition-all duration-150 ${showProfile ? 'bg-green-50 border-green-300' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                <div className="w-7 h-7 rounded-full overflow-hidden">
+                  <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Avatar" className="w-full h-full object-cover" />
+                </div>
+                <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${showProfile ? 'rotate-180 text-green-600' : 'text-gray-500'}`}>unfold_more</span>
+              </div>
+
+              {/* Export CSV */}
+              <button onClick={exportCSV}
+                className="flex flex-shrink-0 whitespace-nowrap items-center gap-2 px-4 h-9 rounded-2xl text-[13px] font-semibold text-white bg-[#2d7a4f] hover:bg-[#246140] active:scale-95 transition-all duration-150 shadow-sm">
+                <span className="material-symbols-outlined text-[16px]">ios_share</span>
+                Xuất CSV
+              </button>
+            </div>
+
+            {/* Bottom Row */}
+            <div className="flex items-center gap-2">
+              <div onClick={() => { setShowTimePicker(!showTimePicker); setShowNotif(false); setShowProfile(false) }}
+                className={`flex items-center gap-1 rounded-2xl border shadow-sm cursor-pointer px-3 h-8 active:scale-95 transition-all duration-150 ${showTimePicker ? 'bg-green-50 border-green-300' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                <span className={`text-[13px] font-medium ${showTimePicker ? 'text-green-700' : 'text-gray-700'}`}>{timePeriodLabel}</span>
+                <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${showTimePicker ? 'rotate-180 text-green-600' : 'text-gray-500'}`}>expand_more</span>
+              </div>
+
+              <button disabled={loading} onClick={() => window.location.reload()}
+                className="group flex items-center gap-1.5 px-3 h-8 rounded-2xl text-[13px] font-medium text-gray-700 bg-white border border-gray-200 shadow-sm hover:bg-gray-50 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed">
+                <span className={`material-symbols-outlined text-[16px] text-gray-500 transition-all ${loading ? 'animate-spin' : 'group-hover:rotate-180'}`}>sync</span>
+                Làm mới
+              </button>
+            </div>
           </div>
         </div>
 
@@ -179,21 +437,21 @@ export default function DashboardPage() {
           {kpis.map((k, i) => (
             <div key={i} className={`bg-white rounded-2xl p-5 shadow-sm border transition-all hover:shadow-md hover:-translate-y-0.5 ${k.alert ? 'border-red-200 bg-red-50' : 'border-gray-100'}`}>
               <div className="flex justify-between items-start mb-3">
-                <p className="text-xs text-gray-500 font-semibold">{k.label}</p>
+                <p className="text-xs text-black font-semibold">{k.label}</p>
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${k.alert ? 'bg-red-100' : 'bg-gray-50'}`}>
                   <span className={`material-symbols-outlined text-base ${k.alert ? 'text-red-500' : 'text-gray-400'}`}>{k.icon}</span>
                 </div>
               </div>
               <p className={`text-3xl font-black mb-1 ${k.alert ? 'text-red-600' : 'text-gray-900'}`}>{k.value}</p>
               <div className="flex items-center justify-between">
-                <p className="text-[10px] text-gray-400">{k.sub}</p>
+                <p className="text-[10px] text-gray-600 font-medium">{k.sub}</p>
                 {k.link
                   ? <Link to={k.link} className="text-[10px] text-green-600 font-bold flex items-center gap-0.5 hover:gap-1 transition-all">Chi tiết <span className="material-symbols-outlined" style={{ fontSize: '10px' }}>north_east</span></Link>
-                  : <span className={`text-[10px] font-bold ${k.pos ? 'text-green-600' : 'text-red-500'}`}>{k.trend}</span>
+                  : renderTrend(k.trend, k.pos)
                 }
               </div>
               <div className="mt-3 pt-3 border-t border-gray-50">
-                <span className={`text-[10px] font-bold ${k.pos ? 'text-green-600' : 'text-red-500'}`}>{k.trend}</span>
+                {renderTrend(k.trend, k.pos, true)}
               </div>
             </div>
           ))}

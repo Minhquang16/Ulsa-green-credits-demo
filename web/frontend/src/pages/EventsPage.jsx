@@ -183,179 +183,181 @@ export default function EventsPage() {
   }
 
   return (
-    <main className="max-w-[1200px] mx-auto px-6 lg:px-8 py-8 animate-in">
-      {error && <div className="mb-6 p-4 rounded-xl bg-error-container text-on-error-container text-sm">{error}</div>}
+    <div style={{ background: '#ffffff' }} className="min-h-screen w-full">
+      <main className="max-w-[1200px] mx-auto px-6 lg:px-8 py-8 animate-in">
+        {error && <div className="mb-6 p-4 rounded-xl bg-error-container text-on-error-container text-sm">{error}</div>}
 
-      {user.role !== 'student' && (
-        <section className="mb-12">
-          <div className="flex flex-col lg:flex-row justify-between gap-8 items-start">
+        {user.role !== 'student' && (
+          <section className="mb-12">
+            <div className="flex flex-col lg:flex-row justify-between gap-8 items-start">
 
-            {/* Left: header */}
-            <div className="flex-1">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-primary mb-2 block">Verifier / Admin Portal</span>
-              <h1 className="font-headline text-3xl font-extrabold tracking-tight text-on-surface mb-2">Quản lý Hoạt động</h1>
-              <p className="text-on-surface-variant text-sm leading-relaxed max-w-md">
-                Chọn loại hoạt động có sẵn và tạo sự kiện. Nếu chưa có loại phù hợp, hãy tạo mới ngay bên dưới.
-              </p>
-            </div>
+              {/* Left: header */}
+              <div className="flex-1">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-primary mb-2 block">Verifier / Admin Portal</span>
+                <h1 className="font-headline text-3xl font-extrabold tracking-tight text-on-surface mb-2">Quản lý Hoạt động</h1>
+                <p className="text-on-surface-variant text-sm leading-relaxed max-w-md">
+                  Chọn loại hoạt động có sẵn và tạo sự kiện. Nếu chưa có loại phù hợp, hãy tạo mới ngay bên dưới.
+                </p>
+              </div>
 
-            {/* Right: unified form */}
-            <div className="w-full lg:w-[400px] bg-surface-container-low rounded-3xl p-6 shadow-xl shadow-black/5 border border-outline-variant/10 shrink-0">
-              <form onSubmit={createEvent} className="space-y-3">
+              {/* Right: unified form */}
+              <div className="w-full lg:w-[400px] bg-surface-container-low rounded-3xl p-6 shadow-xl shadow-black/5 border border-outline-variant/10 shrink-0">
+                <form onSubmit={createEvent} className="space-y-3">
 
-                {/* Step 1: Chọn loại hoạt động */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between px-1">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">
-                      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-on-primary text-[8px] font-black mr-1.5">1</span>
-                      Loại hoạt động
-                    </label>
-                    <button type="button" onClick={() => setShowNewAT(v => !v)}
-                      className="text-[10px] font-bold text-primary flex items-center gap-0.5 hover:underline">
-                      <span className="material-symbols-outlined text-xs">{showNewAT ? 'remove' : 'add'}</span>
-                      {showNewAT ? 'Đóng' : 'Tạo mới'}
-                    </button>
-                  </div>
-
-                  {/* Inline create activity type */}
-                  {showNewAT && (
-                    <div className="rounded-xl bg-surface-container-highest p-3 space-y-2 border border-primary/20">
-                      <p className="text-[10px] font-bold text-primary flex items-center gap-1">
-                        <span className="material-symbols-outlined text-xs">eco</span>Loại hoạt động mới
-                      </p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input className="bg-surface-container border-none rounded-lg py-2 px-3 text-xs outline-none"
-                          placeholder="Tên (VD: Đạp xe)" required={showNewAT}
-                          value={atForm.name} onChange={e => setAtForm(f => ({ ...f, name: e.target.value }))} />
-                        <input className="bg-surface-container border-none rounded-lg py-2 px-3 text-xs outline-none"
-                          type="number" min="1" placeholder="Credits (VD: 6)" required={showNewAT}
-                          value={atForm.credit_amount} onChange={e => setAtForm(f => ({ ...f, credit_amount: e.target.value }))} />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-primary">
-                          {atEditId ? 'Thay đổi ảnh bìa' : 'Ảnh bìa cho loại hoạt động'}
-                        </label>
-                        <input type="file" accept="image/*" onChange={e => setAtFile(e.target.files[0])}
-                          className="w-full text-xs text-on-surface-variant file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-[10px] file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all" />
-                      </div>
-                      <div className="flex gap-2">
-                        <button type="button" onClick={createActivityType} disabled={atBusy}
-                          className="flex-1 py-2 rounded-lg bg-[#161d16] text-[#edf6ea] font-bold text-xs disabled:opacity-50">
-                          {atBusy ? 'Đang lưu...' : (atEditId ? '✓ Cập nhật' : '✓ Tạo & chọn loại này')}
-                        </button>
-                        {atEditId && (
-                          <button type="button" onClick={() => { setAtEditId(null); setAtForm(EMPTY_AT); setShowNewAT(false) }}
-                            className="px-3 py-2 rounded-lg bg-surface-container text-on-surface text-xs font-bold">
-                            Hủy
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <select
-                    className="w-full bg-surface-container-high border-none rounded-xl py-2.5 px-3 text-xs text-on-surface outline-none"
-                    value={form.activity_type_id}
-                    onChange={e => setForm(f => ({ ...f, activity_type_id: e.target.value }))}
-                    required
-                  >
-                    <option value="">-- Chọn loại hoạt động --</option>
-                    {activityTypes.map(at => (
-                      <option key={at.id} value={at.id}>{at.name} ({at.credit_amount} UGC)</option>
-                    ))}
-                  </select>
-
-                  {selectedAT && (
-                    <div className="flex items-center justify-between px-1 mt-1">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary text-sm">eco</span>
-                        <span className="text-[10px] text-primary font-bold">{selectedAT.name} · {selectedAT.credit_amount} UGC</span>
-                      </div>
-                      <button type="button" onClick={handleEditAT} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
-                        <span className="material-symbols-outlined text-xs">edit</span>
-                        Sửa loại này
+                  {/* Step 1: Chọn loại hoạt động */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between px-1">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">
+                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-on-primary text-[8px] font-black mr-1.5">1</span>
+                        Loại hoạt động
+                      </label>
+                      <button type="button" onClick={() => setShowNewAT(v => !v)}
+                        className="text-[10px] font-bold text-primary flex items-center gap-0.5 hover:underline">
+                        <span className="material-symbols-outlined text-xs">{showNewAT ? 'remove' : 'add'}</span>
+                        {showNewAT ? 'Đóng' : 'Tạo mới'}
                       </button>
                     </div>
-                  )}
-                </div>
 
-                {/* Step 2: Thông tin sự kiện */}
-                <div className="space-y-1 pt-1">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 block px-1">
-                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-on-primary text-[8px] font-black mr-1.5">2</span>
-                    Tiêu đề sự kiện
-                  </label>
-                  <input className="w-full bg-surface-container-high border-none rounded-xl py-2.5 px-3 text-xs text-on-surface outline-none"
-                    placeholder="VD: Hiến máu nhân đạo" required
-                    value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
-                </div>
+                    {/* Inline create activity type */}
+                    {showNewAT && (
+                      <div className="rounded-xl bg-surface-container-highest p-3 space-y-2 border border-primary/20">
+                        <p className="text-[10px] font-bold text-primary flex items-center gap-1">
+                          <span className="material-symbols-outlined text-xs">eco</span>Loại hoạt động mới
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input className="bg-surface-container border-none rounded-lg py-2 px-3 text-xs outline-none"
+                            placeholder="Tên (VD: Đạp xe)" required={showNewAT}
+                            value={atForm.name} onChange={e => setAtForm(f => ({ ...f, name: e.target.value }))} />
+                          <input className="bg-surface-container border-none rounded-lg py-2 px-3 text-xs outline-none"
+                            type="number" min="1" placeholder="Credits (VD: 6)" required={showNewAT}
+                            value={atForm.credit_amount} onChange={e => setAtForm(f => ({ ...f, credit_amount: e.target.value }))} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-primary">
+                            {atEditId ? 'Thay đổi ảnh bìa' : 'Ảnh bìa cho loại hoạt động'}
+                          </label>
+                          <input type="file" accept="image/*" onChange={e => setAtFile(e.target.files[0])}
+                            className="w-full text-xs text-on-surface-variant file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-[10px] file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all" />
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={createActivityType} disabled={atBusy}
+                            className="flex-1 py-2 rounded-lg bg-[#161d16] text-[#edf6ea] font-bold text-xs disabled:opacity-50">
+                            {atBusy ? 'Đang lưu...' : (atEditId ? '✓ Cập nhật' : '✓ Tạo & chọn loại này')}
+                          </button>
+                          {atEditId && (
+                            <button type="button" onClick={() => { setAtEditId(null); setAtForm(EMPTY_AT); setShowNewAT(false) }}
+                              className="px-3 py-2 rounded-lg bg-surface-container text-on-surface text-xs font-bold">
+                              Hủy
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 block px-1">Địa điểm</label>
-                  <input className="w-full bg-surface-container-high border-none rounded-xl py-2.5 px-3 text-xs text-on-surface outline-none"
-                    placeholder="Khu A — Hội trường"
-                    value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
-                </div>
+                    <select
+                      className="w-full bg-surface-container-high border-none rounded-xl py-2.5 px-3 text-xs text-on-surface outline-none"
+                      value={form.activity_type_id}
+                      onChange={e => setForm(f => ({ ...f, activity_type_id: e.target.value }))}
+                      required
+                    >
+                      <option value="">-- Chọn loại hoạt động --</option>
+                      {activityTypes.map(at => (
+                        <option key={at.id} value={at.id}>{at.name} ({at.credit_amount} UGC)</option>
+                      ))}
+                    </select>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 block px-1">Bắt đầu</label>
-                    <input className="w-full bg-surface-container-high border-none rounded-xl py-2.5 px-3 text-xs outline-none"
-                      type="datetime-local"
-                      value={form.start_at} onChange={e => setForm(f => ({ ...f, start_at: e.target.value }))} />
+                    {selectedAT && (
+                      <div className="flex items-center justify-between px-1 mt-1">
+                        <div className="flex items-center gap-2">
+                          <span className="material-symbols-outlined text-primary text-sm">eco</span>
+                          <span className="text-[10px] text-primary font-bold">{selectedAT.name} · {selectedAT.credit_amount} UGC</span>
+                        </div>
+                        <button type="button" onClick={handleEditAT} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
+                          <span className="material-symbols-outlined text-xs">edit</span>
+                          Sửa loại này
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 block px-1">Kết thúc</label>
-                    <input className="w-full bg-surface-container-high border-none rounded-xl py-2.5 px-3 text-xs outline-none"
-                      type="datetime-local"
-                      value={form.end_at} onChange={e => setForm(f => ({ ...f, end_at: e.target.value }))} />
+
+                  {/* Step 2: Thông tin sự kiện */}
+                  <div className="space-y-1 pt-1">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 block px-1">
+                      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-on-primary text-[8px] font-black mr-1.5">2</span>
+                      Tiêu đề sự kiện
+                    </label>
+                    <input className="w-full bg-surface-container-high border-none rounded-xl py-2.5 px-3 text-xs text-on-surface outline-none"
+                      placeholder="VD: Hiến máu nhân đạo" required
+                      value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
                   </div>
-                </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 block px-1">Mô tả</label>
-                  <input className="w-full bg-surface-container-high border-none rounded-xl py-2.5 px-3 text-xs text-on-surface outline-none"
-                    placeholder="Mô tả chi tiết sự kiện"
-                    value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-                </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 block px-1">Địa điểm</label>
+                    <input className="w-full bg-surface-container-high border-none rounded-xl py-2.5 px-3 text-xs text-on-surface outline-none"
+                      placeholder="Khu A — Hội trường"
+                      value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
+                  </div>
 
-                <div className="flex gap-3 pt-1">
-                  <button type="submit" disabled={busy}
-                    className="flex-1 bg-primary text-on-primary font-headline font-bold py-3 rounded-xl shadow-lg shadow-primary/10 active:scale-[0.98] transition-all text-sm disabled:opacity-50">
-                    {busy ? 'Đang lưu...' : (editId ? 'Cập nhật sự kiện' : 'Tạo sự kiện')}
-                  </button>
-                  {editId && (
-                    <button type="button" onClick={cancelEdit}
-                      className="px-5 bg-surface-container-highest text-on-surface font-bold py-3 rounded-xl text-sm hover:bg-surface-variant transition-all">
-                      Hủy
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 block px-1">Bắt đầu</label>
+                      <input className="w-full bg-surface-container-high border-none rounded-xl py-2.5 px-3 text-xs outline-none"
+                        type="datetime-local"
+                        value={form.start_at} onChange={e => setForm(f => ({ ...f, start_at: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 block px-1">Kết thúc</label>
+                      <input className="w-full bg-surface-container-high border-none rounded-xl py-2.5 px-3 text-xs outline-none"
+                        type="datetime-local"
+                        value={form.end_at} onChange={e => setForm(f => ({ ...f, end_at: e.target.value }))} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 block px-1">Mô tả</label>
+                    <input className="w-full bg-surface-container-high border-none rounded-xl py-2.5 px-3 text-xs text-on-surface outline-none"
+                      placeholder="Mô tả chi tiết sự kiện"
+                      value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+                  </div>
+
+                  <div className="flex gap-3 pt-1">
+                    <button type="submit" disabled={busy}
+                      className="flex-1 bg-primary text-on-primary font-headline font-bold py-3 rounded-xl shadow-lg shadow-primary/10 active:scale-[0.98] transition-all text-sm disabled:opacity-50">
+                      {busy ? 'Đang lưu...' : (editId ? 'Cập nhật sự kiện' : 'Tạo sự kiện')}
                     </button>
-                  )}
-                </div>
-              </form>
+                    {editId && (
+                      <button type="button" onClick={cancelEdit}
+                        className="px-5 bg-surface-container-highest text-on-surface font-bold py-3 rounded-xl text-sm hover:bg-surface-variant transition-all">
+                        Hủy
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </div>
             </div>
+          </section>
+        )}
+
+        {/* Grid Header */}
+        <div className="flex justify-between items-end mb-8">
+          <div>
+            <h2 className="font-headline text-2xl font-extrabold tracking-tight text-on-surface">Danh sách hoạt động xanh</h2>
+            <p className="text-on-surface-variant text-xs mt-1">Tham gia sự kiện để nhận tín chỉ xanh được xác nhận on-chain</p>
           </div>
-        </section>
-      )}
-
-      {/* Grid Header */}
-      <div className="flex justify-between items-end mb-8">
-        <div>
-          <h2 className="font-headline text-2xl font-extrabold tracking-tight text-on-surface">Danh sách hoạt động xanh</h2>
-          <p className="text-on-surface-variant text-xs mt-1">Tham gia sự kiện để nhận tín chỉ xanh được xác nhận on-chain</p>
+          <button onClick={loadAll} className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container-high text-on-surface hover:bg-surface-variant transition-colors">
+            <span className="material-symbols-outlined text-lg">refresh</span>
+          </button>
         </div>
-        <button onClick={loadAll} className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container-high text-on-surface hover:bg-surface-variant transition-colors">
-          <span className="material-symbols-outlined text-lg">refresh</span>
-        </button>
-      </div>
 
-      <div className="flex flex-wrap gap-8 justify-center md:justify-start">
-        {events.map(ev => (
-          <EventCard key={ev.id} ev={ev} userRole={user.role}
-            onSubmitClaim={submitClaim} busy={busy}
-            onEdit={() => handleEdit(ev)} onDelete={() => deleteEvent(ev.id)} />
-        ))}
-      </div>
-    </main>
+        <div className="flex flex-wrap gap-8 justify-center md:justify-start">
+          {events.map(ev => (
+            <EventCard key={ev.id} ev={ev} userRole={user.role}
+              onSubmitClaim={submitClaim} busy={busy}
+              onEdit={() => handleEdit(ev)} onDelete={() => deleteEvent(ev.id)} />
+          ))}
+        </div>
+      </main>
+    </div>
   )
 }
 
