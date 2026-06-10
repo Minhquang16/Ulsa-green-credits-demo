@@ -1,10 +1,12 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useToast } from '../context/ToastContext.jsx'
+import { useAuth } from '../auth.jsx'
 import logoWeb from '../logo_web.png'
 import ulsaLogo from '../ulsa_logo.png'
 
 export default function RegisterPage() {
+  const { user: authUser } = useAuth()
   const { showToast } = useToast()
   const nav = useNavigate()
   const fileInputRef = useRef(null)
@@ -24,6 +26,12 @@ export default function RegisterPage() {
 
   // OCR step state: '' | 'ocr' | 'register'
   const [busyStep, setBusyStep] = useState('')
+
+  useEffect(() => {
+    if (authUser) {
+      nav('/')
+    }
+  }, [authUser, nav])
 
   // --- Helper: normalize Vietnamese text for comparison ---
   function normalizeViet(s) {
@@ -301,7 +309,7 @@ export default function RegisterPage() {
             <div className="-mt-4 mb-4 flex items-center justify-center gap-4">
               {/* Logo 1: UGC */}
               <div className="w-28 h-auto flex items-center justify-center">
-                <img src={logoWeb} alt="UGC Logo" className="max-w-full object-contain" style={{ maxHeight: '60px' }} />
+                <img src={logoWeb} alt="UGC Logo" className="max-w-full object-contain" style={{ maxHeight: '20px' }} />
               </div>
               {/* Divider */}
               <div className="w-px h-10 bg-slate-200 flex-shrink-0" />

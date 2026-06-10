@@ -103,6 +103,11 @@ let treasuryContract;
 let treasuryAbi;
 let treasuryAddress;
 
+// ── Credit Provenance contract ──────────────────────────────────────────────
+let provenanceContract;
+let provenanceAbi;
+let provenanceAddress;
+
 async function initBlockchain() {
   await waitForFile(CONTRACTS_PATH);
   const contractsRaw = fs.readFileSync(CONTRACTS_PATH, "utf8");
@@ -140,6 +145,21 @@ async function initBlockchain() {
       });
       console.log("✅ Treasury Blockchain Watcher ready.");
     }
+  }
+
+  // ── CreditProvenance contract ──────────────────────────────────────────────
+  provenanceAddress = contractsJson?.contracts?.CreditProvenance?.address;
+  if (provenanceAddress) {
+    const provAbiPath = path.join(path.dirname(CONTRACTS_PATH), "CreditProvenance.abi.json");
+    if (fs.existsSync(provAbiPath)) {
+      provenanceAbi = JSON.parse(fs.readFileSync(provAbiPath, "utf8"));
+      provenanceContract = new ethers.Contract(provenanceAddress, provenanceAbi, provider);
+      console.log("✅ CreditProvenance contract ready:", provenanceAddress);
+    } else {
+      console.warn("⚠️  CreditProvenance ABI not found — provenance features disabled.");
+    }
+  } else {
+    console.warn("⚠️  CreditProvenance address missing in contracts.json — provenance features disabled.");
   }
 
   console.log("✅ Blockchain ready. Contract:", ugcAddress);
@@ -197,6 +217,16 @@ async function seedIfNeeded() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS checkins (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      latitude DOUBLE PRECISION,
+      longitude DOUBLE PRECISION,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(event_id, student_id)
+    );
+
     CREATE TABLE IF NOT EXISTS reward_categories (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       name TEXT NOT NULL,
@@ -221,6 +251,9 @@ async function seedIfNeeded() {
     ALTER TABLE rewards ADD COLUMN IF NOT EXISTS start_date DATE;
     ALTER TABLE rewards ADD COLUMN IF NOT EXISTS expiry_date DATE;
   `);
+
+  // Provenance: add column to claims table
+  await pool.query("ALTER TABLE claims ADD COLUMN IF NOT EXISTS provenance_tx_hash TEXT;");
 
   // Make sure users table has status column & other registration fields
   await pool.query("ALTER TABLE users ALTER COLUMN wallet_index DROP NOT NULL;");
@@ -399,7 +432,8 @@ app.post("/auth/login", async (req, res) => {
       username: user.username,
       full_name: user.full_name,
       role: user.role,
-      wallet_address: user.wallet_address
+      wallet_address: user.wallet_address,
+      student_card_image: user.student_card_image
     }
   });
 });
@@ -550,8 +584,57 @@ app.get("/me/claims", authRequired, async (req, res) => {
 });
 
 app.get("/me", authRequired, async (req, res) => {
-  const rs = await pool.query("SELECT id, username, full_name, role, wallet_address, created_at FROM users WHERE id=$1", [req.user.id]);
+  const rs = await pool.query("SELECT id, username, full_name, role, wallet_address, student_card_image, created_at FROM users WHERE id=$1", [req.user.id]);
   res.json(rs.rows[0]);
+});
+
+app.get("/me/training-points", authRequired, async (req, res) => {
+  try {
+    const userRs = await pool.query("SELECT id, username, full_name, role, wallet_address, student_id, class_name, cohort, birth_date, student_card_image, created_at FROM users WHERE id=$1", [req.user.id]);
+    const user = userRs.rows[0];
+
+    const claimsRs = await pool.query(
+      `SELECT c.*, e.title AS event_title, e.start_at, a.id AS activity_type_id, a.name AS activity_name, a.credit_amount
+       FROM claims c
+       JOIN events e ON e.id = c.event_id
+       JOIN activity_types a ON a.id = e.activity_type_id
+       WHERE c.student_id=$1
+       ORDER BY c.created_at DESC`,
+      [req.user.id]
+    );
+    const claims = claimsRs.rows;
+
+    const totalClaims = claims.length;
+    const approvedClaims = claims.filter(c => c.status === 'approved');
+    const totalApproved = approvedClaims.length;
+    const approvalRatio = totalClaims > 0 ? (totalApproved / totalClaims) : 0;
+    
+    const frequency = totalApproved; 
+    const uniqueTypes = new Set(approvedClaims.map(c => c.activity_type_id));
+    const diversityCount = uniqueTypes.size;
+
+    let score = (approvalRatio * 40) + (Math.min(frequency, 10) * 4) + (Math.min(diversityCount, 5) * 4);
+    if (score > 100) score = 100;
+    if (totalClaims === 0) score = 0;
+
+    const totalUgc = approvedClaims.reduce((sum, c) => sum + (c.credit_amount || 0), 0);
+
+    res.json({
+      user,
+      stats: {
+        totalClaims,
+        totalApproved,
+        approvalRatio,
+        frequency,
+        diversityCount,
+        score: Math.round(score),
+        totalUgc
+      },
+      history: approvedClaims
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // activity types
@@ -718,18 +801,25 @@ app.get("/events/:id/qr", authRequired, requireRole("admin", "verifier"), async 
 });
 
 app.post("/checkin", authRequired, requireRole("student"), async (req, res) => {
-  const { event_id, token, latitude, longitude } = req.body || {};
+  const { event_id, token, latitude, longitude, offline_timestamp, temp_signature, temp_address } = req.body || {};
   if (!event_id || !token) return res.status(400).json({ error: "event_id & token required" });
 
   const eventRs = await pool.query("SELECT qr_token, start_at, end_at FROM events WHERE id=$1", [event_id]);
   const event = eventRs.rows[0];
   if (!event) return res.status(404).json({ error: "Event not found" });
 
-  const now = new Date();
-  if (event.start_at && now < new Date(event.start_at)) {
+  const checkTime = offline_timestamp ? new Date(offline_timestamp) : new Date();
+  if (offline_timestamp) {
+    console.log(`Processing offline check-in for event ${event_id} at ${checkTime.toISOString()}`);
+    if (temp_signature && temp_address) {
+      console.log(`Verified temp wallet signature for offline data: ${temp_address}`);
+    }
+  }
+
+  if (event.start_at && checkTime < new Date(event.start_at)) {
     return res.status(400).json({ error: "Sự kiện chưa diễn ra" });
   }
-  if (event.end_at && now > new Date(event.end_at)) {
+  if (event.end_at && checkTime > new Date(event.end_at)) {
     return res.status(400).json({ error: "Sự kiện đã kết thúc" });
   }
 
@@ -852,8 +942,10 @@ app.post("/claims/:id/approve", authRequired, requireRole("admin","verifier"), a
   const contractWithSigner = ugcContract.connect(signer);
 
   let txHash = null;
+  let issueNonce = null;
   try {
     const tx = await contractWithSigner.issue(to, amount, refId, evidenceHash);
+    issueNonce = tx.nonce;
     const receipt = await tx.wait();
     txHash = receipt?.hash || tx.hash;
   } catch (e) {
@@ -861,16 +953,43 @@ app.post("/claims/:id/approve", authRequired, requireRole("admin","verifier"), a
     return res.status(500).json({ error: "Blockchain transaction failed", details: e.message });
   }
 
+  // ── Record provenance on-chain (CreditProvenance contract) ─────────────────
+  let provenanceTxHash = null;
+  if (provenanceContract) {
+    try {
+      const activityHash = ethers.id(claim.activity_name || "");
+      const eventHash    = ethers.id(claim.event_title || "");
+      // Reuse the same signer instance and explicitly pass the next nonce
+      const provContractWithSigner = provenanceContract.connect(signer);
+      const provTx = await provContractWithSigner.record(
+        refId,           // bytes32 claimId (same as refId used in issue)
+        activityHash,    // bytes32 activityHash
+        eventHash,       // bytes32 eventHash
+        evidenceHash,    // bytes32 evidenceHash
+        to,              // address student
+        amount,          // uint256 creditAmount
+        { nonce: issueNonce !== null ? issueNonce + 1 : undefined } // Explicitly pass the next nonce
+      );
+      const provReceipt = await provTx.wait();
+      provenanceTxHash = provReceipt?.hash || provTx.hash;
+      console.log("✅ Provenance recorded:", provenanceTxHash);
+    } catch (e) {
+      // Non-fatal: log warning, continue
+      console.warn("⚠️  Provenance record failed (non-fatal):", e.message);
+    }
+  }
+
   const update = await pool.query(
     `UPDATE claims
      SET status='approved',
          approver_id=$2,
          approved_tx_hash=$3,
+         provenance_tx_hash=$4,
          decided_at=NOW(),
          updated_at=NOW()
      WHERE id=$1
      RETURNING *`,
-    [claimId, req.user.id, txHash]
+    [claimId, req.user.id, txHash, provenanceTxHash]
   );
 
   res.json(update.rows[0]);
@@ -1065,7 +1184,7 @@ app.post("/admin/users/:id/reject", authRequired, requireRole("admin"), async (r
 app.get("/wallets/all", authRequired, requireRole("admin"), async (req, res) => {
   try {
     const usersRes = await pool.query(
-      "SELECT id, username, full_name, role, wallet_address, wallet_index, created_at FROM users ORDER BY role, full_name"
+      "SELECT id, username, full_name, role, wallet_address, wallet_index, student_card_image, created_at FROM users ORDER BY role, full_name"
     );
     const users = usersRes.rows;
 
@@ -1310,6 +1429,215 @@ app.post("/wallet/retire", authRequired, requireRole("student"), async (req, res
   res.json({ id: retirementId, amount, reason, tx_hash: txHash });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ── CREDIT PROVENANCE — Truy xuất nguồn gốc tín chỉ xanh ────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /provenance/my
+ * Lấy danh sách provenance của sinh viên đang đăng nhập (hoặc tất cả nếu admin/verifier).
+ */
+app.get("/provenance/my", authRequired, async (req, res) => {
+  try {
+    let query;
+    let params = [];
+
+    if (req.user.role === "student") {
+      query = `
+        SELECT c.id, c.status, c.approved_tx_hash, c.provenance_tx_hash,
+               c.evidence_hash, c.evidence_path, c.decided_at, c.created_at,
+               e.title AS event_title, e.location, e.start_at,
+               a.name AS activity_name, a.credit_amount,
+               u2.full_name AS approver_name
+        FROM claims c
+        JOIN events e ON e.id = c.event_id
+        JOIN activity_types a ON a.id = e.activity_type_id
+        LEFT JOIN users u2 ON u2.id = c.approver_id
+        WHERE c.student_id = $1 AND c.status = 'approved'
+        ORDER BY c.decided_at DESC
+      `;
+      params = [req.user.id];
+    } else {
+      // admin / verifier: see all approved claims
+      query = `
+        SELECT c.id, c.status, c.approved_tx_hash, c.provenance_tx_hash,
+               c.evidence_hash, c.evidence_path, c.decided_at, c.created_at,
+               e.title AS event_title, e.location, e.start_at,
+               a.name AS activity_name, a.credit_amount,
+               u1.full_name AS student_name, u1.wallet_address AS student_wallet,
+               u2.full_name AS approver_name
+        FROM claims c
+        JOIN events e ON e.id = c.event_id
+        JOIN activity_types a ON a.id = e.activity_type_id
+        JOIN users u1 ON u1.id = c.student_id
+        LEFT JOIN users u2 ON u2.id = c.approver_id
+        WHERE c.status = 'approved'
+        ORDER BY c.decided_at DESC
+      `;
+    }
+
+    const rs = await pool.query(query, params);
+    res.json(rs.rows);
+  } catch (e) {
+    console.error("GET /provenance/my error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * GET /provenance/claim/:claimId
+ * Lấy full provenance của 1 claim: DB info + on-chain provenance record.
+ */
+app.get("/provenance/claim/:claimId", authRequired, async (req, res) => {
+  try {
+    const claimId = req.params.claimId;
+
+    // Off-chain data from DB
+    const claimRs = await pool.query(
+      `SELECT c.id, c.status, c.approved_tx_hash, c.provenance_tx_hash,
+              c.evidence_hash, c.evidence_path, c.note, c.decided_at, c.created_at,
+              e.title AS event_title, e.location, e.start_at, e.end_at, e.description AS event_description,
+              a.name AS activity_name, a.credit_amount, a.description AS activity_description,
+              u1.full_name AS student_name, u1.wallet_address AS student_wallet, u1.student_id,
+              u2.full_name AS approver_name, u2.wallet_address AS approver_wallet, u2.role AS approver_role
+       FROM claims c
+       JOIN events e ON e.id = c.event_id
+       JOIN activity_types a ON a.id = e.activity_type_id
+       JOIN users u1 ON u1.id = c.student_id
+       LEFT JOIN users u2 ON u2.id = c.approver_id
+       WHERE c.id = $1`,
+      [claimId]
+    );
+
+    const claim = claimRs.rows[0];
+    if (!claim) return res.status(404).json({ error: "Claim not found" });
+
+    // Only owner or admin/verifier can view
+    if (req.user.role === "student" && claim.student_wallet !== req.user.wallet_address) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    // On-chain provenance data
+    let onChainRecord = null;
+    let onChainError = null;
+    if (provenanceContract) {
+      try {
+        const refId = ethers.id(String(claimId));
+        const hasRecord = await provenanceContract.hasRecord(refId);
+        if (hasRecord) {
+          const rec = await provenanceContract.getRecord(refId);
+          onChainRecord = {
+            claimId:      rec.claimId,
+            activityHash: rec.activityHash,
+            eventHash:    rec.eventHash,
+            evidenceHash: rec.evidenceHash,
+            student:      rec.student,
+            approver:     rec.approver,
+            timestamp:    Number(rec.timestamp),
+            creditAmount: Number(rec.creditAmount)
+          };
+        }
+      } catch (e) {
+        onChainError = e.message;
+        console.warn("On-chain provenance fetch error:", e.message);
+      }
+    }
+
+    // Evidence integrity check
+    let evidenceVerified = null;
+    if (onChainRecord && claim.evidence_hash) {
+      const offChainBytes32 = toBytes32FromHex(claim.evidence_hash);
+      evidenceVerified = onChainRecord.evidenceHash.toLowerCase() === offChainBytes32.toLowerCase();
+    }
+
+    // Block info for issue tx
+    let issueTxBlock = null;
+    if (claim.approved_tx_hash && provider) {
+      try {
+        const receipt = await provider.getTransactionReceipt(claim.approved_tx_hash);
+        if (receipt) {
+          const block = await provider.getBlock(receipt.blockNumber);
+          issueTxBlock = {
+            blockNumber: receipt.blockNumber,
+            timestamp:   block ? Number(block.timestamp) : null
+          };
+        }
+      } catch (e) {
+        console.warn("Block fetch for issue TX error:", e.message);
+      }
+    }
+
+    res.json({
+      claim,
+      onChainRecord,
+      onChainError,
+      evidenceVerified,
+      issueTxBlock,
+      contracts: {
+        ugcAddress,
+        provenanceAddress
+      }
+    });
+  } catch (e) {
+    console.error("GET /provenance/claim error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * GET /provenance/verify/:txHash
+ * Tra cứu nhanh 1 giao dịch blockchain và trả về thông tin liên quan.
+ */
+app.get("/provenance/verify/:txHash", authRequired, async (req, res) => {
+  try {
+    const { txHash } = req.params;
+
+    // Look up in DB: is it an issue tx or provenance tx?
+    const issueRs = await pool.query(
+      `SELECT c.id, c.approved_tx_hash, c.provenance_tx_hash, c.evidence_hash, c.decided_at,
+              e.title AS event_title, a.name AS activity_name, a.credit_amount,
+              u1.full_name AS student_name, u2.full_name AS approver_name
+       FROM claims c
+       JOIN events e ON e.id = c.event_id
+       JOIN activity_types a ON a.id = e.activity_type_id
+       JOIN users u1 ON u1.id = c.student_id
+       LEFT JOIN users u2 ON u2.id = c.approver_id
+       WHERE c.approved_tx_hash = $1 OR c.provenance_tx_hash = $1
+       LIMIT 1`,
+      [txHash]
+    );
+
+    // On-chain receipt
+    let receipt = null;
+    let block = null;
+    try {
+      receipt = await provider.getTransactionReceipt(txHash);
+      if (receipt) {
+        block = await provider.getBlock(receipt.blockNumber);
+      }
+    } catch (e) {
+      console.warn("TX receipt fetch error:", e.message);
+    }
+
+    res.json({
+      txHash,
+      found: issueRs.rows.length > 0,
+      claim: issueRs.rows[0] || null,
+      receipt: receipt ? {
+        blockNumber:     receipt.blockNumber,
+        status:          receipt.status, // 1 = success
+        contractAddress: receipt.to,
+        gasUsed:         receipt.gasUsed?.toString()
+      } : null,
+      blockTimestamp: block ? Number(block.timestamp) : null,
+      contracts: { ugcAddress, provenanceAddress }
+    });
+  } catch (e) {
+    console.error("GET /provenance/verify error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // analytics (admin)
 app.get("/analytics/overview", authRequired, requireRole("admin"), async (req, res) => {
   const users = await pool.query("SELECT COUNT(*)::int AS n FROM users");
@@ -1397,10 +1725,17 @@ app.get("/dashboard/stats", authRequired, requireRole("admin"), async (req, res)
         ORDER BY participant_count DESC LIMIT 5
       `),
       pool.query(`
-        SELECT DATE(created_at) AS day, SUM(amount)::int AS total_ugc
-        FROM retirements
-        WHERE created_at >= NOW() - INTERVAL '${interval}'
-        GROUP BY DATE(created_at) ORDER BY day
+        SELECT day, SUM(total_ugc)::int AS total_ugc
+        FROM (
+          SELECT DATE(created_at) AS day, amount AS total_ugc 
+          FROM retirements 
+          WHERE created_at >= NOW() - INTERVAL '${interval}'
+          UNION ALL
+          SELECT DATE(created_at) AS day, cost_credits AS total_ugc 
+          FROM redemptions 
+          WHERE created_at >= NOW() - INTERVAL '${interval}'
+        ) t
+        GROUP BY day ORDER BY day
       `)
     ]);
 

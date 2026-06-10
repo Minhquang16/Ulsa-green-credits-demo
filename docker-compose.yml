@@ -23,7 +23,8 @@ services:
     container_name: ugc_blockchain
     environment:
       MNEMONIC: "test test test test test test test test test test test junk"
-    # Không dùng volumes cho blockchain để tránh lỗi đồng bộ file từ Mac
+    volumes:
+      - ./shared:/shared  # deploy.js writes contracts.json here → backend reads it
     ports:
       - "8545:8545"
     healthcheck:

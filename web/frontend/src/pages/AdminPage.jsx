@@ -374,10 +374,16 @@ export default function AdminPage() {
                     <tr key={u.id} className="hover:bg-surface-container-lowest transition-colors group">
                       <td className="p-4">
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg
-                            ${u.role === 'admin' ? 'bg-error' : u.role === 'verifier' ? 'bg-primary' : 'bg-tertiary'}`}>
-                            {u.full_name?.charAt(0).toUpperCase()}
-                          </div>
+                          {u.student_card_image ? (
+                            <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border border-slate-200">
+                              <img src={`/api${u.student_card_image}`} alt="Avatar" className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0
+                              ${u.role === 'admin' ? 'bg-error' : u.role === 'verifier' ? 'bg-primary' : 'bg-tertiary'}`}>
+                              {u.full_name?.charAt(0).toUpperCase()}
+                            </div>
+                          )}
                           <div>
                             <p className="font-bold text-on-surface text-sm">{u.full_name}</p>
                             <div className="flex items-center gap-2 mt-0.5">

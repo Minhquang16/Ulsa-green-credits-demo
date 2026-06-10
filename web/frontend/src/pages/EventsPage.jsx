@@ -367,7 +367,35 @@ function EventCard({ ev, userRole, onSubmitClaim, busy, onEdit, onDelete }) {
   const [open, setOpen] = useState(false)
   const [showQR, setShowQR] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
+  const [checkedInStatus, setCheckedInStatus] = useState(false) // false | 'offline' | 'online'
   const { showToast } = useToast()
+
+  useEffect(() => {
+    // Check if there is an offline checkin for this event on mount
+    const queue = JSON.parse(localStorage.getItem('offline_checkin_queue') || '[]')
+    const found = queue.find(q => q.event_id === ev.id)
+    
+    if (found && checkedInStatus !== 'online') {
+      if (navigator.onLine) {
+        setCheckedInStatus('online')
+        setOpen(true)
+        showToast('Mạng đã khôi phục! Hệ thống đang đồng bộ Check-in, vui lòng nộp minh chứng.')
+      } else {
+        setCheckedInStatus('offline')
+      }
+    }
+
+    // Polling is much more reliable than the 'online' event across React re-renders
+    const interval = setInterval(() => {
+      if (navigator.onLine && checkedInStatus === 'offline') {
+        setCheckedInStatus('online')
+        setOpen(true)
+        showToast('Mạng đã khôi phục! Hệ thống đang đồng bộ Check-in, vui lòng nộp minh chứng.')
+      }
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [ev.id, checkedInStatus, showToast])
 
   const imageMap = {
     'hiến máu': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCa5hqxGqi0xefKNJWNuFNGScvF7fvvyqTIOZ8D1qoLwE4-Z2JtDqiXj4Y4q-uTlv2U13UoAQIBW6rEAVkzXOChWH_jVZLnIVUaxTgLldXppdkEvndQofXNuVa634y5_HMxSE1dNQOKxGJiOBmLC59aZ-5VqOAX_SYAMXAEtWTUfMq7tiqsIfNSDzW0y8CQaFTAkSE8IqBrfzFjfNgYgyo_ez7BAGZIShCFnjPLDLqXXJgz7soAXOonZmWpPn56V9_Il7tfSQHKVaw',
@@ -430,17 +458,37 @@ function EventCard({ ev, userRole, onSubmitClaim, busy, onEdit, onDelete }) {
           {showQR && createPortal(<QRGenerator eventId={ev.id} onClose={() => setShowQR(false)} />, document.body)}
           {showScanner && createPortal(
             <QRScanner eventId={ev.id} onClose={() => setShowScanner(false)}
-              onSuccess={msg => { setShowScanner(false); showToast('✅ ' + msg); setOpen(true) }} />,
+              onSuccess={(msg, isOffline) => { 
+                setShowScanner(false); 
+                showToast(isOffline ? '⚠️ ' + msg : '✅ ' + msg); 
+                setCheckedInStatus(isOffline ? 'offline' : 'online');
+                if (!isOffline) setOpen(true);
+              }} />,
             document.body
           )}
 
           {userRole === 'student' && (
             <div className="space-y-2.5">
-              <button onClick={() => setShowScanner(true)}
-                className="w-full py-3 rounded-xl bg-primary text-on-primary font-headline font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-all shadow-md shadow-primary/20">
-                <span className="material-symbols-outlined text-xl">qr_code_scanner</span>
-                Check-in (Quét QR)
-              </button>
+              {checkedInStatus ? (
+                <div className={`w-full py-3 rounded-xl font-headline font-bold text-sm flex flex-col items-center justify-center gap-1 border px-2 text-center ${checkedInStatus === 'offline' ? 'bg-orange-100 text-orange-800 border-orange-200' : 'bg-green-100 text-green-800 border-green-200'}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-xl">{checkedInStatus === 'offline' ? 'wifi_off' : 'check_circle'}</span>
+                    {checkedInStatus === 'offline' ? 'Đã lưu check-in (Offline)' : 'Bạn đã Check-in thành công!'}
+                  </div>
+                  {checkedInStatus === 'offline' && (
+                    <div className="text-[11px] font-medium opacity-90 mt-1 lowercase first-letter:uppercase">
+                      Khi có mạng vào nộp chứng minh + ấn xác nhận
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button onClick={() => setShowScanner(true)}
+                  className="w-full py-3 rounded-xl bg-primary text-on-primary font-headline font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-all shadow-md shadow-primary/20">
+                  <span className="material-symbols-outlined text-xl">qr_code_scanner</span>
+                  Check-in (Quét QR)
+                </button>
+              )}
+              
               <button onClick={() => setOpen(!open)}
                 className="w-full py-2.5 rounded-xl bg-surface-container text-on-surface font-headline font-bold text-xs flex items-center justify-center gap-2 hover:bg-surface-variant transition-all">
                 Nộp minh chứng sau khi check-in

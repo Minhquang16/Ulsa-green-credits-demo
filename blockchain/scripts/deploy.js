@@ -6,37 +6,55 @@ const { ethers } = hre;
 async function main() {
   const [admin, verifier] = await ethers.getSigners();
 
+  // ── 1. Deploy ULSAGreenCredit (ERC-20 token) ────────────────────────────────
   const ULSAGreenCredit = await ethers.getContractFactory("ULSAGreenCredit");
   const ugc = await ULSAGreenCredit.deploy(admin.address);
   await ugc.waitForDeployment();
+  const ugcAddress = await ugc.getAddress();
 
+  // ── 2. Deploy UGC_Treasury (multi-sig treasury) ─────────────────────────────
   const UGC_Treasury = await ethers.getContractFactory("UGC_Treasury");
-  // using admin and verifier as the 2 multi-sig admins with threshold 2
-  const treasury = await UGC_Treasury.deploy(await ugc.getAddress(), [admin.address, verifier.address], 2);
+  const treasury = await UGC_Treasury.deploy(ugcAddress, [admin.address, verifier.address], 2);
   await treasury.waitForDeployment();
   const treasuryAddress = await treasury.getAddress();
 
+  // ── 3. Deploy CreditProvenance (truy xuất nguồn gốc) ───────────────────────
+  const CreditProvenance = await ethers.getContractFactory("CreditProvenance");
+  const provenance = await CreditProvenance.deploy(admin.address);
+  await provenance.waitForDeployment();
+  const provenanceAddress = await provenance.getAddress();
+
+  // Grant RECORDER_ROLE to verifier wallet so backend (verifier signer) can record
+  const recorderRole = await provenance.RECORDER_ROLE();
+  await (await provenance.grantRole(recorderRole, verifier.address)).wait();
+
+  // ── 4. Grant roles on ULSAGreenCredit ───────────────────────────────────────
   const issuerRole = await ugc.ISSUER_ROLE();
   const burnerRole = await ugc.BURNER_ROLE();
   await (await ugc.grantRole(issuerRole, verifier.address)).wait();
   await (await ugc.grantRole(issuerRole, treasuryAddress)).wait();
   await (await ugc.grantRole(burnerRole, treasuryAddress)).wait();
 
+  // ── 5. Write ABI files & contracts.json ─────────────────────────────────────
   const network = await ethers.provider.getNetwork();
   const chainId = Number(network.chainId);
-  const address = await ugc.getAddress();
 
   const outDir = path.join(__dirname, "../../shared");
   fs.mkdirSync(outDir, { recursive: true });
 
-  const abiPath = path.join(outDir, "ULSAGreenCredit.abi.json");
-  const artifact = await hre.artifacts.readArtifact("ULSAGreenCredit");
-  fs.writeFileSync(abiPath, JSON.stringify(artifact.abi, null, 2));
+  // ULSAGreenCredit ABI
+  const ugcAbi = (await hre.artifacts.readArtifact("ULSAGreenCredit")).abi;
+  fs.writeFileSync(path.join(outDir, "ULSAGreenCredit.abi.json"), JSON.stringify(ugcAbi, null, 2));
 
-  const treasuryAbiPath = path.join(outDir, "UGC_Treasury.abi.json");
-  const treasuryArtifact = await hre.artifacts.readArtifact("UGC_Treasury");
-  fs.writeFileSync(treasuryAbiPath, JSON.stringify(treasuryArtifact.abi, null, 2));
+  // UGC_Treasury ABI
+  const treasuryAbi = (await hre.artifacts.readArtifact("UGC_Treasury")).abi;
+  fs.writeFileSync(path.join(outDir, "UGC_Treasury.abi.json"), JSON.stringify(treasuryAbi, null, 2));
 
+  // CreditProvenance ABI
+  const provenanceAbi = (await hre.artifacts.readArtifact("CreditProvenance")).abi;
+  fs.writeFileSync(path.join(outDir, "CreditProvenance.abi.json"), JSON.stringify(provenanceAbi, null, 2));
+
+  // contracts.json
   const contractsPath = path.join(outDir, "contracts.json");
   fs.writeFileSync(
     contractsPath,
@@ -45,11 +63,12 @@ async function main() {
         chainId,
         rpcUrl: "http://localhost:8545",
         contracts: {
-          ULSAGreenCredit: { address },
-          UGC_Treasury: { address: treasuryAddress }
+          ULSAGreenCredit:  { address: ugcAddress },
+          UGC_Treasury:     { address: treasuryAddress },
+          CreditProvenance: { address: provenanceAddress }
         },
         accounts: {
-          admin: admin.address,
+          admin:    admin.address,
           verifier: verifier.address
         },
         generatedAt: new Date().toISOString()
@@ -59,9 +78,10 @@ async function main() {
     )
   );
 
-  console.log(" Deployed ULSAGreenCredit to:", address);
-  console.log(" Saved:", contractsPath);
-  console.log(" Saved ABI:", abiPath);
+  console.log("✅ Deployed ULSAGreenCredit  :", ugcAddress);
+  console.log("✅ Deployed UGC_Treasury     :", treasuryAddress);
+  console.log("✅ Deployed CreditProvenance :", provenanceAddress);
+  console.log("✅ contracts.json saved to   :", contractsPath);
 }
 
 main().catch((error) => {

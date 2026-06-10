@@ -104,7 +104,7 @@ function TestimonialPanel() {
 }
 
 export default function LoginPage() {
-  const { login } = useAuth()
+  const { login, user: authUser } = useAuth()
   const { showToast } = useToast()
   const nav = useNavigate()
   const [user, setUser] = useState('')
@@ -112,6 +112,12 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [showPw, setShowPw] = useState(false)
+
+  useEffect(() => {
+    if (authUser) {
+      nav('/')
+    }
+  }, [authUser, nav])
 
   async function handleLogin(e) {
     if (e) e.preventDefault()
@@ -148,7 +154,7 @@ export default function LoginPage() {
 
           {/* Logo + Brand */}
           <div className="flex items-center gap-3 mb-12">
-            <img src={ulsaLogo} alt="UGC Logo" className="object-contain" style={{ maxHeight: '70px' }} />
+            <img src={ulsaLogo} alt="UGC Logo" className="object-contain" style={{ maxHeight: '20px' }} />
             <div>
               <p className="font-black text-gray-900 text-[15px] leading-none">ULSA Green Credit</p>
               <p className="text-gray-500 text-[11px] mt-1">Hệ thống tín chỉ xanh bền vững</p>

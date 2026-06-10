@@ -13,6 +13,34 @@ function timeAgo(d) {
   return `${Math.floor(s / 86400)} ngày trước`
 }
 
+function renderAvatar(u, sizeClass = "w-10 h-10") {
+  if (u?.student_card_image) {
+    return (
+      <div className={`${sizeClass} rounded-full overflow-hidden flex-shrink-0 border border-gray-200`}>
+        <img src={`/api${u.student_card_image}`} alt="Avatar" className="w-full h-full object-cover" />
+      </div>
+    )
+  }
+  
+  let bgClass = "bg-green-600"
+  let label = "??"
+  if (u?.role === 'admin') {
+    bgClass = "bg-rose-600"
+    label = "AD"
+  } else if (u?.role === 'verifier') {
+    bgClass = "bg-indigo-600"
+    label = "VF"
+  } else if (u?.full_name) {
+    label = u.full_name.split(' ').pop()?.slice(0, 2).toUpperCase() || "??"
+  }
+  
+  return (
+    <div className={`${sizeClass} rounded-full ${bgClass} text-white font-black flex items-center justify-center flex-shrink-0 select-none shadow-sm text-xs`}>
+      {label}
+    </div>
+  )
+}
+
 function BarChart({ data }) {
   if (!data?.length) return (
     <div className="flex items-end justify-center gap-3 h-full pb-6">
@@ -84,6 +112,58 @@ function renderTrend(trend, pos, isBottom = false) {
   return <span className={`text-[10px] font-bold ${pos ? 'text-green-600' : 'text-red-500'}`}>{trend}</span>
 }
 
+// ── Student level helper ────────────────────────────────────────────────────
+function getStudentLevel(balance) {
+  if (balance >= 200) return { label: 'Xanh Bền Vững', color: '#89DB1F', bg: '#f3ffe0', icon: 'forest' }
+  if (balance >= 100) return { label: 'Xanh Lá', color: '#89DB1F', bg: '#edffc0', icon: 'eco' }
+  if (balance >= 50)  return { label: 'Xanh Mầm', color: '#89DB1F', bg: '#f3ffe0', icon: 'grass' }
+  return { label: 'Mới bắt đầu', color: '#6b7280', bg: '#f9fafb', icon: 'sprout' }
+}
+
+function StudentUGCChart({ claims }) {
+  // Build last 7 days UGC earned from approved claims
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() - (6 - i))
+    return { date: d, label: d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }), ugc: 0 }
+  })
+  claims.filter(c => c.status === 'approved').forEach(c => {
+    const cd = new Date(c.decided_at || c.created_at)
+    days.forEach(d => {
+      if (cd.toDateString() === d.date.toDateString()) d.ugc += (c.credit_amount || 0)
+    })
+  })
+  const max = Math.max(...days.map(d => d.ugc), 1)
+  return (
+    <div className="flex items-end gap-2 h-28 w-full">
+      {days.map((d, i) => {
+        const pct = Math.max((d.ugc / max) * 100, d.ugc > 0 ? 8 : 3)
+        const isToday = i === 6
+        return (
+          <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group">
+            <div className="relative w-full" style={{ height: '88px' }}>
+              <div className="absolute bottom-0 w-full rounded-t-lg transition-all duration-700"
+                style={{
+                  height: `${pct}%`,
+                  background: isToday
+                    ? '#111214'
+                    : d.ugc > 0
+                    ? 'linear-gradient(to top, #6ab015, #89DB1F)'
+                    : '#f3f4f6'
+                }} />
+              {d.ugc > 0 && (
+                <div className="absolute -top-6 left-1/2 -translate-x-1/2 hidden group-hover:flex text-white text-[9px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap z-10" style={{ background: '#111214' }}>
+                  {d.ugc} UGC
+                </div>
+              )}
+            </div>
+            <span className="text-[9px] font-bold" style={{ color: isToday ? '#111214' : d.ugc > 0 ? '#89DB1F' : '#9ca3af' }}>{d.label}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const { api, user, logout } = useAuth()
   const { showToast } = useToast()
@@ -102,6 +182,9 @@ export default function DashboardPage() {
   const [showProfile, setShowProfile] = useState(false)
   const [timePeriod, setTimePeriod] = useState('month')
   const [showTimePicker, setShowTimePicker] = useState(false)
+  // Student-specific state
+  const [studentClaims, setStudentClaims] = useState([])
+  const [studentEvents, setStudentEvents] = useState([])
   const isAdmin = user.role === 'admin' || user.role === 'verifier'
 
   const timePeriodLabel = { week: '7 ngày qua', month: 'Tháng này', quarter: 'Quý này', year: 'Năm nay' }[timePeriod]
@@ -137,11 +220,16 @@ export default function DashboardPage() {
         ])
         setStats(s); setBalance(b?.balance ?? null); setContract(c?.address || ''); setWallets(w || [])
       } else {
-        const [b, c] = await Promise.all([
+        const [b, c, claims, events] = await Promise.all([
           api('/wallet/balance').catch(() => ({ balance: null })),
           api('/wallet/contract').catch(() => ({ address: '' })),
+          api('/me/claims').catch(() => []),
+          api('/events').catch(() => []),
         ])
-        setBalance(b?.balance ?? null); setContract(c?.address || '')
+        setBalance(b?.balance ?? null)
+        setContract(c?.address || '')
+        setStudentClaims(Array.isArray(claims) ? claims : [])
+        setStudentEvents(Array.isArray(events) ? events : [])
       }
     } catch { showToast('⚠️ Lỗi tải dashboard') } finally { setLoading(false) }
   }, [api, isAdmin, showToast, timePeriod])
@@ -155,42 +243,382 @@ export default function DashboardPage() {
   }
 
   // --- STUDENT VIEW ---
-  if (!isAdmin) return (
-    <div style={{ background: '#ffffff' }} className="min-h-screen p-8">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-black text-gray-800">Xin chào, {user.full_name?.split(' ').pop()} 👋</h1>
-          <p className="text-gray-500 text-sm mt-1">Theo dõi tín chỉ xanh và hoạt động của bạn</p>
-        </div>
-        <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 relative overflow-hidden">
-          <div className="absolute inset-0 opacity-5" style={{ background: 'radial-gradient(circle at 80% 50%,#16a34a,transparent)' }} />
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Số dư Tín chỉ Xanh</p>
-          <div className="flex items-baseline gap-2 mb-6">
-            <span className="text-6xl font-black text-gray-900">{balance ?? '—'}</span>
-            <span className="text-xl font-bold text-green-600">UGC</span>
-          </div>
-          <div className="flex gap-3">
-            <Link to="/events" className="flex items-center gap-2 bg-green-600 text-white rounded-xl px-5 py-2.5 text-sm font-bold hover:bg-green-700 transition-colors">
-              <span className="material-symbols-outlined text-base">eco</span> Tham gia hoạt động
-            </Link>
-            <Link to="/rewards" className="flex items-center gap-2 bg-gray-100 text-gray-700 rounded-xl px-5 py-2.5 text-sm font-bold hover:bg-gray-200 transition-colors">
-              <span className="material-symbols-outlined text-base">redeem</span> Đổi quà
-            </Link>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2">Địa chỉ ví blockchain</p>
-          <div className="flex items-center gap-3">
-            <p className="font-mono text-sm text-gray-700 flex-1 truncate">{user.wallet_address || '—'}</p>
-            <button onClick={() => { navigator.clipboard.writeText(user.wallet_address); showToast('Đã sao chép!') }}
-              className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
-              <span className="material-symbols-outlined text-sm">content_copy</span>
+  if (!isAdmin) {
+    const bal = balance ?? 0
+    const level = getStudentLevel(bal)
+    const approvedClaims = studentClaims.filter(c => c.status === 'approved')
+    const pendingClaims  = studentClaims.filter(c => c.status === 'submitted')
+    const totalEarned    = approvedClaims.reduce((s, c) => s + (c.credit_amount || 0), 0)
+    const nextGoal       = bal < 50 ? 50 : bal < 100 ? 100 : bal < 200 ? 200 : 300
+    const progressPct    = Math.min((bal / nextGoal) * 100, 100)
+    const upcomingEvents = studentEvents
+      .filter(e => e.status === 'published' && new Date(e.end_at) > new Date())
+      .slice(0, 4)
+
+    const ACHIEVEMENTS = [
+      { icon: '🌱', label: 'Khởi đầu', desc: 'Tham gia hoạt động đầu tiên', done: approvedClaims.length >= 1 },
+      { icon: '🌿', label: 'Tích cực', desc: 'Hoàn thành 3 hoạt động', done: approvedClaims.length >= 3 },
+      { icon: '🌳', label: 'Chuyên cần', desc: 'Đạt 50 UGC', done: bal >= 50 },
+      { icon: '🏆', label: 'Xuất sắc', desc: 'Đạt 100 UGC', done: bal >= 100 },
+      { icon: '⭐', label: 'Huyền thoại', desc: 'Đạt 200 UGC', done: bal >= 200 },
+      { icon: '🔗', label: 'On-chain', desc: 'Có giao dịch blockchain', done: approvedClaims.some(c => c.tx_hash) },
+    ]
+
+    const CARD = { background:'#fff', borderRadius:16, border:'1px solid #e8e8e8', boxShadow:'0 1px 4px rgba(0,0,0,.05)', position:'relative' }
+    const BK = '#111214'
+    const G = '#89DB1F'
+    const LBL = { fontSize:12, fontWeight:600, color:'#aaa' }
+    const BIG = { fontSize:34, fontWeight:900, lineHeight:1.1 }
+
+    return (
+      <div style={{ background: '#f5f5f5', minHeight: '100vh' }}>
+        <div className="max-w-[1200px] mx-auto px-6 lg:px-8 py-8 space-y-6">
+
+          {/* ── HEADER ─────────────────────────────────────── */}
+          <div className="flex items-start justify-between">
+            <div className="space-y-1">
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-800 tracking-tight leading-tight">
+                Xin chào, {user.full_name || 'Sinh viên'} 👋
+              </h1>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+                <p className="text-sm text-slate-500 font-medium">
+                  Hôm nay là {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                </p>
+                <span className="hidden sm:inline text-slate-300">•</span>
+                <p className="text-sm text-emerald-600 font-medium flex items-center gap-1">
+                  <span>Hôm nay bạn đã tích lũy được tín chỉ xanh nào chưa?</span>
+                  <span className="inline-block animate-bounce">🌱</span>
+                </p>
+              </div>
+            </div>
+            <button onClick={() => load()} disabled={loading}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 transition-all shadow-sm active:scale-95 flex-shrink-0"
+            >
+              <span className={`material-symbols-outlined text-base ${loading ? 'animate-spin' : ''}`}>sync</span>
+              Làm mới
             </button>
           </div>
+
+          {/* ── ROW 1: STAT CARDS ── style like Decko reference ──────── */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
+
+            {/* UGC Balance */}
+            <div style={{ background:'#fff', borderRadius:16, border:'1px solid #e8e8e8', boxShadow:'0 1px 4px rgba(0,0,0,.02)', padding:'20px 22px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+                <span style={{ fontSize:13, fontWeight:600, color:'#555' }}>Số dư tín chỉ</span>
+                <div style={{ width:30, height:30, borderRadius:'50%', background:'#f5f5f5', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize:16, color:'#111' }}>eco</span>
+                </div>
+              </div>
+              <div style={{ fontSize:30, fontWeight:600, color:'#111', lineHeight:1.1, marginBottom:10 }}>
+                {loading ? '…' : bal}
+              </div>
+              <div style={{ fontSize:12, fontWeight:500, color:'#888', display:'flex', alignItems:'center', gap:5 }}>
+                <div style={{ width:16, height:16, border:'1px solid #d1fae5', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', color:'#10b981' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize:10 }}>trending_up</span>
+                </div>
+                <span style={{ color:'#10b981', fontWeight:600 }}>Cấp độ {level.label}</span> 
+                <span style={{ color:'#999' }}>hiện tại</span>
+              </div>
+            </div>
+
+            {/* Total earned */}
+            <div style={{ background:'#fff', borderRadius:16, border:'1px solid #e8e8e8', boxShadow:'0 1px 4px rgba(0,0,0,.02)', padding:'20px 22px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+                <span style={{ fontSize:13, fontWeight:600, color:'#555' }}>Tổng đã kiếm</span>
+                <div style={{ width:30, height:30, borderRadius:'50%', background:'#f5f5f5', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize:16, color:'#111' }}>workspace_premium</span>
+                </div>
+              </div>
+              <div style={{ fontSize:30, fontWeight:600, color:'#111', lineHeight:1.1, marginBottom:10 }}>
+                {loading ? '…' : totalEarned}
+              </div>
+              <div style={{ fontSize:12, fontWeight:500, color:'#888', display:'flex', alignItems:'center', gap:5 }}>
+                <div style={{ width:16, height:16, border: approvedClaims.length > 0 ? '1px solid #d1fae5' : '1px solid #eee', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', color: approvedClaims.length > 0 ? '#10b981' : '#999' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize:10 }}>{approvedClaims.length > 0 ? 'trending_up' : 'trending_flat'}</span>
+                </div>
+                {approvedClaims.length > 0 ? (
+                  <><span style={{ color:'#10b981', fontWeight:600 }}>+{approvedClaims.length} hoạt động</span> <span style={{ color:'#999' }}>đã nhận</span></>
+                ) : (
+                  <span style={{ color:'#999' }}>Chưa có hoạt động</span>
+                )}
+              </div>
+            </div>
+
+            {/* Activities */}
+            <div style={{ background:'#fff', borderRadius:16, border:'1px solid #e8e8e8', boxShadow:'0 1px 4px rgba(0,0,0,.02)', padding:'20px 22px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+                <span style={{ fontSize:13, fontWeight:600, color:'#555' }}>Lần tham gia</span>
+                <div style={{ width:30, height:30, borderRadius:'50%', background:'#f5f5f5', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize:16, color:'#111' }}>task_alt</span>
+                </div>
+              </div>
+              <div style={{ fontSize:30, fontWeight:600, color:'#111', lineHeight:1.1, marginBottom:10 }}>
+                {loading ? '…' : approvedClaims.length}
+              </div>
+              <div style={{ fontSize:12, fontWeight:500, color:'#888', display:'flex', alignItems:'center', gap:5 }}>
+                <div style={{ width:16, height:16, border: approvedClaims.length > 0 ? '1px solid #d1fae5' : '1px solid #eee', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', color: approvedClaims.length > 0 ? '#10b981' : '#999' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize:10 }}>{approvedClaims.length > 0 ? 'trending_up' : 'trending_flat'}</span>
+                </div>
+                {approvedClaims.length > 0 ? (
+                  <><span style={{ color:'#10b981', fontWeight:600 }}>Đã ghi nhận</span> <span style={{ color:'#999' }}>trên hệ thống</span></>
+                ) : (
+                  <span style={{ color:'#999' }}>Chưa tham gia</span>
+                )}
+              </div>
+            </div>
+
+            {/* Pending */}
+            <div style={{ background:'#fff', borderRadius:16, border:'1px solid #e8e8e8', boxShadow:'0 1px 4px rgba(0,0,0,.02)', padding:'20px 22px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+                <span style={{ fontSize:13, fontWeight:600, color:'#555' }}>Chờ duyệt</span>
+                <div style={{ width:30, height:30, borderRadius:'50%', background:'#f5f5f5', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize:16, color:'#111' }}>pending_actions</span>
+                </div>
+              </div>
+              <div style={{ fontSize:30, fontWeight:600, color:'#111', lineHeight:1.1, marginBottom:10 }}>
+                {loading ? '…' : pendingClaims.length}
+              </div>
+              <div style={{ fontSize:12, fontWeight:500, color:'#888', display:'flex', alignItems:'center', gap:5 }}>
+                <div style={{ width:16, height:16, border: pendingClaims.length > 0 ? '1px solid #ffedd5' : '1px solid #d1fae5', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', color: pendingClaims.length > 0 ? '#f97316' : '#10b981' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize:10 }}>{pendingClaims.length > 0 ? 'trending_down' : 'trending_up'}</span>
+                </div>
+                {pendingClaims.length > 0 ? (
+                  <><span style={{ color:'#f97316', fontWeight:600 }}>Đang đợi xét duyệt</span> <span style={{ color:'#999' }}>từ Verifier</span></>
+                ) : (
+                  <><span style={{ color:'#10b981', fontWeight:600 }}>Đã hoàn tất</span> <span style={{ color:'#999' }}>xử lý</span></>
+                )}
+              </div>
+            </div>
+          </div>
+
+
+          {/* ROW 2: CHART + EVENTS */}
+          <div style={{ display:'grid', gridTemplateColumns:'3fr 2fr', gap:14 }}>
+            {/* Chart */}
+            <div style={CARD}>
+              <div style={{ padding:'20px 20px 0' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
+                  <div>
+                    <p style={{ fontSize:16, fontWeight:900, color:BK, margin:0 }}>Tín chỉ nhận được</p>
+                    <p style={{ fontSize:12, color:'#bbb', marginTop:2, fontWeight:500 }}>7 ngày gần nhất</p>
+                  </div>
+                  <Link to="/claims" style={{ fontSize:11, fontWeight:600, color:'#bbb', textDecoration:'none', display:'flex', alignItems:'center', gap:2 }}>
+                    Xem tất cả <span className="material-symbols-outlined" style={{ fontSize:13 }}>north_east</span>
+                  </Link>
+                </div>
+              </div>
+              <div style={{ padding:'0 20px 20px' }}>
+                {loading
+                  ? <div style={{ height:112, display:'flex', alignItems:'center', justifyContent:'center' }}><span className="material-symbols-outlined" style={{ fontSize:32, color:'#ddd' }}>hourglass_empty</span></div>
+                  : <StudentUGCChart claims={studentClaims} />}
+              </div>
+            </div>
+
+            {/* Events */}
+            <div style={{ background:'#fff', borderRadius:16, border:'1px solid #e8e8e8', boxShadow:'0 1px 4px rgba(0,0,0,.02)', padding:'24px 20px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                <p style={{ fontSize:16, fontWeight:800, color:'#111', margin:0 }}>Sắp diễn ra</p>
+                <div style={{ cursor:'pointer', display:'flex', alignItems:'center' }}>
+                  <span className="material-symbols-outlined" style={{ color:'#888' }}>more_horiz</span>
+                </div>
+              </div>
+              {loading ? (
+                <div style={{ display:'flex', justifyContent:'center', padding:'24px 0' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize:28, color:'#ddd' }}>hourglass_empty</span>
+                </div>
+              ) : upcomingEvents.length === 0 ? (
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'20px 0', gap:8 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize:36, color:'#ddd' }}>event_busy</span>
+                  <p style={{ fontSize:12, color:'#bbb', fontWeight:500 }}>Không có sự kiện sắp tới</p>
+                </div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                  {upcomingEvents.map((ev, i) => {
+                    const d = new Date(ev.start_at);
+                    const dateStr = d.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: 'short' });
+                    const timeStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                    const isFirst = i === 0;
+                    return (
+                      <div key={ev.id} onClick={() => nav('/events')}
+                        style={{ display:'flex', alignItems:'center', gap:16, padding:'14px 16px', borderRadius:12, cursor:'pointer', background: isFirst ? '#f9fafb' : '#fff', transition:'background .2s' }}
+                        onMouseEnter={e => e.currentTarget.style.background='#f3f4f6'}
+                        onMouseLeave={e => e.currentTarget.style.background=isFirst ? '#f9fafb' : '#fff'}>
+                        {/* Checkbox */}
+                        <div style={{ width:20, height:20, borderRadius:6, border: isFirst ? 'none' : '2px solid #ddd', background: isFirst ? '#10b981' : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                          {isFirst && <span className="material-symbols-outlined" style={{ fontSize:14, color:'#fff', fontWeight:900 }}>check</span>}
+                        </div>
+                        {/* Time Info */}
+                        <div style={{ flexShrink:0, width:95 }}>
+                          <p style={{ fontSize:11, color:'#888', fontWeight:500, margin:'0 0 2px' }}>{dateStr}</p>
+                          <p style={{ fontSize:13, fontWeight:800, color:'#111', margin:0 }}>{timeStr}</p>
+                        </div>
+                        {/* Event Info */}
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <p style={{ fontSize:14, fontWeight:700, color:'#111', margin:'0 0 2px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.title}</p>
+                          <p style={{ fontSize:12, color:'#888', margin:0, fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                            {ev.activity_name} • +{ev.credit_amount} UGC
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ROW 3: QUICK ACTIONS + WALLET + ACHIEVEMENTS */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:14 }}>
+            {/* Quick Actions */}
+            <div style={CARD}>
+              <div style={{ padding:20 }}>
+                <p style={{ fontSize:14, fontWeight:800, color:BK, margin:'0 0 12px' }}>Hành động nhanh</p>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                  {[
+                    { icon:'qr_code_scanner', label:'Quét QR',   to:'/events',     desc:'Check-in sự kiện' },
+                    { icon:'redeem',           label:'Đổi quà',   to:'/rewards',    desc:'Dùng UGC' },
+                    { icon:'receipt_long',     label:'Ghi nhận',  to:'/claims',     desc:'Xem claims' },
+                    { icon:'policy',           label:'On-chain',  to:'/provenance', desc:'Nguồn gốc' },
+                  ].map((a, i) => (
+                    <Link key={i} to={a.to} style={{ textDecoration:'none', display:'flex', flexDirection:'column', gap:5, padding:11, borderRadius:11, border:'1px solid #eee', background:'#fafafa', transition:'background .15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background='#f0f0f0'}
+                      onMouseLeave={e => e.currentTarget.style.background='#fafafa'}>
+                      <span className="material-symbols-outlined" style={{ fontSize:19, color:'#aaa' }}>{a.icon}</span>
+                      <p style={{ fontSize:12, fontWeight:800, color:BK, margin:0 }}>{a.label}</p>
+                      <p style={{ fontSize:10, color:'#bbb', margin:0 }}>{a.desc}</p>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Wallet */}
+            <div style={CARD}>
+              <div style={{ padding:20 }}>
+                <p style={{ fontSize:14, fontWeight:800, color:BK, margin:'0 0 12px' }}>Ví Blockchain</p>
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {[
+                    { label:'Địa chỉ ví', val: user.wallet_address, onCopy: () => { navigator.clipboard.writeText(user.wallet_address||''); showToast('Đã sao chép!') } },
+                    { label:'Smart Contract', val: contract, onCopy: () => { navigator.clipboard.writeText(contract||''); showToast('Đã sao chép!') } },
+                  ].map((item, i) => (
+                    <div key={i}>
+                      <p style={{ ...LBL, marginBottom:5 }}>{item.label}</p>
+                      <div style={{ display:'flex', alignItems:'center', gap:6, background:'#f5f5f5', borderRadius:9, padding:'7px 10px' }}>
+                        <p style={{ fontFamily:'monospace', fontSize:11, color:'#555', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight:600, margin:0 }}>{item.val || '—'}</p>
+                        <button onClick={item.onCopy} style={{ background:'none', border:'none', cursor:'pointer', color:'#bbb', padding:2, display:'flex', flexShrink:0 }}>
+                          <span className="material-symbols-outlined" style={{ fontSize:14 }}>content_copy</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ display:'flex', alignItems:'center', gap:8, background:'#f3ffe0', border:'1px solid #cff07e', borderRadius:9, padding:'8px 12px' }}>
+                    <span style={{ width:7, height:7, borderRadius:'50%', background:G, flexShrink:0 }} />
+                    <p style={{ fontSize:11, fontWeight:700, color:'#5a8c10', margin:0 }}>Hardhat · Chain 31337</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Achievements */}
+            <div style={CARD}>
+              <div style={{ padding:20 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                  <p style={{ fontSize:14, fontWeight:800, color:BK, margin:0 }}>Thành tích</p>
+                  <span style={{ fontSize:10, fontWeight:700, color:G, background:'#f3ffe0', padding:'2px 8px', borderRadius:99 }}>
+                    {ACHIEVEMENTS.filter(a => a.done).length}/{ACHIEVEMENTS.length}
+                  </span>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:7 }}>
+                  {ACHIEVEMENTS.map((a, i) => (
+                    <div key={i} title={a.desc} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:8, borderRadius:10, background: a.done ? '#f3ffe0' : '#f7f7f7', opacity: a.done ? 1 : 0.35, filter: a.done ? 'none' : 'grayscale(1)', transition:'all .2s' }}>
+                      <span style={{ fontSize:20 }}>{a.icon}</span>
+                      <p style={{ fontSize:9, fontWeight:800, textAlign:'center', color: a.done ? BK : '#ccc', margin:0, lineHeight:1.3 }}>{a.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ROW 4: CLAIMS TABLE */}
+          <div style={{ ...CARD, overflow:'hidden' }}>
+            <div style={{ padding:'18px 24px', borderBottom:'1px solid #f2f2f2', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div>
+                <p style={{ fontSize:16, fontWeight:900, color:BK, margin:0 }}>Các claim gần đây</p>
+                <p style={{ fontSize:12, color:'#bbb', margin:'2px 0 0', fontWeight:500 }}>Lịch sử ghi nhận tín chỉ</p>
+              </div>
+              <Link to="/claims" style={{ fontSize:12, fontWeight:700, color:'#888', textDecoration:'none', display:'flex', alignItems:'center', gap:3 }}>
+                Xem tất cả <span className="material-symbols-outlined" style={{ fontSize:14 }}>north_east</span>
+              </Link>
+            </div>
+            {loading ? (
+              <div style={{ display:'flex', justifyContent:'center', padding:48 }}>
+                <span className="material-symbols-outlined" style={{ fontSize:36, color:'#ddd' }}>hourglass_empty</span>
+              </div>
+            ) : studentClaims.length === 0 ? (
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'36px 0', gap:10 }}>
+                <span className="material-symbols-outlined" style={{ fontSize:44, color:'#e0e0e0' }}>inbox</span>
+                <p style={{ fontSize:13, color:'#bbb', fontWeight:500 }}>Chưa có claim nào — tham gia hoạt động để bắt đầu!</p>
+                <Link to="/events" style={{ fontSize:12, fontWeight:700, color:G, textDecoration:'none', display:'flex', alignItems:'center', gap:4, marginTop:4 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize:14 }}>eco</span> Khám phá hoạt động
+                </Link>
+              </div>
+            ) : (
+              <div style={{ overflowX:'auto' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                  <thead>
+                    <tr style={{ background:'#fafafa' }}>
+                      {['Hoạt động','Sự kiện','Ngày gửi','Trạng thái','UGC','On-chain'].map((h, i) => (
+                        <th key={i} style={{ padding:'10px 20px', fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color:'#ccc', textAlign: i >= 3 ? 'center' : 'left', whiteSpace:'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {studentClaims.slice(0, 8).map(c => (
+                      <tr key={c.id} style={{ borderTop:'1px solid #f5f5f5' }}
+                        onMouseEnter={e => e.currentTarget.style.background='#fafafa'}
+                        onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                        <td style={{ padding:'14px 20px' }}>
+                          <p style={{ fontSize:13, fontWeight:800, color:'#111214', margin:0 }}>{c.activity_name || '—'}</p>
+                        </td>
+                        <td style={{ padding:'14px 20px', maxWidth:200 }}>
+                          <p style={{ fontSize:12, fontWeight:500, color:'#777', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.event_title || '—'}</p>
+                        </td>
+                        <td style={{ padding:'14px 20px' }}>
+                          <p style={{ fontSize:11, color:'#bbb', fontWeight:500, margin:0 }}>{c.created_at ? new Date(c.created_at).toLocaleDateString('vi-VN') : '—'}</p>
+                        </td>
+                        <td style={{ padding:'14px 20px', textAlign:'center' }}>
+                          <span style={{
+                            padding:'3px 10px', borderRadius:99, fontSize:10, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.04em',
+                            background: c.status==='approved' ? '#111214' : c.status==='rejected' ? '#fee2e2' : '#fef3c7',
+                            color:       c.status==='approved' ? '#89DB1F' : c.status==='rejected' ? '#dc2626' : '#d97706'
+                          }}>
+                            {c.status==='approved' ? 'Đã duyệt' : c.status==='rejected' ? 'Từ chối' : 'Chờ duyệt'}
+                          </span>
+                        </td>
+                        <td style={{ padding:'14px 20px', textAlign:'center' }}>
+                          <span style={{ fontSize:13, fontWeight:800, color: c.status==='approved' ? '#89DB1F' : '#ddd' }}>
+                            {c.status==='approved' ? `+${c.credit_amount}` : '—'}
+                          </span>
+                        </td>
+                        <td style={{ padding:'14px 20px', textAlign:'center' }}>
+                          {c.tx_hash
+                            ? <span title={c.tx_hash} style={{ fontSize:10, fontFamily:'monospace', color:'#818cf8', background:'#eef2ff', padding:'2px 7px', borderRadius:6, fontWeight:700, cursor:'help' }}>{c.tx_hash.slice(0,6)}…</span>
+                            : <span style={{ color:'#e0e0e0' }}>—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   // --- ADMIN VIEW ---
   const pending = stats?.pendingClaims ?? 0
@@ -309,9 +737,7 @@ export default function DashboardPage() {
             <div className="absolute top-16 right-6 bg-white rounded-2xl shadow-2xl border border-gray-100 w-64 overflow-hidden" onClick={e => e.stopPropagation()}>
               <div className="p-4 border-b border-gray-100">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full overflow-hidden">
-                    <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Avatar" className="w-full h-full object-cover" />
-                  </div>
+                  {renderAvatar(user, "w-10 h-10")}
                   <div>
                     <p className="font-bold text-sm text-gray-800">{user.full_name}</p>
                     <p className="text-xs text-gray-500">{user.role === 'admin' ? 'Quản trị viên' : user.role === 'verifier' ? 'Người duyệt' : 'Sinh viên'}</p>
@@ -401,9 +827,7 @@ export default function DashboardPage() {
               {/* Profile — circle avatar + chevron only, no text */}
               <div onClick={() => { setShowProfile(!showProfile); setShowNotif(false); setShowTimePicker(false) }}
                 className={`flex flex-shrink-0 items-center gap-1 rounded-2xl border shadow-sm cursor-pointer h-9 pl-1 pr-2 active:scale-95 transition-all duration-150 ${showProfile ? 'bg-green-50 border-green-300' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-                <div className="w-7 h-7 rounded-full overflow-hidden">
-                  <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Avatar" className="w-full h-full object-cover" />
-                </div>
+                {renderAvatar(user, "w-7 h-7")}
                 <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${showProfile ? 'rotate-180 text-green-600' : 'text-gray-500'}`}>unfold_more</span>
               </div>
 
@@ -674,9 +1098,7 @@ export default function DashboardPage() {
                     <tr key={w.id} className="hover:bg-gray-50 transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center font-black text-green-700 text-xs flex-shrink-0">
-                            {w.full_name?.split(' ').pop()?.slice(0, 2).toUpperCase() || '??'}
-                          </div>
+                          {renderAvatar(w, "w-9 h-9")}
                           <div>
                             <p className="text-sm font-bold text-gray-800">{w.full_name}</p>
                             <p className="text-[10px] text-gray-400 font-mono">@{w.username}</p>
