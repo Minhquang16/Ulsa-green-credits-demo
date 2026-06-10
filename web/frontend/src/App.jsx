@@ -13,7 +13,8 @@ import AdminPage from './pages/AdminPage.jsx'
 import TreasuryPage from './pages/TreasuryPage.jsx'
 import ProvenancePage from './pages/ProvenancePage.jsx'
 import TrainingPointsPage from './pages/TrainingPointsPage.jsx'
-
+import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import ChatBot from './components/ChatBot.jsx'
 // Prototype Styles
 import './styles/base.css'
 import './styles/style.css'
@@ -23,9 +24,22 @@ function Layout({ children }) {
   const { user, logout, api } = useAuth()
   const { showToast } = useToast()
   const [showProfile, setShowProfile] = useState(false)
+  const [showNotif, setShowNotif] = useState(false)
+  const [studentStats, setStudentStats] = useState({ pending: 0, totalEarned: 0 })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const loc = useLocation()
   const nav = useNavigate()
+
+  useEffect(() => {
+    if (user?.role === 'student') {
+      api('/claims/my').then(res => {
+        const claims = res.data || []
+        const pending = claims.filter(c => c.status === 'pending').length
+        const totalEarned = claims.filter(c => c.status === 'approved').reduce((sum, c) => sum + (c.reward_amount || 0), 0)
+        setStudentStats({ pending, totalEarned })
+      }).catch(console.error)
+    }
+  }, [user, api])
 
   // Background Sync logic for offline check-ins
   useEffect(() => {
@@ -141,31 +155,78 @@ function Layout({ children }) {
                 </button>
 
                 {/* Notifications */}
-                <button 
-                  onClick={() => showToast('Bạn có thông báo mới trong phần Dashboard!')} 
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-gray-700 bg-gray-100/80 hover:bg-gray-200 transition-colors relative"
-                  title="Thông báo"
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize:20, fontVariationSettings: "'wght' 400" }}>notifications</span>
-                  <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-                </button>
+                <div className="relative flex items-center">
+                  <button 
+                    onClick={() => { setShowNotif(!showNotif); setShowProfile(false); }} 
+                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors relative ${showNotif ? 'bg-emerald-100 text-emerald-700' : 'text-gray-700 bg-gray-100/80 hover:bg-gray-200'}`}
+                    title="Thông báo"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize:20, fontVariationSettings: "'wght' 400" }}>notifications</span>
+                    {studentStats.pending > 0 && (
+                      <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                    )}
+                  </button>
+
+                  {/* Notification Dropdown */}
+                  {showNotif && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowNotif(false)} />
+                      <div className="absolute right-0 top-12 mt-2 w-80 bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 py-0 z-50 animate-in fade-in duration-200 overflow-hidden">
+                        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-white">
+                          <h3 className="font-bold text-[14px] text-gray-800">Thông báo</h3>
+                          <button onClick={() => setShowNotif(false)} className="text-[12px] text-gray-500 hover:text-gray-800 font-medium">Đóng</button>
+                        </div>
+                        <div className="max-h-[350px] overflow-y-auto flex flex-col">
+                          {studentStats.pending > 0 && (
+                            <div className="flex gap-3 p-4 hover:bg-gray-50 border-b border-gray-50 bg-orange-50/50 cursor-pointer" onClick={() => { setShowNotif(false); nav('/claims'); }}>
+                              <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 border border-orange-200">
+                                <span className="material-symbols-outlined text-orange-600 text-[20px]">pending_actions</span>
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-[13px] text-gray-800 font-bold">Yêu cầu chờ duyệt</p>
+                                <p className="text-[13px] text-gray-600 mt-0.5">Bạn có <span className="font-bold text-orange-600">{studentStats.pending} yêu cầu</span> đang đợi người duyệt xác nhận.</p>
+                              </div>
+                            </div>
+                          )}
+                          {studentStats.totalEarned > 0 && (
+                            <div className="flex gap-3 p-4 hover:bg-gray-50 border-b border-gray-50 cursor-pointer" onClick={() => { setShowNotif(false); nav('/claims'); }}>
+                              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 border border-emerald-200">
+                                <span className="material-symbols-outlined text-emerald-600 text-[20px]">verified</span>
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-[13px] text-gray-800 font-bold">Hoạt động đã ghi nhận</p>
+                                <p className="text-[13px] text-gray-600 mt-0.5">Bạn đã được cấp tổng cộng <span className="font-bold text-emerald-600">{studentStats.totalEarned} UGC</span>. Cố gắng phát huy nhé!</p>
+                              </div>
+                            </div>
+                          )}
+                          {studentStats.pending === 0 && studentStats.totalEarned === 0 && (
+                            <div className="py-8 flex flex-col items-center justify-center px-4">
+                              <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-2">
+                                <span className="material-symbols-outlined text-[24px] text-gray-300">notifications_off</span>
+                              </div>
+                              <p className="text-[13px] font-medium text-gray-600">Chưa có thông báo nào</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
 
                 {/* Profile/Avatar dropdown */}
                 <div className="relative">
                   <div 
                     className="flex items-center gap-3 cursor-pointer hover:opacity-85 transition-opacity ml-2"
-                    onClick={() => setShowProfile(!showProfile)}
+                    onClick={() => { setShowProfile(!showProfile); setShowNotif(false); }}
                     title="Menu tài khoản"
                   >
-                    {user.student_card_image ? (
-                      <div className="w-10 h-10 rounded-full overflow-hidden shadow-sm">
-                        <img src={`/api${user.student_card_image}`} alt="Avatar" className="w-full h-full object-cover" />
-                      </div>
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center font-black text-white text-[12px] shadow-sm">
+                    <Avatar className="w-10 h-10 shadow-sm border border-slate-200/60">
+                      <AvatarImage src={user.student_card_image ? `/api${user.student_card_image}` : ''} alt={user.full_name || 'SV'} className="object-cover" />
+                      <AvatarFallback className="bg-gray-800 text-white font-black text-[12px]">
                         {user.full_name?.split(' ').pop()?.slice(0, 2).toUpperCase() || 'SV'}
-                      </div>
-                    )}
+                      </AvatarFallback>
+                      <AvatarBadge className="bg-green-600 dark:bg-green-800" />
+                    </Avatar>
                     <div className="hidden md:flex flex-col text-left justify-center">
                       <span className="text-[14px] font-bold text-[#111214] leading-tight">{user.full_name || 'Sinh viên ULSA'}</span>
                       <span className="text-[12.5px] text-gray-500 font-medium leading-tight mt-0.5">{user.email || 'student@ulsa.edu.vn'}</span>
@@ -302,6 +363,7 @@ function Layout({ children }) {
           </p>
         </footer>
       </div>
+      <ChatBot />
     </div>
   )
 }
