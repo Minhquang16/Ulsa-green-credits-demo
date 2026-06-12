@@ -148,54 +148,90 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 const chartConfig = {
-  suKien: {
-    label: "Sự kiện",
+  totalUgc: {
+    label: "Tín chỉ",
     color: "#10b981", // Emerald 500
-  },
-  hoatDong: {
-    label: "Hoạt động",
-    color: "#a7f3d0", // Emerald 200
   },
 }
 
-function StudentUGCChart({ claims }) {
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (6 - i))
-    return { date: d, label: d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }), shortLabel: ['CN','T2','T3','T4','T5','T6','T7'][d.getDay()], suKien: 0, hoatDong: 0 }
-  })
-  
-  claims.filter(c => c.status === 'approved').forEach(c => {
-    const cd = new Date(c.decided_at || c.created_at)
-    days.forEach(d => {
-      if (cd.toDateString() === d.date.toDateString()) {
-        if (c.event_id) d.suKien += (c.credit_amount || 0);
-        else d.hoatDong += (c.credit_amount || 0);
-      }
-    })
-  })
+function StudentUGCChart({ studentId, api }) {
+  const [data, setData] = useState([]);
+  const [totalUgc, setTotalUgc] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Nếu không có dữ liệu thật (tổng = 0), dùng dữ liệu mẫu cho đẹp
-  const hasData = days.some(d => d.suKien > 0 || d.hoatDong > 0)
-  if (!hasData) {
-    days[0].suKien = 12; days[0].hoatDong = 5;
-    days[1].suKien = 8; days[1].hoatDong = 10;
-    days[2].suKien = 15; days[2].hoatDong = 0;
-    days[3].suKien = 5; days[3].hoatDong = 5;
-    days[4].suKien = 20; days[4].hoatDong = 12;
-    days[5].suKien = 0; days[5].hoatDong = 8;
-    days[6].suKien = 10; days[6].hoatDong = 15;
+  const fetchWeeklyStats = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api(`/ugc/weekly-stats/${studentId}`);
+      if (res && res.success) {
+        setData(res.data);
+        setTotalUgc(res.total_weekly_ugc);
+      } else {
+        throw new Error("Không thể tải cấu trúc dữ liệu.");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Không thể kết nối API thống kê tín chỉ.");
+    } finally {
+      setLoading(false);
+    }
+  }, [studentId, api]);
+
+  useEffect(() => {
+    if (studentId) {
+      fetchWeeklyStats();
+    }
+  }, [studentId, fetchWeeklyStats]);
+
+  if (loading) {
+    return (
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span className="material-symbols-outlined animate-spin text-[32px] text-emerald-600">progress_activity</span>
+      </div>
+    );
   }
-  
+
+  if (error) {
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '16px' }}>
+        <span className="material-symbols-outlined text-[32px] text-red-500 mb-2 font-black">error</span>
+        <p style={{ fontSize: '12px', color: '#ef4444', fontWeight: 'bold' }}>{error}</p>
+        <button onClick={fetchWeeklyStats} style={{ fontSize: '12px', color: '#059669', marginTop: '8px', cursor: 'pointer' }} className="hover:underline">Thử lại</button>
+      </div>
+    );
+  }
+
+  if (totalUgc === 0) {
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '16px' }}>
+        <span className="material-symbols-outlined text-[36px] text-gray-300 mb-2">bar_chart</span>
+        <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#9ca3af' }}>Chưa có tín chỉ tuần này</p>
+        <p style={{ fontSize: '11px', color: '#9ca3af', maxWidth: '240px', marginTop: '4px' }}>Hãy tham gia hoạt động để tích lũy tín chỉ xanh UGC đầu tiên nhé!</p>
+      </div>
+    );
+  }
+
   return (
     <Card className="border-0 shadow-none bg-transparent">
       <CardContent className="p-0">
         <ChartContainer config={chartConfig} className="w-full h-[230px]">
-          <RechartsBarChart accessibilityLayer data={days} margin={{ top: 10, right: 0, left: 0, bottom: 15 }}>
+          <RechartsBarChart accessibilityLayer data={data} margin={{ top: 10, right: 0, left: 0, bottom: 15 }}>
             <CartesianGrid vertical={false} stroke="#e5e7eb" strokeDasharray="4 4" />
-            <XAxis dataKey="shortLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6b7280', fontWeight: 500 }} tickMargin={10} />
-            <ChartTooltip content={<ChartTooltipContent indicator="dot" />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
-            <Bar dataKey="suKien" fill="var(--color-suKien)" radius={[0, 0, 4, 4]} barSize={24} />
-            <Bar dataKey="hoatDong" fill="var(--color-hoatDong)" radius={[4, 4, 0, 0]} barSize={24} />
+            <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6b7280', fontWeight: 500 }} tickMargin={10} />
+            <ChartTooltip content={
+              <ChartTooltipContent 
+                indicator="dot" 
+                formatter={(value, name, item) => (
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-gray-800">{value} UGC</span>
+                    <span className="text-[10px] text-gray-400">({item.payload.activity_count} hoạt động)</span>
+                  </div>
+                )}
+              />
+            } cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
+            <Bar dataKey="total_ugc" fill="var(--color-totalUgc)" radius={[4, 4, 0, 0]} barSize={24} />
           </RechartsBarChart>
         </ChartContainer>
       </CardContent>
@@ -438,7 +474,7 @@ export default function DashboardPage() {
               <div style={{ padding:'0 24px 16px', flex: 1, minHeight: 0 }}>
                 {loading
                   ? <div style={{ height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}><span className="material-symbols-outlined" style={{ fontSize:32, color:'#ddd' }}>hourglass_empty</span></div>
-                  : <StudentUGCChart claims={studentClaims} />}
+                  : <StudentUGCChart studentId={user.id} api={api} />}
               </div>
               <div style={{ padding:'14px 24px', borderTop:'1px solid #f2f2f2', display:'flex', flexDirection:'column', gap:'4px', background: '#fafafa' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:'8px', fontSize:'13px', fontWeight:700, color:'#111' }}>

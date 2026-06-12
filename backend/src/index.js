@@ -1812,6 +1812,85 @@ app.get("/dashboard/stats", authRequired, requireRole("admin"), async (req, res)
   }
 });
 
+// Thống kê Tín chỉ Xanh (UGC) trong 7 ngày gần nhất của một sinh viên
+app.get("/ugc/weekly-stats/:studentId", authRequired, async (req, res) => {
+  const { studentId } = req.params;
+
+  // Bảo mật: Chỉ cho phép chính sinh viên đó hoặc admin/verifier truy cập
+  if (req.user.role === 'student' && req.user.id !== studentId) {
+    return res.status(403).json({ error: "Bạn không có quyền truy cập dữ liệu thống kê này." });
+  }
+
+  try {
+    // Truy vấn tổng UGC đã duyệt theo ngày trong vòng 7 ngày gần nhất
+    const query = `
+      SELECT 
+        DATE(COALESCE(c.decided_at, c.created_at)) AS stat_date,
+        SUM(a.credit_amount)::int AS total_ugc,
+        COUNT(c.id)::int AS activity_count
+      FROM claims c
+      JOIN events e ON e.id = c.event_id
+      JOIN activity_types a ON a.id = e.activity_type_id
+      WHERE c.student_id = $1 
+        AND c.status = 'approved'
+        AND COALESCE(c.decided_at, c.created_at) >= NOW() - INTERVAL '6 days'
+      GROUP BY DATE(COALESCE(c.decided_at, c.created_at))
+      ORDER BY stat_date ASC
+    `;
+
+    const { rows } = await pool.query(query, [studentId]);
+
+    // Ánh xạ kết quả truy vấn vào Map để tìm kiếm nhanh
+    const dbDataMap = new Map(
+      rows.map(row => [new Date(row.stat_date).toDateString(), row])
+    );
+
+    const weeklyStats = [];
+    const weekdays = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+    // Thực hiện đệm dữ liệu (fill gaps) cho 7 ngày qua
+    for (let i = 6; i >= 0; i--) {
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() - i);
+      const dateKey = targetDate.toDateString();
+
+      const dayName = weekdays[targetDate.getDay()];
+      const formattedDate = targetDate.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+
+      if (dbDataMap.has(dateKey)) {
+        const dbRow = dbDataMap.get(dateKey);
+        weeklyStats.push({
+          day: dayName,
+          date: formattedDate,
+          total_ugc: dbRow.total_ugc || 0,
+          activity_count: dbRow.activity_count || 0
+        });
+      } else {
+        // Đệm ngày không hoạt động với điểm bằng 0
+        weeklyStats.push({
+          day: dayName,
+          date: formattedDate,
+          total_ugc: 0,
+          activity_count: 0
+        });
+      }
+    }
+
+    // Tính tổng UGC của tuần
+    const totalWeeklyUgc = weeklyStats.reduce((sum, item) => sum + item.total_ugc, 0);
+
+    res.json({
+      success: true,
+      data: weeklyStats,
+      total_weekly_ugc: totalWeeklyUgc
+    });
+
+  } catch (error) {
+    console.error("Lỗi lấy thống kê tuần UGC:", error);
+    res.status(500).json({ error: "Lỗi hệ thống khi tải dữ liệu thống kê." });
+  }
+});
+
 // -------------------- Chatbot (Gemini proxy) --------------------
 app.post("/api/chat", authRequired, async (req, res) => {
   const { messages } = req.body || {};
