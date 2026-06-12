@@ -241,7 +241,7 @@ export default function EventsPage() {
                         </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={createActivityType} disabled={atBusy}
-                            className="flex-1 py-2 rounded-lg bg-[#161d16] text-[#edf6ea] font-bold text-xs disabled:opacity-50">
+                            className="flex-1 py-2 rounded-lg bg-primary text-on-primary font-bold text-xs disabled:opacity-50 hover:opacity-90 transition-opacity">
                             {atBusy ? 'Đang lưu...' : (atEditId ? '✓ Cập nhật' : '✓ Tạo & chọn loại này')}
                           </button>
                           {atEditId && (

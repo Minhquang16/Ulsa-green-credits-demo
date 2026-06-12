@@ -696,7 +696,7 @@ app.get("/activity-types", authRequired, async (req, res) => {
   res.json(rs.rows);
 });
 
-app.post("/activity-types", authRequired, requireRole("admin"), async (req, res) => {
+app.post("/activity-types", authRequired, requireRole("admin", "verifier"), async (req, res) => {
   const { name, description, credit_amount, evidence_required } = req.body || {};
   if (!name || credit_amount === undefined) return res.status(400).json({ error: "name & credit_amount required" });
 
@@ -707,7 +707,7 @@ app.post("/activity-types", authRequired, requireRole("admin"), async (req, res)
   res.json(rs.rows[0]);
 });
 
-app.put("/activity-types/:id", authRequired, requireRole("admin"), async (req, res) => {
+app.put("/activity-types/:id", authRequired, requireRole("admin", "verifier"), async (req, res) => {
   const { name, description, credit_amount, evidence_required } = req.body || {};
   const rs = await pool.query(
     `UPDATE activity_types 
