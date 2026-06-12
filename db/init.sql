@@ -118,3 +118,30 @@ CREATE TABLE IF NOT EXISTS retirements (
 );
 
 CREATE INDEX IF NOT EXISTS idx_retirements_student ON retirements(student_id);
+
+CREATE TABLE IF NOT EXISTS achievements (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  icon TEXT NOT NULL,
+  label TEXT NOT NULL,
+  description TEXT,
+  target_type TEXT NOT NULL CHECK (target_type IN ('claims_count', 'total_ugc', 'on_chain')),
+  target_value INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_achievements (
+  student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  achievement_id UUID NOT NULL REFERENCES achievements(id) ON DELETE CASCADE,
+  unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (student_id, achievement_id)
+);
+
+-- Insert default achievements
+INSERT INTO achievements (icon, label, description, target_type, target_value) VALUES
+  ('🌱', 'Khởi đầu', 'Tham gia hoạt động đầu tiên', 'claims_count', 1),
+  ('🌿', 'Tích cực', 'Hoàn thành 3 hoạt động', 'claims_count', 3),
+  ('🌳', 'Chuyên cần', 'Đạt 50 UGC', 'total_ugc', 50),
+  ('🏆', 'Xuất sắc', 'Đạt 100 UGC', 'total_ugc', 100),
+  ('⭐', 'Huyền thoại', 'Đạt 200 UGC', 'total_ugc', 200),
+  ('🔗', 'On-chain', 'Có giao dịch blockchain', 'on_chain', 1)
+ON CONFLICT DO NOTHING;

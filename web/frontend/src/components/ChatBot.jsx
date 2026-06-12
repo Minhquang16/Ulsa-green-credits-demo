@@ -58,33 +58,24 @@ Bạn là chuyên gia về hệ thống ULSA Green Credit, đồng thời là tr
 - Với câu hỏi nhạy cảm hoặc có hại, từ chối lịch sự và giải thích lý do
 - Khuyến khích sinh viên tham gia hoạt động xanh và sử dụng hệ thống UGC`
 
-async function callGemini(messages) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`
-  
-  // Build conversation history
-  const contents = messages.map(msg => ({
-    role: msg.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: msg.content }]
-  }))
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
-  const res = await fetch(url, {
+async function callGeminiViaBackend(messages) {
+  const token = localStorage.getItem('token')
+  const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents,
-      generationConfig: {
-        temperature: 0.8,
-        topK: 64,
-        topP: 0.95,
-        maxOutputTokens: 2048,
-      }
-    })
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ messages })
   })
-  
-  if (!res.ok) throw new Error('API error')
+
+  if (!res.ok) throw new Error('BACKEND_ERROR')
   const data = await res.json()
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không thể trả lời lúc này.'
+  // If backend returns fallback signal (no API key or API error), throw so we use local fallback
+  if (data.fallback || !data.reply) throw new Error('USE_FALLBACK')
+  return data.reply
 }
 
 // Fallback smart responses when no API key
@@ -116,6 +107,11 @@ function getFallbackResponse(message) {
   return '🤖 Tôi hiểu bạn đang hỏi về hệ thống ULSA Green Credit. Để được hỗ trợ chính xác hơn, bạn có thể:\n- Hỏi về **tín chỉ UGC** và cách kiếm\n- Hỏi về quy trình **ghi nhận hoạt động**\n- Hỏi về **ưu đãi** có thể đổi\n- Liên hệ phòng **Công tác sinh viên** nếu cần hỗ trợ trực tiếp!'
 }
 
+const INITIAL_MESSAGE = {
+  role: 'assistant',
+  content: '👋 Xin chào! Tôi là **ULSA Bot** - trợ lý thông minh của hệ thống Green Credit!\n\nTôi có thể giúp bạn tìm hiểu về tín chỉ xanh UGC, cách tích lũy điểm và các ưu đãi. Bạn cần hỏi gì không? 🌿',
+}
+
 const SUGGESTIONS = [
   '🌱 UGC là gì?',
   '📝 Cách ghi nhận hoạt động?',
@@ -127,16 +123,23 @@ export default function ChatBot() {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState([
     {
-      role: 'assistant',
-      content: '👋 Xin chào! Tôi là **ULSA Bot** - trợ lý thông minh của hệ thống Green Credit!\n\nTôi có thể giúp bạn tìm hiểu về tín chỉ xanh UGC, cách tích lũy điểm và các ưu đãi. Bạn cần hỏi gì không? 🌿',
+      ...INITIAL_MESSAGE,
       time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     }
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [hasApiKey, setHasApiKey] = useState(!!GEMINI_API_KEY)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+
+  const resetChat = () => {
+    setMessages([{
+      ...INITIAL_MESSAGE,
+      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+    }])
+    setInput('')
+    setTimeout(() => inputRef.current?.focus(), 100)
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -158,10 +161,11 @@ export default function ChatBot() {
 
     try {
       let reply
-      if (GEMINI_API_KEY) {
-        reply = await callGemini(newMessages)
-      } else {
-        await new Promise(r => setTimeout(r, 600 + Math.random() * 600))
+      try {
+        reply = await callGeminiViaBackend(newMessages)
+      } catch {
+        // Backend unavailable or API key issue → dùng fallback offline
+        await new Promise(r => setTimeout(r, 400 + Math.random() * 400))
         reply = getFallbackResponse(userText)
       }
       setMessages(prev => [...prev, {
@@ -170,6 +174,7 @@ export default function ChatBot() {
         time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
       }])
     } catch {
+      // Lỗi thực sự (ví dụ: mất mạng hoàn toàn)
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: '😅 Xin lỗi, tôi đang gặp sự cố kết nối. Vui lòng thử lại sau!',
@@ -236,8 +241,10 @@ export default function ChatBot() {
               Đang trực tuyến · Trợ lý tín chỉ xanh
             </div>
           </div>
+          {/* Reset button */}
           <button
-            onClick={() => setOpen(false)}
+            onClick={resetChat}
+            title="Làm mới hội thoại"
             style={{
               background: 'rgba(255,255,255,0.15)',
               border: 'none',
@@ -249,8 +256,28 @@ export default function ChatBot() {
               flexShrink: 0,
               transition: 'background 0.2s',
             }}
-            onMouseEnter={e => e.target.style.background = 'rgba(255,255,255,0.25)'}
-            onMouseLeave={e => e.target.style.background = 'rgba(255,255,255,0.15)'}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>refresh</span>
+          </button>
+          {/* Close button */}
+          <button
+            onClick={() => setOpen(false)}
+            title="Đóng"
+            style={{
+              background: 'rgba(255,255,255,0.15)',
+              border: 'none',
+              borderRadius: '50%',
+              width: 30, height: 30,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+              color: '#fff',
+              flexShrink: 0,
+              transition: 'background 0.2s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
           >
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
           </button>

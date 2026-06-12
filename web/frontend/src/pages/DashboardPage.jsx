@@ -226,6 +226,7 @@ export default function DashboardPage() {
   // Student-specific state
   const [studentClaims, setStudentClaims] = useState([])
   const [studentEvents, setStudentEvents] = useState([])
+  const [achievements, setAchievements] = useState([])
   const isAdmin = user.role === 'admin' || user.role === 'verifier'
 
   const timePeriodLabel = { week: '7 ngày qua', month: 'Tháng này', quarter: 'Quý này', year: 'Năm nay' }[timePeriod]
@@ -261,16 +262,18 @@ export default function DashboardPage() {
         ])
         setStats(s); setBalance(b?.balance ?? null); setContract(c?.address || ''); setWallets(w || [])
       } else {
-        const [b, c, claims, events] = await Promise.all([
+        const [b, c, claims, events, ach] = await Promise.all([
           api('/wallet/balance').catch(() => ({ balance: null })),
           api('/wallet/contract').catch(() => ({ address: '' })),
           api('/me/claims').catch(() => []),
           api('/events').catch(() => []),
+          api('/me/achievements').catch(() => []),
         ])
         setBalance(b?.balance ?? null)
         setContract(c?.address || '')
         setStudentClaims(Array.isArray(claims) ? claims : [])
         setStudentEvents(Array.isArray(events) ? events : [])
+        setAchievements(Array.isArray(ach) ? ach : [])
       }
     } catch { showToast('⚠️ Lỗi tải dashboard') } finally { setLoading(false) }
   }, [api, isAdmin, showToast, timePeriod])
@@ -295,15 +298,6 @@ export default function DashboardPage() {
     const upcomingEvents = studentEvents
       .filter(e => e.status === 'published' && new Date(e.end_at) > new Date())
       .slice(0, 4)
-
-    const ACHIEVEMENTS = [
-      { icon: '🌱', label: 'Khởi đầu', desc: 'Tham gia hoạt động đầu tiên', done: approvedClaims.length >= 1 },
-      { icon: '🌿', label: 'Tích cực', desc: 'Hoàn thành 3 hoạt động', done: approvedClaims.length >= 3 },
-      { icon: '🌳', label: 'Chuyên cần', desc: 'Đạt 50 UGC', done: bal >= 50 },
-      { icon: '🏆', label: 'Xuất sắc', desc: 'Đạt 100 UGC', done: bal >= 100 },
-      { icon: '⭐', label: 'Huyền thoại', desc: 'Đạt 200 UGC', done: bal >= 200 },
-      { icon: '🔗', label: 'On-chain', desc: 'Có giao dịch blockchain', done: approvedClaims.some(c => c.tx_hash) },
-    ]
 
     const CARD = { background:'#fff', borderRadius:16, border:'1px solid #e8e8e8', boxShadow:'0 1px 4px rgba(0,0,0,.05)', position:'relative' }
     const BK = '#111214'
@@ -332,13 +326,8 @@ export default function DashboardPage() {
                 </p>
               </div>
             </div>
-            <button onClick={() => load()} disabled={loading}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 transition-all shadow-sm active:scale-95 flex-shrink-0"
-            >
-              <span className={`material-symbols-outlined text-base ${loading ? 'animate-spin' : ''}`}>sync</span>
-              Làm mới
-            </button>
           </div>
+
 
           {/* ── ROW 1: STAT CARDS ── style like Decko reference ──────── */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
@@ -572,12 +561,12 @@ export default function DashboardPage() {
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
                   <p style={{ fontSize:14, fontWeight:800, color:BK, margin:0 }}>Thành tích</p>
                   <span style={{ fontSize:10, fontWeight:700, color:G, background:'#f3ffe0', padding:'2px 8px', borderRadius:99 }}>
-                    {ACHIEVEMENTS.filter(a => a.done).length}/{ACHIEVEMENTS.length}
+                    {achievements.filter(a => a.done).length}/{Math.max(achievements.length, 6)}
                   </span>
                 </div>
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:7 }}>
-                  {ACHIEVEMENTS.map((a, i) => (
-                    <div key={i} title={a.desc} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:8, borderRadius:10, background: a.done ? '#f3ffe0' : '#f7f7f7', opacity: a.done ? 1 : 0.35, filter: a.done ? 'none' : 'grayscale(1)', transition:'all .2s' }}>
+                  {achievements.map((a, i) => (
+                    <div key={i} title={a.description} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:8, borderRadius:10, background: a.done ? '#f3ffe0' : '#f7f7f7', opacity: a.done ? 1 : 0.35, filter: a.done ? 'none' : 'grayscale(1)', transition:'all .2s' }}>
                       <span style={{ fontSize:20 }}>{a.icon}</span>
                       <p style={{ fontSize:9, fontWeight:800, textAlign:'center', color: a.done ? BK : '#ccc', margin:0, lineHeight:1.3 }}>{a.label}</p>
                     </div>
@@ -821,12 +810,6 @@ export default function DashboardPage() {
                 <span className={`text-[13px] font-medium ${showTimePicker ? 'text-green-700' : 'text-gray-700'}`}>{timePeriodLabel}</span>
                 <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${showTimePicker ? 'rotate-180 text-green-600' : 'text-gray-500'}`}>expand_more</span>
               </div>
-
-              <button disabled={loading} onClick={() => window.location.reload()}
-                className="group flex items-center gap-1.5 px-3 h-8 rounded-2xl text-[13px] font-medium text-gray-700 bg-white border border-gray-200 shadow-sm hover:bg-gray-50 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed">
-                <span className={`material-symbols-outlined text-[16px] text-gray-500 transition-all ${loading ? 'animate-spin' : 'group-hover:rotate-180'}`}>sync</span>
-                Làm mới
-              </button>
             </div>
           </div>
         </div>

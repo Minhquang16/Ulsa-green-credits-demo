@@ -106,6 +106,9 @@ export const schema = z.object({
   target: z.string(),
   limit: z.string(),
   reviewer: z.string(),
+  txHash: z.string().optional(),
+  createdAt: z.string().optional(),
+  decidedAt: z.string().optional(),
 })
 
 // Create a separate component for the drag handle
@@ -452,7 +455,7 @@ function DataTable({ data: initialData }) {
                         column.toggleVisibility(!!value)
                       }
                     >
-                      {column.id}
+                      {typeof column.columnDef.header === "string" ? column.columnDef.header : column.id}
                     </DropdownMenuCheckboxItem>
                   )
                 })}
@@ -704,8 +707,8 @@ function TableCellViewer({ item }) {
                       <SelectValue placeholder="Chọn loại" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Hoạt động">Activity</SelectItem>
-                      <SelectItem value="Sự kiện">Event</SelectItem>
+                      <SelectItem value="Hoạt động">Hoạt động</SelectItem>
+                      <SelectItem value="Sự kiện">Sự kiện</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -716,9 +719,9 @@ function TableCellViewer({ item }) {
                       <SelectValue placeholder="Chọn trạng thái" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Hoàn thành">Done</SelectItem>
-                      <SelectItem value="Chờ xử lý">In Progress</SelectItem>
-                      <SelectItem value="Từ chối">Rejected</SelectItem>
+                      <SelectItem value="Hoàn thành">Hoàn thành</SelectItem>
+                      <SelectItem value="Chờ xử lý">Chờ xử lý</SelectItem>
+                      <SelectItem value="Từ chối">Từ chối</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -735,18 +738,7 @@ function TableCellViewer({ item }) {
               </div>
               <div className="flex flex-col gap-3">
                 <Label htmlFor="reviewer">Người duyệt</Label>
-                <Select defaultValue={item.reviewer}>
-                  <SelectTrigger id="reviewer" className="w-full">
-                    <SelectValue placeholder="Chọn người duyệt" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Hệ thống">System Admin</SelectItem>
-                    <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
-                    <SelectItem value="Jamik Tashpulatov">
-                      Jamik Tashpulatov
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input id="reviewer" defaultValue={item.reviewer} readOnly />
               </div>
             </form>
           </div>
@@ -788,7 +780,10 @@ export default function ClaimsDataTable({ claims, loading, nav }) {
     status: c.status === "approved" ? "Hoàn thành" : c.status === "rejected" ? "Từ chối" : "Chờ xử lý",
     target: c.credit_amount ? `+${c.credit_amount}` : "0",
     limit: "0",
-    reviewer: "Hệ thống"
+    reviewer: "Hệ thống",
+    txHash: c.tx_hash || null,
+    createdAt: c.created_at || null,
+    decidedAt: c.decided_at || null,
   }))
 
   return <DataTable data={mappedData} />

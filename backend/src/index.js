@@ -588,6 +588,59 @@ app.get("/me", authRequired, async (req, res) => {
   res.json(rs.rows[0]);
 });
 
+async function checkAndUnlockAchievements(studentId) {
+  try {
+    const user = (await pool.query("SELECT wallet_address FROM users WHERE id=$1", [studentId])).rows[0];
+    if (!user) return;
+    
+    let ugcBalance = 0;
+    if (user.wallet_address) {
+      try {
+        ugcBalance = Number(await ugcContract.balanceOf(user.wallet_address));
+      } catch (e) {
+        console.error("Error fetching balance:", e);
+      }
+    }
+    
+    const claims = (await pool.query("SELECT * FROM claims WHERE student_id=$1 AND status='approved'", [studentId])).rows;
+    const claimsCount = claims.length;
+    const hasOnChain = claims.some(c => c.approved_tx_hash || c.provenance_tx_hash);
+
+    const achievements = (await pool.query("SELECT * FROM achievements")).rows;
+    for (const ach of achievements) {
+      let isEligible = false;
+      if (ach.target_type === 'claims_count' && claimsCount >= ach.target_value) isEligible = true;
+      if (ach.target_type === 'total_ugc' && ugcBalance >= ach.target_value) isEligible = true;
+      if (ach.target_type === 'on_chain' && hasOnChain) isEligible = true;
+
+      if (isEligible) {
+        await pool.query(
+          "INSERT INTO user_achievements (student_id, achievement_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+          [studentId, ach.id]
+        );
+      }
+    }
+  } catch (e) {
+    console.error("Error in checkAndUnlockAchievements:", e);
+  }
+}
+
+app.get("/me/achievements", authRequired, async (req, res) => {
+  try {
+    await checkAndUnlockAchievements(req.user.id);
+    const rs = await pool.query(`
+      SELECT a.*, (ua.unlocked_at IS NOT NULL) as done
+      FROM achievements a
+      LEFT JOIN user_achievements ua ON ua.achievement_id = a.id AND ua.student_id = $1
+      ORDER BY a.target_type, a.target_value ASC
+    `, [req.user.id]);
+    res.json(rs.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
 app.get("/me/training-points", authRequired, async (req, res) => {
   try {
     const userRs = await pool.query("SELECT id, username, full_name, role, wallet_address, student_id, class_name, cohort, birth_date, student_card_image, created_at FROM users WHERE id=$1", [req.user.id]);
@@ -991,6 +1044,8 @@ app.post("/claims/:id/approve", authRequired, requireRole("admin","verifier"), a
      RETURNING *`,
     [claimId, req.user.id, txHash, provenanceTxHash]
   );
+
+  await checkAndUnlockAchievements(claim.student_id);
 
   res.json(update.rows[0]);
 });
@@ -1754,6 +1809,63 @@ app.get("/dashboard/stats", authRequired, requireRole("admin"), async (req, res)
   } catch (e) {
     console.error("Dashboard stats error:", e);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// -------------------- Chatbot (Gemini proxy) --------------------
+app.post("/api/chat", authRequired, async (req, res) => {
+  const { messages } = req.body || {};
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: "messages array required" });
+  }
+
+  // If Gemini not configured, return null so frontend uses fallback
+  if (!genAI) {
+    return res.json({ reply: null, fallback: true });
+  }
+
+  try {
+    const { GoogleGenerativeAI } = require("@google/generative-ai");
+    const ai = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const model = ai.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      systemInstruction: `Bạn là ULSA Bot - trợ lý AI thông minh toàn diện, được tích hợp vào hệ thống ULSA Green Credit. Bạn được xây dựng trên nền tảng Gemini AI của Google, có khả năng trả lời mọi câu hỏi về bất kỳ chủ đề nào.
+
+## VAI TRÒ CHÍNH
+Bạn là chuyên gia về hệ thống ULSA Green Credit, đồng thời là trợ lý thông minh tổng hợp. Bạn có thể:
+- Trả lời câu hỏi về hệ thống tín chỉ xanh UGC, claims, blockchain, ưu đãi, điểm rèn luyện
+- Giải đáp câu hỏi học thuật: toán, lý, hóa, văn, lịch sử, địa lý, sinh học...
+- Hỗ trợ lập trình: JavaScript, Python, Java, C++, React, Node.js...
+- Tư vấn kỹ năng sống, học tập, phát triển bản thân
+- Và mọi chủ đề khác
+
+## KIẾN THỨC VỀ ULSA GREEN CREDIT
+- UGC (ULSA Green Credit) là token ERC-20 trên Ethereum blockchain
+- Sinh viên nhận UGC khi tham gia hoạt động xanh được phê duyệt
+- Có thể đổi UGC lấy ưu đãi từ đối tác trường
+
+## PHONG CÁCH TRẢ LỜI
+- Ngôn ngữ: Mặc định tiếng Việt, tự chuyển nếu người dùng hỏi ngôn ngữ khác
+- Thân thiện, tự nhiên, dùng emoji phù hợp
+- Không từ chối các câu hỏi bình thường`
+    });
+
+    // Convert messages to Gemini format
+    const history = messages.slice(0, -1).map(m => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }]
+    }));
+    const lastMessage = messages[messages.length - 1];
+
+    const chat = model.startChat({ history });
+    const result = await chat.sendMessage(lastMessage.content);
+    const reply = result.response.text();
+
+    res.json({ reply });
+  } catch (e) {
+    console.error("Chat API error:", e.message);
+    // Return fallback signal instead of error so frontend handles gracefully
+    res.json({ reply: null, fallback: true, error: e.message });
   }
 });
 
