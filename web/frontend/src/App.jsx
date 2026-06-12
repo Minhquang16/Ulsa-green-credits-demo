@@ -382,30 +382,48 @@ const COHORTS = [
 
 const MAJORS = [
   // Nhóm Quản trị, Kinh tế số & Công nghệ
-  { code: "QTNL", name: "Quản trị nhân lực" },
-  { code: "QTKD", name: "Quản trị kinh doanh" },
-  { code: "KTS", name: "Kinh tế số" },
-  { code: "CNTT", name: "Công nghệ thông tin / Hệ thống thông tin quản lý" },
-  { code: "TMDT", name: "Thương mại điện tử & Marketing" },
+  { code: "QL", name: "Quản trị nhân lực (Số, Văn phòng)" },
+  { code: "QK", name: "Quản trị kinh doanh" },
+  { code: "HQ", name: "Hệ thống thông tin quản lý / Kinh tế số" },
+  { code: "CN", name: "Công nghệ thông tin" },
+  { code: "KM", name: "Kiểm toán / Thương mại điện tử & Marketing" },
 
   // Nhóm Kinh tế - Tài chính - Kế toán
-  { code: "KT", name: "Kế toán" },
-  { code: "KiT", name: "Kiểm toán" },
-  { code: "TCNH", name: "Tài chính - Ngân hàng" },
-  { code: "KTLD", name: "Kinh tế lao động" },
+  { code: "KT", name: "Kế toán (Quản trị, Phân tích dữ liệu)" },
+  { code: "TC", name: "Tài chính - Ngân hàng" },
+  { code: "KL", name: "Kinh tế lao động" },
 
   // Nhóm Dịch vụ - Bảo hiểm - Ngôn ngữ
-  { code: "BH", name: "Bảo hiểm / Bảo hiểm - Tài chính" },
+  { code: "BH", name: "Bảo hiểm" },
+  { code: "BT", name: "Bảo hiểm - Tài chính" },
   { code: "LOG", name: "Logistics & Chuỗi cung ứng" },
-  { code: "QTDL", name: "Quản trị dịch vụ du lịch và lữ hành" },
-  { code: "QTKS", name: "Quản trị khách sạn" },
-  { code: "NNA", name: "Ngôn ngữ Anh" },
+  { code: "QD", name: "Quản trị dịch vụ du lịch và lữ hành / Khách sạn" },
+  { code: "NA", name: "Ngôn ngữ Anh" },
 
   // Nhóm Tâm lý & Khoa học xã hội - Luật
-  { code: "CTXH", name: "Công tác xã hội" },
-  { code: "TLH", name: "Tâm lý học" },
-  { code: "LKT", name: "Luật kinh tế" }
+  { code: "CT", name: "Công tác xã hội" },
+  { code: "TL", name: "Tâm lý học" },
+  { code: "LK", name: "Luật kinh tế" }
 ];
+
+const CLASS_COUNTS = {
+  BH: { default: 1, D18: 1, D19: 1, D20: 2, D21: 1 },
+  BT: { default: 1, D18: 1, D19: 2, D20: 2, D21: 1 },
+  CT: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
+  TL: { default: 2, D18: 2, D19: 2, D20: 2, D21: 3 },
+  QK: { default: 5, D18: 5, D19: 6, D20: 5, D21: 6 },
+  QD: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
+  LK: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
+  KT: { default: 7, D18: 7, D19: 8, D20: 9, D21: 7 },
+  KM: { default: 1, D18: 1, D19: 1, D20: 1, D21: 1 },
+  TC: { default: 3, D18: 3, D19: 3, D20: 3, D21: 4 },
+  NA: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
+  QL: { default: 8, D18: 8, D19: 8, D20: 9, D21: 13 },
+  KL: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
+  HQ: { default: 1, D18: 1, D19: 1, D20: 1, D21: 1 },
+  CN: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
+  LOG: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
+};
 
 function SettingsModal({ isOpen, onClose, api, user, showToast }) {
   const [activeTab, setActiveTab] = useState("profile") // profile | wallet | password
@@ -435,6 +453,20 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
   const [walletKey, setWalletKey] = useState(null)
   const [showKey, setShowKey] = useState(false)
   const [copiedKey, setCopiedKey] = useState(false)
+
+  // Trả về danh sách lớp học thực tế gợi ý từ văn bản của trường ULSA
+  const getClassOptions = (cohortId, majorCode) => {
+    if (!cohortId || !majorCode) return [];
+    const config = CLASS_COUNTS[majorCode];
+    if (!config) return [];
+    const count = config[cohortId] || config.default || 2;
+    const options = [];
+    for (let i = 1; i <= count; i++) {
+      const numStr = String(i).padStart(2, '0');
+      options.push(`${cohortId}${majorCode}${numStr}`);
+    }
+    return options;
+  };
 
   // Gọi API tải thêm chi tiết hồ sơ từ DB khi mở Modal
   useEffect(() => {
@@ -629,7 +661,10 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
                           setSelectedCohort(val);
                           setCohort(val);
                           if (!isCustomClass && val && selectedMajor) {
-                            setClassName(`${val}${selectedMajor}1`);
+                            const opts = getClassOptions(val, selectedMajor);
+                            if (opts.length > 0) {
+                              setClassName(opts[0]);
+                            }
                           }
                         }}
                       >
@@ -652,7 +687,10 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
                           const val = e.target.value;
                           setSelectedMajor(val);
                           if (!isCustomClass && selectedCohort && val) {
-                            setClassName(`${selectedCohort}${val}1`);
+                            const opts = getClassOptions(selectedCohort, val);
+                            if (opts.length > 0) {
+                              setClassName(opts[0]);
+                            }
                           }
                         }}
                       >
@@ -677,16 +715,15 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
                           const val = e.target.value;
                           if (val === "custom") {
                             setIsCustomClass(true);
-                            setClassName(customClassName || `${selectedCohort}${selectedMajor}1`);
+                            setClassName(customClassName || getClassOptions(selectedCohort, selectedMajor)[0]);
                           } else {
                             setClassName(val);
                           }
                         }}
                       >
-                        <option value={`${selectedCohort}${selectedMajor}1`}>{selectedCohort}{selectedMajor}1</option>
-                        <option value={`${selectedCohort}${selectedMajor}2`}>{selectedCohort}{selectedMajor}2</option>
-                        <option value={`${selectedCohort}${selectedMajor}3`}>{selectedCohort}{selectedMajor}3</option>
-                        <option value={`${selectedCohort}${selectedMajor}4`}>{selectedCohort}{selectedMajor}4</option>
+                        {getClassOptions(selectedCohort, selectedMajor).map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
                         <option value="custom">-- Nhập lớp học khác --</option>
                       </select>
                       <span className="material-symbols-outlined absolute right-3 top-2 text-gray-400 pointer-events-none text-base">expand_more</span>
@@ -710,7 +747,10 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
                           type="button" 
                           onClick={() => {
                             setIsCustomClass(false);
-                            setClassName(`${selectedCohort}${selectedMajor}1`);
+                            const opts = getClassOptions(selectedCohort, selectedMajor);
+                            if (opts.length > 0) {
+                              setClassName(opts[0]);
+                            }
                           }}
                           className="px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-xs font-bold transition-all"
                         >
