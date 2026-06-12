@@ -32,10 +32,10 @@ function Layout({ children }) {
 
   useEffect(() => {
     if (user?.role === 'student') {
-      api('/claims/my').then(res => {
-        const claims = res.data || []
-        const pending = claims.filter(c => c.status === 'pending').length
-        const totalEarned = claims.filter(c => c.status === 'approved').reduce((sum, c) => sum + (c.reward_amount || 0), 0)
+      api('/me/claims').then(res => {
+        const claims = res || []
+        const pending = claims.filter(c => c.status === 'submitted').length
+        const totalEarned = claims.filter(c => c.status === 'approved').reduce((sum, c) => sum + (c.credit_amount || 0), 0)
         setStudentStats({ pending, totalEarned })
       }).catch(console.error)
     }
