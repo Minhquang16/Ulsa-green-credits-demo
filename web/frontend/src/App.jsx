@@ -372,15 +372,57 @@ function Layout({ children }) {
   )
 }
 
+const COHORTS = [
+  { id: "D17", label: "Khóa D17 (2021 – 2025)" },
+  { id: "D18", label: "Khóa D18 (2022 – 2026)" },
+  { id: "D19", label: "Khóa D19 (2023 – 2027)" },
+  { id: "D20", label: "Khóa D20 (2024 – 2028)" },
+  { id: "D21", label: "Khóa D21 (2025 – 2029)" },
+];
+
+const MAJORS = [
+  // Nhóm Quản trị, Kinh tế số & Công nghệ
+  { code: "QTNL", name: "Quản trị nhân lực" },
+  { code: "QTKD", name: "Quản trị kinh doanh" },
+  { code: "KTS", name: "Kinh tế số" },
+  { code: "CNTT", name: "Công nghệ thông tin / Hệ thống thông tin quản lý" },
+  { code: "TMDT", name: "Thương mại điện tử & Marketing" },
+
+  // Nhóm Kinh tế - Tài chính - Kế toán
+  { code: "KT", name: "Kế toán" },
+  { code: "KiT", name: "Kiểm toán" },
+  { code: "TCNH", name: "Tài chính - Ngân hàng" },
+  { code: "KTLD", name: "Kinh tế lao động" },
+
+  // Nhóm Dịch vụ - Bảo hiểm - Ngôn ngữ
+  { code: "BH", name: "Bảo hiểm / Bảo hiểm - Tài chính" },
+  { code: "LOG", name: "Logistics & Chuỗi cung ứng" },
+  { code: "QTDL", name: "Quản trị dịch vụ du lịch và lữ hành" },
+  { code: "QTKS", name: "Quản trị khách sạn" },
+  { code: "NNA", name: "Ngôn ngữ Anh" },
+
+  // Nhóm Tâm lý & Khoa học xã hội - Luật
+  { code: "CTXH", name: "Công tác xã hội" },
+  { code: "TLH", name: "Tâm lý học" },
+  { code: "LKT", name: "Luật kinh tế" }
+];
+
 function SettingsModal({ isOpen, onClose, api, user, showToast }) {
   const [activeTab, setActiveTab] = useState("profile") // profile | wallet | password
   const [busy, setBusy] = useState(false)
+  const { setUser } = useAuth()
 
   // Hồ sơ sinh viên
   const [fullName, setFullName] = useState(user?.full_name || "")
   const [className, setClassName] = useState("")
   const [cohort, setCohort] = useState("")
   const [birthDate, setBirthDate] = useState("")
+
+  // Thêm các state hỗ trợ dropdown ULSA
+  const [selectedCohort, setSelectedCohort] = useState("")
+  const [selectedMajor, setSelectedMajor] = useState("")
+  const [customClassName, setCustomClassName] = useState("")
+  const [isCustomClass, setIsCustomClass] = useState(false)
 
   // Mật khẩu
   const [oldPassword, setOldPassword] = useState("")
@@ -403,6 +445,31 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
           setClassName(res.class_name || "")
           setCohort(res.cohort || "")
           setBirthDate(res.birth_date || "")
+
+          // Phân tích thông tin để chọn dropdown tự động
+          if (res.cohort) {
+            const matchedC = res.cohort.match(/D\d+/)?.[0] || "";
+            if (matchedC) {
+              setSelectedCohort(matchedC);
+            }
+          }
+          if (res.class_name) {
+            const match = res.class_name.match(/^D\d+([A-Z]+)\d+$/);
+            if (match) {
+              const majorCode = match[1];
+              const foundMajor = MAJORS.find(m => m.code === majorCode);
+              if (foundMajor) {
+                setSelectedMajor(majorCode);
+                setIsCustomClass(false);
+              } else {
+                setIsCustomClass(true);
+                setCustomClassName(res.class_name);
+              }
+            } else {
+              setIsCustomClass(true);
+              setCustomClassName(res.class_name);
+            }
+          }
         }
       }).catch(console.error)
     }
@@ -424,6 +491,9 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
       })
       if (res && res.success) {
         showToast("✅ Cập nhật thông tin thành công!")
+        if (res.user) {
+          setUser(res.user)
+        }
       }
     } catch (err) {
       showToast("❌ Lỗi: " + err.message)
@@ -541,23 +611,114 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
                       value={fullName} onChange={e => setFullName(e.target.value)} required />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Lớp học</label>
-                    <input className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
-                      placeholder="VD: D16-QLĐất đai" value={className} onChange={e => setClassName(e.target.value)} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Niên khóa (Khóa)</label>
-                    <input className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
-                      placeholder="VD: K16" value={cohort} onChange={e => setCohort(e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Ngày sinh</label>
                     <input className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
                       placeholder="VD: 15/08/2004" value={birthDate} onChange={e => setBirthDate(e.target.value)} />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1 relative">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Niên khóa (Khóa)</label>
+                    <div className="relative">
+                      <select 
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-3 pr-10 text-xs outline-none text-gray-800 appearance-none cursor-pointer"
+                        value={selectedCohort}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setSelectedCohort(val);
+                          setCohort(val);
+                          if (!isCustomClass && val && selectedMajor) {
+                            setClassName(`${val}${selectedMajor}1`);
+                          }
+                        }}
+                      >
+                        <option value="">-- Chọn Khóa --</option>
+                        {COHORTS.map(c => (
+                          <option key={c.id} value={c.id}>{c.label}</option>
+                        ))}
+                      </select>
+                      <span className="material-symbols-outlined absolute right-3 top-2 text-gray-400 pointer-events-none text-base">expand_more</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 relative">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Ngành học</label>
+                    <div className="relative">
+                      <select 
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-3 pr-10 text-xs outline-none text-gray-800 appearance-none cursor-pointer"
+                        value={selectedMajor}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setSelectedMajor(val);
+                          if (!isCustomClass && selectedCohort && val) {
+                            setClassName(`${selectedCohort}${val}1`);
+                          }
+                        }}
+                      >
+                        <option value="">-- Chọn Ngành --</option>
+                        {MAJORS.map(m => (
+                          <option key={m.code} value={m.code}>{m.name}</option>
+                        ))}
+                      </select>
+                      <span className="material-symbols-outlined absolute right-3 top-2 text-gray-400 pointer-events-none text-base">expand_more</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Lớp học (Hành chính/Lớp học phần)</label>
+                  {!isCustomClass && selectedCohort && selectedMajor ? (
+                    <div className="relative">
+                      <select 
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-3 pr-10 text-xs outline-none text-gray-800 appearance-none cursor-pointer"
+                        value={className}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === "custom") {
+                            setIsCustomClass(true);
+                            setClassName(customClassName || `${selectedCohort}${selectedMajor}1`);
+                          } else {
+                            setClassName(val);
+                          }
+                        }}
+                      >
+                        <option value={`${selectedCohort}${selectedMajor}1`}>{selectedCohort}{selectedMajor}1</option>
+                        <option value={`${selectedCohort}${selectedMajor}2`}>{selectedCohort}{selectedMajor}2</option>
+                        <option value={`${selectedCohort}${selectedMajor}3`}>{selectedCohort}{selectedMajor}3</option>
+                        <option value={`${selectedCohort}${selectedMajor}4`}>{selectedCohort}{selectedMajor}4</option>
+                        <option value="custom">-- Nhập lớp học khác --</option>
+                      </select>
+                      <span className="material-symbols-outlined absolute right-3 top-2 text-gray-400 pointer-events-none text-base">expand_more</span>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input 
+                        className="flex-1 bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
+                        placeholder="VD: D19QT1, D20KT2..." 
+                        value={isCustomClass ? customClassName : className}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (isCustomClass) {
+                            setCustomClassName(val);
+                          }
+                          setClassName(val);
+                        }} 
+                      />
+                      {selectedCohort && selectedMajor && (
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setIsCustomClass(false);
+                            setClassName(`${selectedCohort}${selectedMajor}1`);
+                          }}
+                          className="px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-xs font-bold transition-all"
+                        >
+                          Gợi ý lớp
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
