@@ -27,6 +27,7 @@ function Layout({ children }) {
   const [showNotif, setShowNotif] = useState(false)
   const [studentStats, setStudentStats] = useState({ pending: 0, totalEarned: 0 })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const loc = useLocation()
   const nav = useNavigate()
 
@@ -147,7 +148,7 @@ function Layout({ children }) {
                 
                 {/* Cài đặt (Settings) */}
                 <button 
-                  onClick={() => showToast('Tính năng Cài đặt tài khoản đang được phát triển!')} 
+                  onClick={() => setShowSettings(true)} 
                   className="w-10 h-10 rounded-full flex items-center justify-center text-gray-700 bg-gray-100/80 hover:bg-gray-200 transition-colors"
                   title="Cài đặt"
                 >
@@ -364,6 +365,319 @@ function Layout({ children }) {
         </footer>
       </div>
       <ChatBot />
+      {showSettings && (
+        <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} api={api} user={user} showToast={showToast} />
+      )}
+    </div>
+  )
+}
+
+function SettingsModal({ isOpen, onClose, api, user, showToast }) {
+  const [activeTab, setActiveTab] = useState("profile") // profile | wallet | password
+  const [busy, setBusy] = useState(false)
+
+  // Hồ sơ sinh viên
+  const [fullName, setFullName] = useState(user?.full_name || "")
+  const [className, setClassName] = useState("")
+  const [cohort, setCohort] = useState("")
+  const [birthDate, setBirthDate] = useState("")
+
+  // Mật khẩu
+  const [oldPassword, setOldPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [showOldPass, setShowOldPass] = useState(false)
+  const [showNewPass, setShowNewPass] = useState(false)
+
+  // Ví cá nhân
+  const [walletKey, setWalletKey] = useState(null)
+  const [showKey, setShowKey] = useState(false)
+  const [copiedKey, setCopiedKey] = useState(false)
+
+  // Gọi API tải thêm chi tiết hồ sơ từ DB khi mở Modal
+  useEffect(() => {
+    if (isOpen) {
+      api('/me').then(res => {
+        if (res) {
+          setFullName(res.full_name || "")
+          setClassName(res.class_name || "")
+          setCohort(res.cohort || "")
+          setBirthDate(res.birth_date || "")
+        }
+      }).catch(console.error)
+    }
+  }, [isOpen, api])
+
+  // Gửi cập nhật thông tin hồ sơ
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      const res = await api('/me/profile', {
+        method: 'PUT',
+        body: JSON.stringify({
+          full_name: fullName,
+          class_name: className,
+          cohort: cohort,
+          birth_date: birthDate
+        })
+      })
+      if (res && res.success) {
+        showToast("✅ Cập nhật thông tin thành công!")
+      }
+    } catch (err) {
+      showToast("❌ Lỗi: " + err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Đổi mật khẩu tài khoản
+  const handleChangePassword = async (e) => {
+    e.preventDefault()
+    if (newPassword !== confirmPassword) {
+      showToast("⚠️ Mật khẩu xác nhận không khớp!")
+      return
+    }
+    setBusy(true)
+    try {
+      const res = await api('/me/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ oldPassword, newPassword })
+      })
+      if (res && res.success) {
+        showToast("✅ Đổi mật khẩu thành công!")
+        setOldPassword("")
+        setNewPassword("")
+        setConfirmPassword("")
+      }
+    } catch (err) {
+      showToast("❌ Lỗi: " + err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Lấy khóa bí mật ví blockchain
+  const handleRevealKey = async () => {
+    if (walletKey) {
+      setShowKey(true);
+      return;
+    }
+    setBusy(true)
+    try {
+      const res = await api('/me/wallet-key')
+      if (res && res.success) {
+        setWalletKey(res)
+        setShowKey(true)
+      }
+    } catch (err) {
+      showToast("❌ Không thể lấy khóa ví: " + err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleCopyKey = () => {
+    if (walletKey?.privateKey) {
+      navigator.clipboard.writeText(walletKey.privateKey)
+      setCopiedKey(true)
+      showToast("Đã sao chép Khóa bí mật ví!")
+      setTimeout(() => setCopiedKey(false), 2000)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in">
+      <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 max-w-2xl w-full mx-4 overflow-hidden flex flex-col md:flex-row h-[480px]">
+        
+        {/* Thanh điều hướng Modal bên trái */}
+        <div className="w-full md:w-56 bg-gray-50 border-r border-gray-100 p-4 flex flex-col gap-1.5 shrink-0 justify-between">
+          <div className="space-y-1.5">
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-3 mb-4">Cài đặt tài khoản</h3>
+            
+            <button onClick={() => setActiveTab("profile")}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'profile' ? 'bg-emerald-50 text-emerald-700' : 'text-gray-600 hover:bg-gray-200/50'}`}>
+              <span className="material-symbols-outlined text-lg">person</span>
+              <span>Thông tin cá nhân</span>
+            </button>
+
+            <button onClick={() => setActiveTab("wallet")}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'wallet' ? 'bg-emerald-50 text-emerald-700' : 'text-gray-600 hover:bg-gray-200/50'}`}>
+              <span className="material-symbols-outlined text-lg">account_balance_wallet</span>
+              <span>Ví Blockchain</span>
+            </button>
+
+            <button onClick={() => setActiveTab("password")}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${activeTab === 'password' ? 'bg-emerald-50 text-emerald-700' : 'text-gray-600 hover:bg-gray-200/50'}`}>
+              <span className="material-symbols-outlined text-lg">lock</span>
+              <span>Đổi mật khẩu</span>
+            </button>
+          </div>
+
+          <button onClick={onClose}
+            className="w-full py-2.5 bg-gray-200/80 text-gray-700 rounded-xl font-bold text-xs hover:bg-gray-300 transition-colors">
+            Đóng
+          </button>
+        </div>
+
+        {/* Nội dung tương ứng bên phải */}
+        <div className="flex-1 p-6 overflow-y-auto relative flex flex-col justify-between">
+          
+          {/* TAB 1: THÔNG TIN CÁ NHÂN */}
+          {activeTab === "profile" && (
+            <form onSubmit={handleUpdateProfile} className="space-y-4 flex-1 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div>
+                  <h4 className="font-extrabold text-base text-gray-800">Thông tin cá nhân</h4>
+                  <p className="text-xs text-gray-500 mt-0.5">Cập nhật hồ sơ sinh viên của bạn trong hệ thống.</p>
+                </div>
+                <div className="h-px bg-gray-100 my-2" />
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Họ và tên</label>
+                    <input className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
+                      value={fullName} onChange={e => setFullName(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Lớp học</label>
+                    <input className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
+                      placeholder="VD: D16-QLĐất đai" value={className} onChange={e => setClassName(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Niên khóa (Khóa)</label>
+                    <input className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
+                      placeholder="VD: K16" value={cohort} onChange={e => setCohort(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Ngày sinh</label>
+                    <input className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
+                      placeholder="VD: 15/08/2004" value={birthDate} onChange={e => setBirthDate(e.target.value)} />
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" disabled={busy}
+                className="w-full mt-4 py-2.5 bg-primary text-on-primary rounded-xl font-bold text-xs hover:opacity-95 disabled:opacity-50 transition-opacity">
+                {busy ? "Đang cập nhật..." : "Cập nhật hồ sơ"}
+              </button>
+            </form>
+          )}
+
+          {/* TAB 2: VÍ BLOCKCHAIN */}
+          {activeTab === "wallet" && (
+            <div className="flex-1 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div>
+                  <h4 className="font-extrabold text-base text-gray-800">Ví Blockchain cá nhân</h4>
+                  <p className="text-xs text-gray-500 mt-0.5">Quản lý và sao lưu tài sản UGC của bạn.</p>
+                </div>
+                <div className="h-px bg-gray-100 my-2" />
+
+                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-2">
+                  <p className="text-xs text-emerald-800 font-bold flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-base">info</span> Địa chỉ ví của bạn
+                  </p>
+                  <p className="font-mono text-[11px] text-emerald-700 bg-white border border-emerald-100 rounded-lg p-2 break-all select-all font-bold">
+                    {user?.wallet_address || "—"}
+                  </p>
+                </div>
+
+                {!showKey ? (
+                  <div className="border border-orange-200 bg-orange-50/50 rounded-2xl p-4 space-y-3">
+                    <p className="text-xs text-orange-800 font-bold flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-base">warning</span> Cảnh báo bảo mật
+                    </p>
+                    <p className="text-[11px] text-gray-600 leading-relaxed">
+                      Khóa bí mật (Private Key) cho phép truy cập trực tiếp vào tài sản tín chỉ của bạn. Tuyệt đối không chia sẻ khóa này cho bất kỳ ai!
+                    </p>
+                    <button type="button" onClick={handleRevealKey} disabled={busy}
+                      className="py-2 px-4 bg-orange-600 text-white rounded-xl font-bold text-[11px] hover:bg-orange-700 transition-colors shadow-sm">
+                      {busy ? "Đang kết nối..." : "Hiện Khóa Bí Mật (Private Key)"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="border border-red-200 bg-red-50/30 rounded-2xl p-4 space-y-3">
+                    <p className="text-xs text-red-800 font-bold flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-base">vpn_key</span> Khóa bí mật của ví
+                    </p>
+                    <div className="flex items-center gap-2 bg-white border border-red-100 rounded-lg p-2">
+                      <p className="font-mono text-[10px] text-red-700 break-all select-all font-bold flex-1">
+                        {walletKey?.privateKey || "—"}
+                      </p>
+                      <button type="button" onClick={handleCopyKey} className="text-gray-400 hover:text-gray-700 shrink-0">
+                        <span className="material-symbols-outlined text-base">{copiedKey ? "check" : "content_copy"}</span>
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-gray-500 leading-tight">
+                      Đường dẫn ví: <code className="bg-gray-150 rounded px-1 text-[9px]">{walletKey?.path}</code>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="text-[10px] text-gray-400 text-center font-medium mt-4">
+                Mạng: Hardhat Localhost (Chain ID: 31337)
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: ĐỔI MẬT KHẨU */}
+          {activeTab === "password" && (
+            <form onSubmit={handleChangePassword} className="space-y-4 flex-1 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div>
+                  <h4 className="font-extrabold text-base text-gray-800">Đổi mật khẩu</h4>
+                  <p className="text-xs text-gray-500 mt-0.5">Đảm bảo mật khẩu mạnh để bảo vệ tài khoản.</p>
+                </div>
+                <div className="h-px bg-gray-100 my-2" />
+
+                <div className="space-y-2">
+                  <div className="space-y-1 relative">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Mật khẩu cũ</label>
+                    <input className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
+                      type={showOldPass ? "text" : "password"} required
+                      value={oldPassword} onChange={e => setOldPassword(e.target.value)} />
+                    <button type="button" onClick={() => setShowOldPass(!showOldPass)}
+                      className="absolute right-3 top-6 text-gray-400 hover:text-gray-600 flex items-center">
+                      <span className="material-symbols-outlined text-base">{showOldPass ? "visibility_off" : "visibility"}</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1 relative">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Mật khẩu mới</label>
+                      <input className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
+                        type={showNewPass ? "text" : "password"} required
+                        value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+                      <button type="button" onClick={() => setShowNewPass(!showNewPass)}
+                        className="absolute right-3 top-6 text-gray-400 hover:text-gray-600 flex items-center">
+                        <span className="material-symbols-outlined text-base">{showNewPass ? "visibility_off" : "visibility"}</span>
+                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Xác nhận mật khẩu</label>
+                      <input className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
+                        type="password" required
+                        value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" disabled={busy}
+                className="w-full mt-4 py-2.5 bg-primary text-on-primary rounded-xl font-bold text-xs hover:opacity-95 disabled:opacity-50 transition-opacity">
+                {busy ? "Đang cập nhật..." : "Đổi mật khẩu"}
+              </button>
+            </form>
+          )}
+
+        </div>
+      </div>
     </div>
   )
 }

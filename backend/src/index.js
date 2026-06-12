@@ -1891,6 +1891,72 @@ app.get("/ugc/weekly-stats/:studentId", authRequired, async (req, res) => {
   }
 });
 
+// Đổi mật khẩu tài khoản
+app.post("/me/change-password", authRequired, async (req, res) => {
+  const { oldPassword, newPassword } = req.body || {};
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ error: "Vui lòng nhập mật khẩu cũ và mật khẩu mới." });
+  }
+  try {
+    const rs = await pool.query("SELECT password_hash FROM users WHERE id=$1", [req.user.id]);
+    const user = rs.rows[0];
+    if (!user) return res.status(404).json({ error: "Không tìm thấy người dùng." });
+
+    const ok = bcrypt.compareSync(oldPassword, user.password_hash);
+    if (!ok) return res.status(400).json({ error: "Mật khẩu cũ không chính xác." });
+
+    const newHash = bcrypt.hashSync(newPassword, 10);
+    await pool.query("UPDATE users SET password_hash=$1 WHERE id=$2", [newHash, req.user.id]);
+
+    res.json({ success: true, message: "Đổi mật khẩu thành công!" });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Xuất Khóa bí mật (Private Key) của ví
+app.get("/me/wallet-key", authRequired, async (req, res) => {
+  try {
+    const rs = await pool.query("SELECT wallet_index, wallet_address FROM users WHERE id=$1", [req.user.id]);
+    const user = rs.rows[0];
+    if (!user) return res.status(404).json({ error: "Không tìm thấy người dùng." });
+    if (user.wallet_index === null) {
+      return res.status(400).json({ error: "Tài khoản chưa được cấp ví blockchain." });
+    }
+
+    const wallet = deriveWallet(user.wallet_index);
+    res.json({
+      success: true,
+      address: wallet.address,
+      privateKey: wallet.privateKey,
+      mnemonic: MNEMONIC,
+      path: `m/44'/60'/0'/0/${user.wallet_index}`
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Cập nhật thông tin hồ sơ cá nhân
+app.put("/me/profile", authRequired, async (req, res) => {
+  const { full_name, class_name, cohort, birth_date } = req.body || {};
+  try {
+    const rs = await pool.query(
+      `UPDATE users 
+       SET full_name = COALESCE($1, full_name),
+           class_name = COALESCE($2, class_name),
+           cohort = COALESCE($3, cohort),
+           birth_date = COALESCE($4, birth_date)
+       WHERE id = $5 
+       RETURNING id, username, full_name, role, wallet_address, student_card_image, class_name, cohort, birth_date`,
+      [full_name, class_name, cohort, birth_date, req.user.id]
+    );
+    res.json({ success: true, user: rs.rows[0] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // -------------------- Chatbot (Gemini proxy) --------------------
 app.post("/api/chat", authRequired, async (req, res) => {
   const { messages } = req.body || {};
