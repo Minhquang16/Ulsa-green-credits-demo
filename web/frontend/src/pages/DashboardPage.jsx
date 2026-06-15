@@ -3,10 +3,15 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth.jsx'
 import { useToast } from '../context/ToastContext.jsx'
 import { TrendingUp } from "lucide-react"
-import { Bar, BarChart as RechartsBarChart, CartesianGrid, XAxis, Tooltip, ResponsiveContainer } from "recharts"
+import { Bar, BarChart as RechartsBarChart, Line, LineChart, Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
 import ClaimsDataTable from '../components/ClaimsDataTable'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+
+import iconCard1 from '../assets/icon_dashboard/ô_1.png'
+import iconCard4 from '../assets/icon_dashboard/ô_4.png'
+import logoWeb from '../logo_web.png'
+import '../assets/dashboard.css'
 
 function shortAddr(h) { return h ? h.slice(0, 6) + '...' + h.slice(-4) : '—' }
 function timeAgo(d) {
@@ -26,7 +31,7 @@ function renderAvatar(u, sizeClass = "w-10 h-10") {
       </div>
     )
   }
-  
+
   let bgClass = "bg-green-600"
   let label = "??"
   if (u?.role === 'admin') {
@@ -38,7 +43,7 @@ function renderAvatar(u, sizeClass = "w-10 h-10") {
   } else if (u?.full_name) {
     label = u.full_name.split(' ').pop()?.slice(0, 2).toUpperCase() || "??"
   }
-  
+
   return (
     <div className={`${sizeClass} rounded-full ${bgClass} text-white font-black flex items-center justify-center flex-shrink-0 select-none shadow-sm text-xs`}>
       {label}
@@ -101,7 +106,7 @@ function renderTrend(trend, pos, isBottom = false) {
   if (trend === 'Cần xử lý ngay') {
     return <span className="text-[10px] font-bold text-red-500">{trend}</span>
   }
-  
+
   const match = trend?.match(/^(\+\d+(?:\.\d+)?%)(.*)$/)
   if (match) {
     const pct = match[1]
@@ -113,7 +118,7 @@ function renderTrend(trend, pos, isBottom = false) {
       </span>
     )
   }
-  
+
   return <span className={`text-[10px] font-bold ${pos ? 'text-green-600' : 'text-red-500'}`}>{trend}</span>
 }
 
@@ -121,7 +126,7 @@ function renderTrend(trend, pos, isBottom = false) {
 function getStudentLevel(balance) {
   if (balance >= 200) return { label: 'Xanh Bền Vững', color: '#89DB1F', bg: '#f3ffe0', icon: 'forest' }
   if (balance >= 100) return { label: 'Xanh Lá', color: '#89DB1F', bg: '#edffc0', icon: 'eco' }
-  if (balance >= 50)  return { label: 'Xanh Mầm', color: '#89DB1F', bg: '#f3ffe0', icon: 'grass' }
+  if (balance >= 50) return { label: 'Xanh Mầm', color: '#89DB1F', bg: '#f3ffe0', icon: 'grass' }
   return { label: 'Mới bắt đầu', color: '#6b7280', bg: '#f9fafb', icon: 'sprout' }
 }
 
@@ -193,50 +198,79 @@ function StudentUGCChart({ studentId, api }) {
     );
   }
 
-  if (error) {
-    return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '16px' }}>
-        <span className="material-symbols-outlined text-[32px] text-red-500 mb-2 font-black">error</span>
-        <p style={{ fontSize: '12px', color: '#ef4444', fontWeight: 'bold' }}>{error}</p>
-        <button onClick={fetchWeeklyStats} style={{ fontSize: '12px', color: '#059669', marginTop: '8px', cursor: 'pointer' }} className="hover:underline">Thử lại</button>
-      </div>
-    );
-  }
+  // Khởi tạo data mặc định nếu API trả rỗng để tránh lỗi
+  const chartData = (data && data.length > 0) ? data : [
+    { day: 'T2', total_ugc: 0 }, { day: 'T3', total_ugc: 0 }, { day: 'T4', total_ugc: 0 },
+    { day: 'T5', total_ugc: 0 }, { day: 'T6', total_ugc: 0 }, { day: 'T7', total_ugc: 0 }, { day: 'CN', total_ugc: 0 }
+  ];
 
-  if (totalUgc === 0) {
-    return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '16px' }}>
-        <span className="material-symbols-outlined text-[36px] text-gray-300 mb-2">bar_chart</span>
-        <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#9ca3af' }}>Chưa có tín chỉ tuần này</p>
-        <p style={{ fontSize: '11px', color: '#9ca3af', maxWidth: '240px', marginTop: '4px' }}>Hãy tham gia hoạt động để tích lũy tín chỉ xanh UGC đầu tiên nhé!</p>
-      </div>
-    );
-  }
+  // Tính scale cho trục Y
+  const chartConfig = {
+    total_ugc: {
+      label: "UGC",
+      color: "#22c55e",
+    },
+  };
+
+  // Prevent repeating YAxis values when data is very small
+  const maxUgc = Math.max(...chartData.map(d => d.total_ugc || 0));
+  const tickStep = Math.max(1, Math.ceil(maxUgc / 4)); // Generate 5 ticks
+  const yTicks = [0, tickStep, tickStep * 2, tickStep * 3, tickStep * 4];
+  const actualMax = yTicks[yTicks.length - 1];
 
   return (
-    <Card className="border-0 shadow-none bg-transparent">
-      <CardContent className="p-0">
-        <ChartContainer config={chartConfig} className="w-full h-[230px]">
-          <RechartsBarChart accessibilityLayer data={data} margin={{ top: 10, right: 0, left: 0, bottom: 15 }}>
-            <CartesianGrid vertical={false} stroke="#e5e7eb" strokeDasharray="4 4" />
-            <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6b7280', fontWeight: 500 }} tickMargin={10} />
-            <ChartTooltip content={
-              <ChartTooltipContent 
-                indicator="dot" 
-                formatter={(value, name, item) => (
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-gray-800">{value} UGC</span>
-                    <span className="text-[10px] text-gray-400">({item.payload.activity_count} hoạt động)</span>
-                  </div>
-                )}
-              />
-            } cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
-            <Bar dataKey="total_ugc" fill="var(--color-totalUgc)" radius={[4, 4, 0, 0]} barSize={24} />
-          </RechartsBarChart>
-        </ChartContainer>
-      </CardContent>
-    </Card>
-  )
+    <div style={{ height: '250px', width: '100%', marginTop: '20px', position: 'relative' }} className="select-none">
+      <ChartContainer config={chartConfig} className="w-full h-full">
+        <AreaChart
+          accessibilityLayer
+          data={chartData}
+          margin={{
+            left: -8,
+            right: 12,
+            top: 20,
+            bottom: 0
+          }}
+        >
+          <defs>
+            <linearGradient id="fillUgc" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="var(--color-total_ugc)" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="var(--color-total_ugc)" stopOpacity={0.0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid vertical={false} stroke="#f3f4f6" />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tickMargin={16}
+            ticks={yTicks}
+            domain={[0, actualMax]}
+            tick={{ fontSize: 12, fill: '#9ca3af', fontWeight: 500 }}
+            width={45}
+          />
+          <XAxis
+            dataKey="day"
+            tickLine={false}
+            axisLine={false}
+            tickMargin={12}
+            tick={{ fontSize: 12, fill: '#6b7280', fontWeight: 600 }}
+          />
+          <ChartTooltip
+            cursor={{ stroke: '#9ca3af', strokeWidth: 1, strokeDasharray: '4 4' }}
+            content={<ChartTooltipContent />}
+          />
+          <Area
+            dataKey="total_ugc"
+            type="monotone"
+            fill="url(#fillUgc)"
+            stroke="var(--color-total_ugc)"
+            strokeWidth={3}
+            dot={{ r: 4, fill: 'var(--color-total_ugc)', strokeWidth: 0, opacity: 0.6 }}
+            activeDot={{ r: 6, fill: 'var(--color-total_ugc)', stroke: '#fff', strokeWidth: 2 }}
+          />
+        </AreaChart>
+      </ChartContainer>
+    </div>
+  );
 }
 
 
@@ -281,7 +315,7 @@ export default function DashboardPage() {
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url
-    a.download = `ugc-wallets-${new Date().toISOString().slice(0,10)}.csv`
+    a.download = `ugc-wallets-${new Date().toISOString().slice(0, 10)}.csv`
     a.click(); URL.revokeObjectURL(url)
     showToast('✅ Đã xuất file CSV thành công!')
   }
@@ -327,284 +361,394 @@ export default function DashboardPage() {
     const bal = balance ?? 0
     const level = getStudentLevel(bal)
     const approvedClaims = studentClaims.filter(c => c.status === 'approved')
-    const pendingClaims  = studentClaims.filter(c => c.status === 'submitted')
-    const totalEarned    = approvedClaims.reduce((s, c) => s + (c.credit_amount || 0), 0)
-    const nextGoal       = bal < 50 ? 50 : bal < 100 ? 100 : bal < 200 ? 200 : 300
-    const progressPct    = Math.min((bal / nextGoal) * 100, 100)
+    const pendingClaims = studentClaims.filter(c => c.status === 'submitted')
+    const totalEarned = approvedClaims.reduce((s, c) => s + (c.credit_amount || 0), 0)
+    const nextGoal = bal < 50 ? 50 : bal < 100 ? 100 : bal < 200 ? 200 : 300
+    const progressPct = Math.min((bal / nextGoal) * 100, 100)
     const upcomingEvents = studentEvents
       .filter(e => e.status === 'published' && new Date(e.end_at) > new Date())
       .slice(0, 4)
 
-    const CARD = { background:'#fff', borderRadius:16, border:'1px solid #e8e8e8', boxShadow:'0 1px 4px rgba(0,0,0,.05)', position:'relative' }
+    // Calculate real weekly tasks based on events the student can participate in
+    const tasksList = studentEvents.slice(0, 5).map(ev => {
+      // Check if student has submitted a claim for this event
+      const claim = studentClaims.find(c => c.event_id === ev.id);
+      const hasParticipated = claim && (claim.status === 'approved' || claim.status === 'submitted');
+      
+      return {
+        label: ev.title,
+        progress: hasParticipated ? 1 : 0,
+        total: 1,
+        done: !!hasParticipated,
+        status: claim ? claim.status : null
+      };
+    });
+
+    const tasksCompleted = tasksList.filter(t => t.done).length;
+    const tasksTotal = tasksList.length || 1; // avoid division by zero
+    const tasksProgressPct = (tasksCompleted / tasksTotal) * 100;
+
+    // Trend calculations for KPI cards
+    const now = new Date()
+    const thisWeekStart = new Date(now); thisWeekStart.setDate(now.getDate() - 7)
+    const lastWeekStart = new Date(thisWeekStart); lastWeekStart.setDate(lastWeekStart.getDate() - 7)
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+
+    let ugcThisWeek = 0, ugcLastWeek = 0, ugcThisMonth = 0, actThisMonth = 0
+    approvedClaims.forEach(c => {
+      const d = new Date(c.updated_at || c.created_at)
+      if (d >= thisWeekStart) ugcThisWeek += c.credit_amount
+      else if (d >= lastWeekStart) ugcLastWeek += c.credit_amount
+      if (d >= thisMonthStart) { ugcThisMonth += c.credit_amount; actThisMonth++ }
+    })
+    const ugcTrend = ugcThisWeek - ugcLastWeek
+    const ugcTrendStr = `${ugcTrend >= 0 ? '+' : ''}${ugcTrend} UGC so với tuần trước`
+
+    // Streak calculation
+    const streakDates = approvedClaims
+      .map(c => { const d = new Date(c.updated_at || c.created_at); d.setHours(0, 0, 0, 0); return d.getTime() })
+    const uniqueDates = [...new Set(streakDates)].sort((a, b) => b - a)
+    let streakDays = 0, maxStreak = 0, run = 1
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    for (let i = 0; i < uniqueDates.length; i++) {
+      if (uniqueDates[i] === today.getTime() - i * 86400000) streakDays++
+      else break
+    }
+    for (let i = 0; i < uniqueDates.length - 1; i++) {
+      if ((uniqueDates[i] - uniqueDates[i + 1]) / 86400000 === 1) { run++; if (run > maxStreak) maxStreak = run }
+      else run = 1
+    }
+    maxStreak = Math.max(streakDays, maxStreak)
+
+    const CARD = { background: '#fff', borderRadius: 16, border: '1px solid #e8e8e8', boxShadow: '0 1px 4px rgba(0,0,0,.05)', position: 'relative' }
     const BK = '#111214'
     const G = '#89DB1F'
-    const LBL = { fontSize:12, fontWeight:600, color:'#aaa' }
-    const BIG = { fontSize:34, fontWeight:900, lineHeight:1.1 }
+    const LBL = { fontSize: 12, fontWeight: 600, color: '#aaa' }
+    const BIG = { fontSize: 34, fontWeight: 900, lineHeight: 1.1 }
 
     return (
-      <div style={{ background: '#f5f5f5', minHeight: '100vh' }}>
-        <div className="max-w-[1200px] mx-auto px-6 lg:px-8 py-8 space-y-6">
+      <div className="dashboard-page" style={{ background: '#f5f5f5', minHeight: '100vh' }}>
+        <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-8 space-y-6">
 
-          {/* ── HEADER ─────────────────────────────────────── */}
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <h1 className="text-2xl md:text-3xl font-bold text-slate-800 tracking-tight leading-tight">
-                Xin chào, {user.full_name || 'Sinh viên'} 👋
+          {/* ── HEADER (Welcome Section + Progress Card) ── */}
+          <div className="welcome-section" style={{ flexWrap: 'nowrap' }}>
+            <div style={{ flexShrink: 1, minWidth: 0 }}>
+              <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#111', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                Xin chào, {user.full_name || 'Hoàng Trường'}
               </h1>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
-                <p className="text-sm text-slate-500 font-medium">
+              <div style={{ marginTop: '6px', fontSize: '12px', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span className="text-muted text-sm" style={{ margin: 0, whiteSpace: 'nowrap' }}>
                   Hôm nay là {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                </p>
-                <span className="hidden sm:inline text-slate-300">•</span>
-                <p className="text-sm text-emerald-600 font-medium flex items-center gap-1">
-                  <span>Hôm nay bạn đã tích lũy được tín chỉ xanh nào chưa?</span>
-                  <span className="inline-block animate-bounce">🌱</span>
-                </p>
+                </span>
+                <span style={{ margin: '0 8px', color: '#ccc' }}>•</span>
+                <span className="text-green" style={{ margin: 0, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  Hôm nay bạn đã tích lũy được tín chỉ xanh nào chưa? <span>🌱</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Progress Card */}
+            <div className="progress-card">
+              <div className="icon-box">
+                <img src={logoWeb} alt="logo" className="w-[20px] h-[20px] object-contain" />
+              </div>
+              <div className="content-area">
+                <div className="top-text">
+                  Bạn đã đạt <strong>{bal} / {nextGoal} UGC</strong>
+                </div>
+                <div className="bottom-row">
+                  <div className="progress-track">
+                    <div className="progress-fill" style={{ width: `${progressPct}%` }}></div>
+                  </div>
+                  <span className="percentage">{Math.round(progressPct)}%</span>
+                  <span className="hint-text">
+                    Còn {nextGoal - bal} UGC để nhận huy hiệu {nextGoal === 50 ? 'Đồng' : nextGoal === 100 ? 'Bạc' : 'Vàng'}
+                  </span>
+                </div>
+              </div>
+              <img src="https://cdn-icons-png.flaticon.com/512/3176/3176294.png" alt="badge" className="medal-icon" style={{ filter: 'grayscale(1)', opacity: 0.5 }} />
+            </div>
+          </div>
+
+
+          {/* ── KPI CARDS ── */}
+          <div className="kpi-row">
+            {/* Card 1 */}
+            <div className="kpi-card theme-green">
+              <div className="kpi-icon-container">
+                <img src={iconCard1} alt="UGC" style={{ width: '44px', height: '44px', objectFit: 'cover', borderRadius: '50%' }} />
+              </div>
+              <div className="kpi-info" style={{ flex: 1 }}>
+                <p className="kpi-title card1-title">Số dư tín chỉ</p>
+                <div className="kpi-value-container">
+                  <span className="kpi-value">{loading ? '…' : bal}</span>
+                </div>
+                <div className="card1-trend">
+                  <span className="card1-trend-icon"><i className="ph-bold ph-trend-up"></i></span>
+                  <span className="card1-trend-text-highle">{ugcTrendStr.split(' ')[0]}</span>
+                  <span className="card1-trend-text">&nbsp;{ugcTrendStr.split(' ').slice(1).join(' ')}</span>
+                </div>
+              </div>
+              <div className="top-right-badge">
+                <span className="ugc-badge">UGC</span>
+              </div>
+            </div>
+
+            {/* Ô 2: Tổng đã kiếm */}
+            <div className="kpi-card theme-orange">
+              <div className="kpi-icon-container">
+                <div className="kpi-icon-inner">
+                  <i className="ph-fill ph-medal" style={{ fontSize: '22px' }}></i>
+                </div>
+              </div>
+              <div className="kpi-info" style={{ flex: 1 }}>
+                <p className="kpi-title card2-title">Tổng đã kiếm</p>
+                <div className="kpi-value-container">
+                  <span className="kpi-value">{loading ? '…' : totalEarned}</span>
+                </div>
+                <div className="card2-trend">
+                  <span className="card2-trend-icon"><i className="ph-bold ph-trend-up"></i></span>
+                  <span className="card2-trend-text-highle">+{ugcThisMonth} UGC</span>
+                  <span className="card2-trend-text">&nbsp;tháng này</span>
+                </div>
+              </div>
+              <div className="top-right-badge">
+                <div className="icon-badge">
+                  <i className="ph-fill ph-medal"></i>
+                </div>
+              </div>
+            </div>
+
+            {/* Ô 3: Lần tham gia */}
+            <div className="kpi-card theme-blue">
+              <div className="kpi-icon-container">
+                <div className="kpi-icon-inner">
+                  <i className="ph-fill ph-users-three" style={{ fontSize: '22px' }}></i>
+                </div>
+              </div>
+              <div className="kpi-info" style={{ flex: 1 }}>
+                <p className="kpi-title card3-title">Lần tham gia</p>
+                <div className="kpi-value-container">
+                  <span className="kpi-value">{loading ? '…' : studentClaims.length}</span>
+                </div>
+                <div className="card3-trend">
+                  <span className="card3-trend-icon"><i className="ph-bold ph-trend-up"></i></span>
+                  <span className="card3-trend-text-highle">+{actThisMonth} hoạt động</span>
+                  <span className="card3-trend-text">&nbsp;tháng này</span>
+                </div>
+              </div>
+              <div className="top-right-badge">
+                <div className="icon-badge">
+                  <i className="ph-fill ph-users-three"></i>
+                </div>
+              </div>
+            </div>
+
+            {/* Ô 4: Chuỗi xanh hiện tại */}
+            <div className="kpi-card theme-purple">
+              <div className="kpi-icon-container">
+                <img src={iconCard4} alt="Streak" style={{ width: '44px', height: '44px', objectFit: 'cover', borderRadius: '50%' }} />
+              </div>
+              <div className="kpi-info" style={{ flex: 1 }}>
+                <p className="kpi-title card4-title">Chuỗi xanh hiện tại</p>
+                <div className="kpi-value-container">
+                  <span className="kpi-value">{loading ? '…' : streakDays}</span>
+                  <span className="kpi-value-unit">ngày</span>
+                </div>
+                <div className="card4-trend">
+                  <span className="card4-trend-text">Kỷ lục của bạn: {maxStreak} ngày</span>
+                </div>
+              </div>
+              <div className="top-right-badge">
+                <div className="icon-badge">
+                  <i className="ph-fill ph-calendar-blank"></i>
+                </div>
               </div>
             </div>
           </div>
 
 
-          {/* ── ROW 1: STAT CARDS ── style like Decko reference ──────── */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
-
-            {/* UGC Balance */}
-            <div style={{ background:'#fff', borderRadius:16, border:'1px solid #e8e8e8', boxShadow:'0 1px 4px rgba(0,0,0,.02)', padding:'20px 22px' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
-                <span style={{ fontSize:13, fontWeight:700, color:'#111' }}>Số dư tín chỉ</span>
-                <div style={{ width:30, height:30, borderRadius:'50%', background:'#f5f5f5', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize:16, color:'#111' }}>eco</span>
-                </div>
-              </div>
-              <div style={{ fontSize:30, fontWeight:600, color:'#111', lineHeight:1.1, marginBottom:10 }}>
-                {loading ? '…' : bal}
-              </div>
-              <div style={{ fontSize:12, fontWeight:500, color:'#888', display:'flex', alignItems:'center', gap:5 }}>
-                <div style={{ width:16, height:16, border:'1px solid #d1fae5', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', color:'#10b981' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize:10 }}>trending_up</span>
-                </div>
-                <span style={{ color:'#10b981', fontWeight:600 }}>Cấp độ {level.label}</span> 
-                <span style={{ color:'#111', fontWeight:500 }}>hiện tại</span>
-              </div>
-            </div>
-
-            {/* Total earned */}
-            <div style={{ background:'#fff', borderRadius:16, border:'1px solid #e8e8e8', boxShadow:'0 1px 4px rgba(0,0,0,.02)', padding:'20px 22px' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
-                <span style={{ fontSize:13, fontWeight:700, color:'#111' }}>Tổng đã kiếm</span>
-                <div style={{ width:30, height:30, borderRadius:'50%', background:'#f5f5f5', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize:16, color:'#111' }}>workspace_premium</span>
-                </div>
-              </div>
-              <div style={{ fontSize:30, fontWeight:600, color:'#111', lineHeight:1.1, marginBottom:10 }}>
-                {loading ? '…' : totalEarned}
-              </div>
-              <div style={{ fontSize:12, fontWeight:500, color:'#888', display:'flex', alignItems:'center', gap:5 }}>
-                <div style={{ width:16, height:16, border: approvedClaims.length > 0 ? '1px solid #d1fae5' : '1px solid #eee', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', color: approvedClaims.length > 0 ? '#10b981' : '#999' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize:10 }}>{approvedClaims.length > 0 ? 'trending_up' : 'trending_flat'}</span>
-                </div>
-                {approvedClaims.length > 0 ? (
-                  <><span style={{ color:'#10b981', fontWeight:600 }}>+{approvedClaims.length} hoạt động</span> <span style={{ color:'#111', fontWeight:500 }}>đã nhận</span></>
-                ) : (
-                  <span style={{ color:'#111', fontWeight:500 }}>Chưa có hoạt động</span>
-                )}
-              </div>
-            </div>
-
-            {/* Activities */}
-            <div style={{ background:'#fff', borderRadius:16, border:'1px solid #e8e8e8', boxShadow:'0 1px 4px rgba(0,0,0,.02)', padding:'20px 22px' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
-                <span style={{ fontSize:13, fontWeight:700, color:'#111' }}>Lần tham gia</span>
-                <div style={{ width:30, height:30, borderRadius:'50%', background:'#f5f5f5', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize:16, color:'#111' }}>task_alt</span>
-                </div>
-              </div>
-              <div style={{ fontSize:30, fontWeight:600, color:'#111', lineHeight:1.1, marginBottom:10 }}>
-                {loading ? '…' : approvedClaims.length}
-              </div>
-              <div style={{ fontSize:12, fontWeight:500, color:'#888', display:'flex', alignItems:'center', gap:5 }}>
-                <div style={{ width:16, height:16, border: approvedClaims.length > 0 ? '1px solid #d1fae5' : '1px solid #eee', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', color: approvedClaims.length > 0 ? '#10b981' : '#999' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize:10 }}>{approvedClaims.length > 0 ? 'trending_up' : 'trending_flat'}</span>
-                </div>
-                {approvedClaims.length > 0 ? (
-                  <><span style={{ color:'#10b981', fontWeight:600 }}>Đã ghi nhận</span> <span style={{ color:'#111', fontWeight:500 }}>trên hệ thống</span></>
-                ) : (
-                  <span style={{ color:'#111', fontWeight:500 }}>Chưa tham gia</span>
-                )}
-              </div>
-            </div>
-
-            {/* Pending */}
-            <div style={{ background:'#fff', borderRadius:16, border:'1px solid #e8e8e8', boxShadow:'0 1px 4px rgba(0,0,0,.02)', padding:'20px 22px' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
-                <span style={{ fontSize:13, fontWeight:700, color:'#111' }}>Chờ duyệt</span>
-                <div style={{ width:30, height:30, borderRadius:'50%', background:'#f5f5f5', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize:16, color:'#111' }}>pending_actions</span>
-                </div>
-              </div>
-              <div style={{ fontSize:30, fontWeight:600, color:'#111', lineHeight:1.1, marginBottom:10 }}>
-                {loading ? '…' : pendingClaims.length}
-              </div>
-              <div style={{ fontSize:12, fontWeight:500, color:'#888', display:'flex', alignItems:'center', gap:5 }}>
-                <div style={{ width:16, height:16, border: pendingClaims.length > 0 ? '1px solid #ffedd5' : '1px solid #d1fae5', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', color: pendingClaims.length > 0 ? '#f97316' : '#10b981' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize:10 }}>{pendingClaims.length > 0 ? 'trending_down' : 'trending_up'}</span>
-                </div>
-                {pendingClaims.length > 0 ? (
-                  <><span style={{ color:'#f97316', fontWeight:600 }}>Đang đợi xét duyệt</span> <span style={{ color:'#111', fontWeight:500 }}>từ Verifier</span></>
-                ) : (
-                  <><span style={{ color:'#10b981', fontWeight:600 }}>Đã hoàn tất</span> <span style={{ color:'#111', fontWeight:500 }}>xử lý</span></>
-                )}
-              </div>
-            </div>
-          </div>
-
-
-          {/* ROW 2: CHART + EVENTS */}
-          <div style={{ display:'grid', gridTemplateColumns:'3fr 2fr', gap:14 }}>
-            {/* Chart */}
-            <div style={{ background:'#fff', borderRadius:16, border:'1px solid #e8e8e8', boxShadow:'0 1px 4px rgba(0,0,0,.02)', position:'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%', maxWidth: '678px' }}>
-              <div style={{ padding:'20px 24px 0' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                  <div>
-                    <p style={{ fontSize:16, fontWeight:800, color:'#111', margin:0 }}>Tín chỉ nhận được</p>
-                    <p style={{ fontSize:13, color:'#888', marginTop:4, fontWeight:500 }}>7 ngày gần nhất</p>
+          {/* ===== MAIN GRID ===== */}
+          <div className="main-grid">
+            <div className="left-column">
+              <div className="chart-activity-row">
+                {/* Tăng trưởng tín chỉ (Chart) */}
+                <div className="card flex flex-col">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <p style={{ fontSize: 16, fontWeight: 800, color: '#111', margin: 0 }} className="flex items-center gap-1">Tăng trưởng tín chỉ <i className="ph ph-info" style={{ fontSize: '16px', color: '#94a3b8', cursor: 'pointer' }}></i></p>
+                      <p style={{ fontSize: 13, color: '#888', marginTop: 4, fontWeight: 500 }}>Thống kê 7 ngày gần nhất</p>
+                    </div>
+                  </div>
+                  <div className="chart-container flex-1">
+                    {loading ? <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span className="material-symbols-outlined" style={{ fontSize: 32, color: '#ddd' }}>hourglass_empty</span></div> : <StudentUGCChart studentId={user.id} api={api} />}
+                  </div>
+                  <div className="mt-2 pt-1">
+                    <Link to="/claims" className="link-text flex items-center gap-1 w-max">
+                      Xem chi tiết thống kê <i className="ph-bold ph-arrow-right"></i>
+                    </Link>
                   </div>
                 </div>
-              </div>
-              <div style={{ padding:'0 24px 16px', flex: 1, minHeight: 0 }}>
-                {loading
-                  ? <div style={{ height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}><span className="material-symbols-outlined" style={{ fontSize:32, color:'#ddd' }}>hourglass_empty</span></div>
-                  : <StudentUGCChart studentId={user.id} api={api} />}
-              </div>
-              <div style={{ padding:'14px 24px', borderTop:'1px solid #f2f2f2', display:'flex', flexDirection:'column', gap:'4px', background: '#fafafa' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:'8px', fontSize:'13px', fontWeight:700, color:'#111' }}>
-                  Tăng trưởng tốt trong tuần này <TrendingUp size={16} color="#10b981" />
-                </div>
-                <div style={{ fontSize:'13px', color:'#888', fontWeight:500 }}>
-                  Hiển thị tổng tín chỉ nhận được 7 ngày qua
-                </div>
-              </div>
-            </div>
 
-            {/* Events */}
-            <div style={{ background:'#fff', borderRadius:16, border:'1px solid #e8e8e8', boxShadow:'0 1px 4px rgba(0,0,0,.02)', padding:'24px 20px' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-                <p style={{ fontSize:16, fontWeight:800, color:'#111', margin:0 }}>Sắp diễn ra</p>
-                <div style={{ cursor:'pointer', display:'flex', alignItems:'center' }}>
-                  <span className="material-symbols-outlined" style={{ color:'#888' }}>more_horiz</span>
+                {/* Hoạt động gần đây */}
+                <div className="card flex flex-col">
+                  <div className="list-header">
+                    <p className="title-hd m-0">Hoạt động gần đây</p>
+                    <Link to="/claims" className="link-text">Xem tất cả</Link>
+                  </div>
+                  <ul className="activity-list flex-1" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    {studentClaims.slice(0, 4).map((c, i) => {
+                      const imageMap = {
+                        'hiến máu': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCa5hqxGqi0xefKNJWNuFNGScvF7fvvyqTIOZ8D1qoLwE4-Z2JtDqiXj4Y4q-uTlv2U13UoAQIBW6rEAVkzXOChWH_jVZLnIVUaxTgLldXppdkEvndQofXNuVa634y5_HMxSE1dNQOKxGJiOBmLC59aZ-5VqOAX_SYAMXAEtWTUfMq7tiqsIfNSDzW0y8CQaFTAkSE8IqBrfzFjfNgYgyo_ez7BAGZIShCFnjPLDLqXXJgz7soAXOonZmWpPn56V9_Il7tfSQHKVaw',
+                        'dọn rác': 'https://lh3.googleusercontent.com/aida-public/AB6AXuC14SOlq3R0r-3nDYB6Ko1XoLKnyxNGVKOXJ2dA-_6ik43yNN5K2S1sfW7LsskwyM7tM7-4DY3U-fZMxoMb5TVd5PIPFe7wuMX87JW2uZlRFGH8I4591sojg0ia--U5JX_qf24qJU5peW3GFd4JzeF5WHKcCCtV4xbuwPc1T9oq0Cf0IileiEHzkZOjTiVxCfDmO5QyTmv8DibNeqzxFsItPJu7MTf0geKtk26NeyAo9ph1h6mOO2Cd0VjAWHupo0dG8PIe_fhnI7I',
+                        'nhựa': 'https://lh3.googleusercontent.com/aida-public/AB6AXuC14SOlq3R0r-3nDYB6Ko1XoLKnyxNGVKOXJ2dA-_6ik43yNN5K2S1sfW7LsskwyM7tM7-4DY3U-fZMxoMb5TVd5PIPFe7wuMX87JW2uZlRFGH8I4591sojg0ia--U5JX_qf24qJU5peW3GFd4JzeF5WHKcCCtV4xbuwPc1T9oq0Cf0IileiEHzkZOjTiVxCfDmO5QyTmv8DibNeqzxFsItPJu7MTf0geKtk26NeyAo9ph1h6mOO2Cd0VjAWHupo0dG8PIe_fhnI7I',
+                        'trồng cây': 'https://lh3.googleusercontent.com/aida-public/AB6AXuA4KG8-XPwNqm7KEzQjUhCOM8qd38W--uWHs9NB-S1U0KfHDpmyGVb2mf8bt9ikxVn-ebXwpRFg0MedawTWeib0fRq1OLf1Uju2Ku8lj2TfgE-gc45Tm-Uouu7_j54zYKIroqVz-trQdlczFElFqCgkxjQx_LLh9cTyEbmGLHzR1Jb4wXLUzkRHHslf9wQS62aLV-OdGyBimSpFY6QVvKWXs11rc6jdro8pDExiDXGreHmy7q5C9JJiKY54JKP_KIFBO2s4XwA8vTs',
+                        'xe': 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=150&auto=format&fit=crop&q=60',
+                        'buýt': 'https://images.unsplash.com/photo-1570125909232-eb263c188f7e?w=150&auto=format&fit=crop&q=60',
+                        'nước': 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=150&auto=format&fit=crop&q=60'
+                      };
+                      const defaultImg = 'https://lh3.googleusercontent.com/aida-public/AB6AXuDtIhg0ZWFRXbL0h7Ube3PNjJGRZUluIeMrOkrS8c5_TNs-4VIrnRpbn5aRh_6vrT3C1rusVFoSkVOjL-QhfD7gTO-391AWkUkdPxx4jN63csv3uyUv0Notw0GmGi3j7JGIz7N-xAk5CUxeFnaOht3B-ab987F7-GPw64Z4k_fQAeWKRYP0CC-Xwz12teASa0qKElDVHEbNODdqNcHKysdNyCdFTTK2ieEKjHi0iEOq6xi4g634UwSu2eaoI3mlLoy3OzgyjYcK2w8';
+                      const searchStr = ((c.event_title || '') + ' ' + (c.activity_name || '')).toLowerCase();
+                      const matchedKey = Object.keys(imageMap).find(k => searchStr.includes(k));
+                      let imgSrc = matchedKey ? imageMap[matchedKey] : defaultImg;
+                      if (c.activity_description && c.activity_description.startsWith('/uploads')) {
+                        imgSrc = `/api${c.activity_description}`;
+                      }
+
+                      const isPending = c.status === 'submitted';
+                      const isRejected = c.status === 'rejected';
+
+                      return (
+                        <li key={i} style={{ opacity: isRejected ? 0.5 : 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div className="activity-icon" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                              <img src={imgSrc} alt={c.activity_name} className="w-full h-full object-cover" />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontWeight: 600, color: '#333' }}>{c.activity_name}</span>
+                              <span style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+                                {new Date(c.updated_at || c.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {new Date(c.updated_at || c.created_at).toLocaleDateString('vi-VN')}
+                              </span>
+                            </div>
+                          </div>
+                          <div className={`font-semibold ${isPending ? 'text-orange-500' : isRejected ? 'text-red-500' : 'text-green'}`}>
+                            {isPending ? 'Đang duyệt' : isRejected ? 'Từ chối' : `+${c.credit_amount} UGC`}
+                          </div>
+                        </li>
+                      )
+                    })}
+                    {studentClaims.length === 0 && <p className="text-sm text-gray-500 text-center py-4 m-0">Chưa có hoạt động nào</p>}
+                  </ul>
                 </div>
               </div>
-              {loading ? (
-                <div style={{ display:'flex', justifyContent:'center', padding:'24px 0' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize:28, color:'#ddd' }}>hourglass_empty</span>
+
+              {/* Thành tích nổi bật */}
+              <div className="card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <p style={{ fontSize: 16, fontWeight: 800, color: '#111', margin: 0 }}>Thành tích nổi bật</p>
+                  <button className="text-[13px] font-bold text-green-600 hover:underline">Xem tất cả</button>
                 </div>
-              ) : upcomingEvents.length === 0 ? (
-                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'20px 0', gap:8 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize:36, color:'#ddd' }}>event_busy</span>
-                  <p style={{ fontSize:12, color:'#bbb', fontWeight:500 }}>Không có sự kiện sắp tới</p>
-                </div>
-              ) : (
-                <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-                  {upcomingEvents.map((ev, i) => {
-                    const d = new Date(ev.start_at);
-                    const dateStr = d.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: 'short' });
-                    const timeStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-                    const isFirst = i === 0;
-                    return (
-                      <div key={ev.id} onClick={() => nav('/events')}
-                        style={{ display:'flex', alignItems:'center', gap:16, padding:'14px 16px', borderRadius:12, cursor:'pointer', background: isFirst ? '#f9fafb' : '#fff', transition:'background .2s' }}
-                        onMouseEnter={e => e.currentTarget.style.background='#f3f4f6'}
-                        onMouseLeave={e => e.currentTarget.style.background=isFirst ? '#f9fafb' : '#fff'}>
-                        {/* Checkbox */}
-                        <div style={{ width:20, height:20, borderRadius:6, border: isFirst ? 'none' : '2px solid #ddd', background: isFirst ? '#10b981' : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                          {isFirst && <span className="material-symbols-outlined" style={{ fontSize:14, color:'#fff', fontWeight:900 }}>check</span>}
-                        </div>
-                        {/* Time Info */}
-                        <div style={{ flexShrink:0, width:95 }}>
-                          <p style={{ fontSize:11, color:'#888', fontWeight:500, margin:'0 0 2px' }}>{dateStr}</p>
-                          <p style={{ fontSize:13, fontWeight:800, color:'#111', margin:0 }}>{timeStr}</p>
-                        </div>
-                        {/* Event Info */}
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <p style={{ fontSize:14, fontWeight:700, color:'#111', margin:'0 0 2px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.title}</p>
-                          <p style={{ fontSize:12, color:'#888', margin:0, fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                            {ev.activity_name} • +{ev.credit_amount} UGC
-                          </p>
-                        </div>
+                <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '12px' }} className="horizontal-scroll-container">
+                  {achievements.map((a, i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow" style={{ flexShrink: 0, width: '220px' }}>
+                      <div className={`w-11 h-11 rounded-full flex items-center justify-center text-xl flex-shrink-0 ${a.done ? 'bg-green-50 border border-green-100' : 'bg-gray-50 opacity-40 border border-gray-200'}`}>
+                        {a.icon}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ROW 3: QUICK ACTIONS + WALLET + ACHIEVEMENTS */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:14 }}>
-            {/* Quick Actions */}
-            <div style={CARD}>
-              <div style={{ padding:20 }}>
-                <p style={{ fontSize:14, fontWeight:800, color:BK, margin:'0 0 12px' }}>Hành động nhanh</p>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                  {[
-                    { icon:'qr_code_scanner', label:'Quét QR',   to:'/events',     desc:'Check-in sự kiện' },
-                    { icon:'redeem',           label:'Đổi quà',   to:'/rewards',    desc:'Dùng UGC' },
-                    { icon:'receipt_long',     label:'Ghi nhận',  to:'/claims',     desc:'Xem claims' },
-                    { icon:'policy',           label:'On-chain',  to:'/provenance', desc:'Nguồn gốc' },
-                  ].map((a, i) => (
-                    <Link key={i} to={a.to} style={{ textDecoration:'none', display:'flex', flexDirection:'column', gap:5, padding:11, borderRadius:11, border:'1px solid #eee', background:'#fafafa', transition:'background .15s' }}
-                      onMouseEnter={e => e.currentTarget.style.background='#f0f0f0'}
-                      onMouseLeave={e => e.currentTarget.style.background='#fafafa'}>
-                      <span className="material-symbols-outlined" style={{ fontSize:19, color:'#aaa' }}>{a.icon}</span>
-                      <p style={{ fontSize:12, fontWeight:800, color:BK, margin:0 }}>{a.label}</p>
-                      <p style={{ fontSize:10, color:'#bbb', margin:0 }}>{a.desc}</p>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Wallet */}
-            <div style={CARD}>
-              <div style={{ padding:20 }}>
-                <p style={{ fontSize:14, fontWeight:800, color:BK, margin:'0 0 12px' }}>Ví Blockchain</p>
-                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                  {[
-                    { label:'Địa chỉ ví', val: user.wallet_address, onCopy: () => { navigator.clipboard.writeText(user.wallet_address||''); showToast('Đã sao chép!') } },
-                    { label:'Smart Contract', val: contract, onCopy: () => { navigator.clipboard.writeText(contract||''); showToast('Đã sao chép!') } },
-                  ].map((item, i) => (
-                    <div key={i}>
-                      <p style={{ ...LBL, marginBottom:5 }}>{item.label}</p>
-                      <div style={{ display:'flex', alignItems:'center', gap:6, background:'#f5f5f5', borderRadius:9, padding:'7px 10px' }}>
-                        <p style={{ fontFamily:'monospace', fontSize:11, color:'#555', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight:600, margin:0 }}>{item.val || '—'}</p>
-                        <button onClick={item.onCopy} style={{ background:'none', border:'none', cursor:'pointer', color:'#bbb', padding:2, display:'flex', flexShrink:0 }}>
-                          <span className="material-symbols-outlined" style={{ fontSize:14 }}>content_copy</span>
-                        </button>
+                      <div className="min-w-0">
+                        <p className={`text-[13px] font-bold m-0 truncate ${a.done ? 'text-gray-800' : 'text-gray-400'}`}>{a.label}</p>
+                        <p className="text-[11px] text-gray-500 m-0 mt-0.5 truncate">{a.description}</p>
                       </div>
                     </div>
                   ))}
-                  <div style={{ display:'flex', alignItems:'center', gap:8, background:'#f3ffe0', border:'1px solid #cff07e', borderRadius:9, padding:'8px 12px' }}>
-                    <span style={{ width:7, height:7, borderRadius:'50%', background:G, flexShrink:0 }} />
-                    <p style={{ fontSize:11, fontWeight:700, color:'#5a8c10', margin:0 }}>Hardhat · Chain 31337</p>
+                </div>
+              </div>
+
+              {/* Ví Blockchain */}
+              <div className="card">
+                <p style={{ fontSize: 16, fontWeight: 800, color: '#111', margin: '0 0 16px' }} className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-green-600">verified_user</span> Ví Blockchain <span className="material-symbols-outlined text-gray-400 text-[16px]">expand_more</span>
+                </p>
+                <div className="flex gap-4 items-end">
+                  <div className="flex-1">
+                    <p style={{ fontSize: 12, fontWeight: 600, color: '#aaa', marginBottom: 6 }}>Địa chỉ ví</p>
+                    <div className="flex items-center gap-2 bg-[#f5f5f5] rounded-xl px-3 py-2.5">
+                      <p className="font-mono text-[12px] text-gray-600 flex-1 truncate font-semibold m-0">{user.wallet_address || '0x90F79bf6EB2c4f870365E785982E1f101E93b906'}</p>
+                      <button onClick={() => { navigator.clipboard.writeText(user.wallet_address || ''); showToast('Đã sao chép!') }} className="text-gray-400 hover:text-gray-600"><span className="material-symbols-outlined text-[16px]">content_copy</span></button>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <p style={{ fontSize: 12, fontWeight: 600, color: '#aaa', marginBottom: 6 }}>Smart Contract</p>
+                    <div className="flex items-center gap-2 bg-[#f5f5f5] rounded-xl px-3 py-2.5">
+                      <p className="font-mono text-[12px] text-gray-600 flex-1 truncate font-semibold m-0">{contract || '0x5FbDB2315678afecb367f032d93F642f64180aa3'}</p>
+                      <button onClick={() => { navigator.clipboard.writeText(contract || ''); showToast('Đã sao chép!') }} className="text-gray-400 hover:text-gray-600"><span className="material-symbols-outlined text-[16px]">content_copy</span></button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-center">
+                    <div className="flex items-center gap-2 bg-[#f4fbf7] rounded-xl px-4 py-2.5 h-[38px]">
+                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                      <p className="text-[12px] font-bold text-green-700 m-0">Hardhat · Chain 31337</p>
+                    </div>
                   </div>
                 </div>
               </div>
+
             </div>
 
-            {/* Achievements */}
-            <div style={CARD}>
-              <div style={{ padding:20 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
-                  <p style={{ fontSize:14, fontWeight:800, color:BK, margin:0 }}>Thành tích</p>
-                  <span style={{ fontSize:10, fontWeight:700, color:G, background:'#f3ffe0', padding:'2px 8px', borderRadius:99 }}>
-                    {achievements.filter(a => a.done).length}/{Math.max(achievements.length, 6)}
-                  </span>
+            <div className="right-column">
+              {/* Nhiệm vụ tuần này */}
+              <div className="card flex flex-col">
+                <div className="list-header">
+                  <p className="title-hd m-0">Nhiệm vụ tuần này</p>
+                  <Link to="/events" className="link-text">Xem thêm</Link>
                 </div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:7 }}>
-                  {achievements.map((a, i) => (
-                    <div key={i} title={a.description} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:8, borderRadius:10, background: a.done ? '#f3ffe0' : '#f7f7f7', opacity: a.done ? 1 : 0.35, filter: a.done ? 'none' : 'grayscale(1)', transition:'all .2s' }}>
-                      <span style={{ fontSize:20 }}>{a.icon}</span>
-                      <p style={{ fontSize:9, fontWeight:800, textAlign:'center', color: a.done ? BK : '#ccc', margin:0, lineHeight:1.3 }}>{a.label}</p>
+                <div className="flex-1">
+                  <ul className="task-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    {tasksList.map((task, i) => (
+                      <li key={i}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${task.done ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'}`}>
+                            {task.done && <i className="ph-bold ph-check" style={{ fontSize: '12px' }}></i>}
+                          </div>
+                          <span style={{ fontWeight: 500, color: task.done ? '#333' : '#666' }}>{task.label}</span>
+                        </div>
+                        <span style={{ fontWeight: 700, color: task.done ? '#16a34a' : '#9ca3af' }}>{task.progress}/{task.total}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <div className="w-full bg-gray-100 h-[6px] rounded-full mb-2 overflow-hidden">
+                      <div className="bg-green-500 h-[6px] rounded-full transition-all duration-500" style={{ width: `${tasksProgressPct}%` }}></div>
+                    </div>
+                    <p style={{ fontSize: '12px', color: '#888', fontWeight: 500, margin: 0 }}>{tasksCompleted} / {tasksTotal} hoàn thành</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bảng xếp hạng */}
+              <div className="card mt-5">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <p style={{ fontSize: 16, fontWeight: 800, color: '#111', margin: 0 }}>Bảng xếp hạng</p>
+                  <button className="text-[13px] font-bold text-green-600 hover:underline">Xem thêm</button>
+                </div>
+                <div className="space-y-1">
+                  {[
+                    { rank: 1, name: 'Nguyễn Minh Anh', score: 560, isMe: false },
+                    { rank: 2, name: 'Trần Quốc Bảo', score: 540, isMe: false },
+                    { rank: 3, name: 'Lê Gia Huy', score: 520, isMe: false },
+                    { rank: 15, name: user.full_name || 'Hoàng Trường', score: bal, isMe: true },
+                  ].map((u, i) => (
+                    <div key={i} className={`flex items-center justify-between p-2.5 rounded-xl ${u.isMe ? 'bg-green-50' : 'hover:bg-gray-50 transition-colors'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${u.rank === 1 ? 'bg-orange-100 text-orange-600' : u.rank === 2 ? 'bg-gray-200 text-gray-600' : u.rank === 3 ? 'bg-orange-50 text-orange-500' : 'bg-transparent text-gray-600'}`}>
+                          {u.rank}
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden flex items-center justify-center text-[10px] font-black text-slate-500">
+                          {u.name.split(' ').pop().slice(0, 2).toUpperCase()}
+                        </div>
+                        <span className={`text-[13px] font-bold ${u.isMe ? 'text-green-700' : 'text-gray-800'}`}>{u.name} {u.isMe && '(Bạn)'}</span>
+                      </div>
+                      <span className="text-[13px] font-bold text-gray-800">{u.score} UGC</span>
                     </div>
                   ))}
                 </div>
@@ -636,145 +780,144 @@ export default function DashboardPage() {
   return (
     <div style={{ background: '#ffffff' }} className="min-h-screen">
       {/* ===== MODALS & DROPDOWNS — outside layout flow ===== */}
-        {/* Help Modal */}
-        {showHelp && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setShowHelp(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-black text-gray-800">Trợ giúp & Hướng dẫn</h2>
-                <button onClick={() => setShowHelp(false)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-gray-500">close</span>
-                </button>
-              </div>
-              <div className="space-y-3">
-                {[
-                  { icon: 'dashboard', title: 'Dashboard', desc: 'Tổng quan số liệu: tổng UGC, sinh viên, claims cần duyệt.' },
-                  { icon: 'pending_actions', title: 'Claims', desc: 'Xem và duyệt các yêu cầu tín chỉ từ sinh viên.' },
-                  { icon: 'eco', title: 'Sự kiện', desc: 'Quản lý các hoạt động xanh đang diễn ra.' },
-                  { icon: 'account_balance', title: 'Ngân sách', desc: 'Phát hành và theo dõi tổng cung UGC token.' },
-                  { icon: 'redeem', title: 'Đổi thưởng', desc: 'Xem các phần thưởng sinh viên có thể đổi bằng UGC.' },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50">
-                    <div className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
-                      <span className="material-symbols-outlined text-green-600 text-lg">{item.icon}</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-800">{item.title}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
-                    </div>
+      {/* Help Modal */}
+      {showHelp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setShowHelp(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-black text-gray-800">Trợ giúp & Hướng dẫn</h2>
+              <button onClick={() => setShowHelp(false)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center">
+                <span className="material-symbols-outlined text-gray-500">close</span>
+              </button>
+            </div>
+            <div className="space-y-3">
+              {[
+                { icon: 'dashboard', title: 'Dashboard', desc: 'Tổng quan số liệu: tổng UGC, sinh viên, claims cần duyệt.' },
+                { icon: 'pending_actions', title: 'Claims', desc: 'Xem và duyệt các yêu cầu tín chỉ từ sinh viên.' },
+                { icon: 'eco', title: 'Sự kiện', desc: 'Quản lý các hoạt động xanh đang diễn ra.' },
+                { icon: 'account_balance', title: 'Ngân sách', desc: 'Phát hành và theo dõi tổng cung UGC token.' },
+                { icon: 'redeem', title: 'Đổi thưởng', desc: 'Xem các phần thưởng sinh viên có thể đổi bằng UGC.' },
+              ].map((item, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50">
+                  <div className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
+                    <span className="material-symbols-outlined text-green-600 text-lg">{item.icon}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Notification Panel */}
-        {showNotif && (
-          <div className="fixed inset-0 z-50" onClick={() => setShowNotif(false)}>
-            <div className="absolute top-16 right-6 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 w-[380px] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-              
-              {/* Header */}
-              <div className="px-4 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white">
-                <h3 className="font-bold text-[15px] text-gray-800">Thông báo</h3>
-                <button className="text-[13px] text-gray-500 hover:text-gray-800 font-medium transition-colors">
-                  Đánh dấu tất cả đã đọc
-                </button>
-              </div>
-
-              {/* Body (Scrollable list) */}
-              <div className="max-h-[400px] overflow-y-auto">
-                <div className="flex flex-col">
-                  {(stats?.pendingClaims ?? 0) > 0 ? (
-                    <>
-                      {/* Notification Item 1 (Unread) */}
-                      <div className="flex gap-3 p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-50 transition-colors bg-blue-50/30">
-                        <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 border border-orange-200">
-                          <span className="material-symbols-outlined text-orange-600 text-[20px]">pending_actions</span>
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-[13px] text-gray-800 leading-snug font-bold">
-                            Hệ thống cần bạn xử lý
-                          </p>
-                          <p className="text-[13px] text-gray-600 leading-snug mt-0.5">
-                            Bạn có <span className="font-bold text-orange-600">{stats?.pendingClaims} claims</span> mới đang chờ phê duyệt. Vui lòng kiểm tra và xử lý ngay.
-                          </p>
-                          <p className="text-[12px] text-gray-500 mt-1 font-medium text-blue-600">1 giờ trước</p>
-                        </div>
-                        <div className="w-2 h-2 bg-blue-500 rounded-full mt-1 flex-shrink-0"></div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="py-12 flex flex-col items-center justify-center text-center px-4">
-                      {/* Empty state (when there are no notifications) */}
-                      <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3">
-                        <span className="material-symbols-outlined text-[32px] text-gray-300">notifications_off</span>
-                      </div>
-                      <p className="text-[14px] font-medium text-gray-600">Bạn không có thông báo nào</p>
-                      <p className="text-[13px] text-gray-400 mt-1">Khi có cập nhật mới, thông báo sẽ hiển thị tại đây.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="p-3 border-t border-gray-100 bg-gray-50">
-                <button 
-                  onClick={(e) => { e.preventDefault(); setShowNotif(false); }}
-                  className="w-full py-2 text-[13px] font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-sm"
-                >
-                  Xem tất cả thông báo
-                </button>
-              </div>
-
-            </div>
-          </div>
-        )}
-
-        {/* Profile Dropdown */}
-        {showProfile && (
-          <div className="fixed inset-0 z-50" onClick={() => setShowProfile(false)}>
-            <div className="absolute top-16 right-6 bg-white rounded-2xl shadow-2xl border border-gray-100 w-64 overflow-hidden" onClick={e => e.stopPropagation()}>
-              <div className="p-4 border-b border-gray-100">
-                <div className="flex items-center gap-3">
-                  {renderAvatar(user, "w-10 h-10")}
                   <div>
-                    <p className="font-bold text-sm text-gray-800">{user.full_name}</p>
-                    <p className="text-xs text-gray-500">{user.role === 'admin' ? 'Quản trị viên' : user.role === 'verifier' ? 'Người duyệt' : 'Sinh viên'}</p>
-                    <p className="text-xs text-gray-400 font-mono">@{user.username}</p>
+                    <p className="text-sm font-bold text-gray-800">{item.title}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
                   </div>
                 </div>
-              </div>
-              <div className="p-2">
-                <button onClick={() => { setShowProfile(false); showToast('Tính năng đang phát triển') }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 transition-colors">
-                  <span className="material-symbols-outlined text-gray-400 text-lg">manage_accounts</span> Cài đặt tài khoản
-                </button>
-                <button onClick={() => { logout(); nav('/login') }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-red-50 text-sm text-red-600 transition-colors">
-                  <span className="material-symbols-outlined text-red-400 text-lg">logout</span> Đăng xuất
-                </button>
-              </div>
+              ))}
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Time Picker Dropdown */}
-        {showTimePicker && (
-          <div className="fixed inset-0 z-50" onClick={() => setShowTimePicker(false)}>
-            <div className="absolute top-32 right-6 bg-white rounded-2xl shadow-2xl border border-gray-100 w-48 overflow-hidden" onClick={e => e.stopPropagation()}>
-              <div className="p-2">
-                {[['week','7 ngày qua'],['month','Tháng này'],['quarter','Quý này'],['year','Năm nay']].map(([val, label]) => (
-                  <button key={val} onClick={() => { setTimePeriod(val); setShowTimePicker(false); showToast(`Đang xem: ${label}`) }}
-                    className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors flex items-center justify-between ${
-                      timePeriod === val ? 'bg-green-50 text-green-700 font-bold' : 'hover:bg-gray-50 text-gray-700'
-                    }`}>
-                    {label}
-                    {timePeriod === val && <span className="material-symbols-outlined text-green-600 text-base">check</span>}
-                  </button>
-                ))}
+      {/* Notification Panel */}
+      {showNotif && (
+        <div className="fixed inset-0 z-50" onClick={() => setShowNotif(false)}>
+          <div className="absolute top-16 right-6 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 w-[380px] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="px-4 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white">
+              <h3 className="font-bold text-[15px] text-gray-800">Thông báo</h3>
+              <button className="text-[13px] text-gray-500 hover:text-gray-800 font-medium transition-colors">
+                Đánh dấu tất cả đã đọc
+              </button>
+            </div>
+
+            {/* Body (Scrollable list) */}
+            <div className="max-h-[400px] overflow-y-auto">
+              <div className="flex flex-col">
+                {(stats?.pendingClaims ?? 0) > 0 ? (
+                  <>
+                    {/* Notification Item 1 (Unread) */}
+                    <div className="flex gap-3 p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-50 transition-colors bg-blue-50/30">
+                      <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 border border-orange-200">
+                        <span className="material-symbols-outlined text-orange-600 text-[20px]">pending_actions</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-[13px] text-gray-800 leading-snug font-bold">
+                          Hệ thống cần bạn xử lý
+                        </p>
+                        <p className="text-[13px] text-gray-600 leading-snug mt-0.5">
+                          Bạn có <span className="font-bold text-orange-600">{stats?.pendingClaims} claims</span> mới đang chờ phê duyệt. Vui lòng kiểm tra và xử lý ngay.
+                        </p>
+                        <p className="text-[12px] text-gray-500 mt-1 font-medium text-blue-600">1 giờ trước</p>
+                      </div>
+                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-1 flex-shrink-0"></div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-12 flex flex-col items-center justify-center text-center px-4">
+                    {/* Empty state (when there are no notifications) */}
+                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                      <span className="material-symbols-outlined text-[32px] text-gray-300">notifications_off</span>
+                    </div>
+                    <p className="text-[14px] font-medium text-gray-600">Bạn không có thông báo nào</p>
+                    <p className="text-[13px] text-gray-400 mt-1">Khi có cập nhật mới, thông báo sẽ hiển thị tại đây.</p>
+                  </div>
+                )}
               </div>
             </div>
+
+            {/* Footer */}
+            <div className="p-3 border-t border-gray-100 bg-gray-50">
+              <button
+                onClick={(e) => { e.preventDefault(); setShowNotif(false); }}
+                className="w-full py-2 text-[13px] font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-sm"
+              >
+                Xem tất cả thông báo
+              </button>
+            </div>
+
           </div>
-        )}
+        </div>
+      )}
+
+      {/* Profile Dropdown */}
+      {showProfile && (
+        <div className="fixed inset-0 z-50" onClick={() => setShowProfile(false)}>
+          <div className="absolute top-16 right-6 bg-white rounded-2xl shadow-2xl border border-gray-100 w-64 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                {renderAvatar(user, "w-10 h-10")}
+                <div>
+                  <p className="font-bold text-sm text-gray-800">{user.full_name}</p>
+                  <p className="text-xs text-gray-500">{user.role === 'admin' ? 'Quản trị viên' : user.role === 'verifier' ? 'Người duyệt' : 'Sinh viên'}</p>
+                  <p className="text-xs text-gray-400 font-mono">@{user.username}</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-2">
+              <button onClick={() => { setShowProfile(false); showToast('Tính năng đang phát triển') }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 transition-colors">
+                <span className="material-symbols-outlined text-gray-400 text-lg">manage_accounts</span> Cài đặt tài khoản
+              </button>
+              <button onClick={() => { logout(); nav('/login') }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-red-50 text-sm text-red-600 transition-colors">
+                <span className="material-symbols-outlined text-red-400 text-lg">logout</span> Đăng xuất
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Time Picker Dropdown */}
+      {showTimePicker && (
+        <div className="fixed inset-0 z-50" onClick={() => setShowTimePicker(false)}>
+          <div className="absolute top-32 right-6 bg-white rounded-2xl shadow-2xl border border-gray-100 w-48 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-2">
+              {[['week', '7 ngày qua'], ['month', 'Tháng này'], ['quarter', 'Quý này'], ['year', 'Năm nay']].map(([val, label]) => (
+                <button key={val} onClick={() => { setTimePeriod(val); setShowTimePicker(false); showToast(`Đang xem: ${label}`) }}
+                  className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors flex items-center justify-between ${timePeriod === val ? 'bg-green-50 text-green-700 font-bold' : 'hover:bg-gray-50 text-gray-700'
+                    }`}>
+                  {label}
+                  {timePeriod === val && <span className="material-symbols-outlined text-green-600 text-base">check</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== MAIN CONTENT ===== */}
       <div className="max-w-[1280px] mx-auto px-6 lg:px-8 pt-4 pb-8 space-y-7">
@@ -794,7 +937,7 @@ export default function DashboardPage() {
                   onClick={() => { setIsSearchOpen(!isSearchOpen); if (!isSearchOpen) setTimeout(() => document.getElementById('headerSearch')?.focus(), 50) }}
                   className="w-9 h-9 flex-shrink-0 flex items-center justify-center"
                 >
-                  <span className="material-symbols-outlined text-[20px] text-gray-600" style={{fontVariationSettings:"'wght' 300"}}>search</span>
+                  <span className="material-symbols-outlined text-[20px] text-gray-600" style={{ fontVariationSettings: "'wght' 300" }}>search</span>
                 </button>
                 <input
                   id="headerSearch"
@@ -810,13 +953,13 @@ export default function DashboardPage() {
               {/* Help */}
               <button onClick={() => setShowHelp(true)}
                 className="w-9 h-9 flex-shrink-0 rounded-2xl bg-white border border-gray-200 shadow-sm flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all duration-150">
-                <span className="material-symbols-outlined text-[20px] text-gray-600" style={{fontVariationSettings:"'wght' 300"}}>help_outline</span>
+                <span className="material-symbols-outlined text-[20px] text-gray-600" style={{ fontVariationSettings: "'wght' 300" }}>help_outline</span>
               </button>
 
               {/* Notifications */}
               <button onClick={() => { setShowNotif(!showNotif); setShowProfile(false); setShowTimePicker(false) }}
                 className={`w-9 h-9 flex-shrink-0 rounded-2xl border shadow-sm flex items-center justify-center relative active:scale-95 transition-all duration-150 ${showNotif ? 'bg-green-50 border-green-300' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-                <span className={`material-symbols-outlined text-[20px] ${showNotif ? 'text-green-600' : 'text-gray-600'}`} style={{fontVariationSettings:"'wght' 300"}}>notifications</span>
+                <span className={`material-symbols-outlined text-[20px] ${showNotif ? 'text-green-600' : 'text-gray-600'}`} style={{ fontVariationSettings: "'wght' 300" }}>notifications</span>
                 {(stats?.pendingClaims ?? 0) > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white px-1">
                     {stats.pendingClaims}
@@ -966,7 +1109,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-[10px] text-gray-400 font-medium">{ev.activity_name}</span>
                       <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${ev.status === 'published' ? 'bg-green-100 text-green-700' :
-                          ev.status === 'ended' ? 'bg-gray-100 text-gray-500' : 'bg-yellow-100 text-yellow-700'
+                        ev.status === 'ended' ? 'bg-gray-100 text-gray-500' : 'bg-yellow-100 text-yellow-700'
                         }`}>{ev.status === 'published' ? 'Đang chạy' : ev.status === 'ended' ? 'Đã kết thúc' : 'Nháp'}</span>
                     </div>
                   </div>
@@ -1101,8 +1244,8 @@ export default function DashboardPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${w.role === 'admin' ? 'bg-purple-100 text-purple-700' :
-                            w.role === 'verifier' ? 'bg-blue-100 text-blue-700' :
-                              'bg-green-100 text-green-700'
+                          w.role === 'verifier' ? 'bg-blue-100 text-blue-700' :
+                            'bg-green-100 text-green-700'
                           }`}>{w.role === 'admin' ? 'Admin' : w.role === 'verifier' ? 'Verifier' : 'Sinh viên'}</span>
                       </td>
                       <td className="px-6 py-4">

@@ -37,6 +37,8 @@ services:
     build:
       context: ./backend
     container_name: ugc_backend
+    ports:
+      - "8080:8080"
     environment:
       PORT: "8080"
       DATABASE_URL: "postgres://ugc:ugc@db:5432/ugc"

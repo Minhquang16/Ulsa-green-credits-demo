@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { Navigate, Route, Routes, Link, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth.jsx'
 import { ToastProvider, useToast } from './context/ToastContext.jsx'
@@ -381,49 +381,269 @@ const COHORTS = [
 ];
 
 const MAJORS = [
-  // Nhóm Quản trị, Kinh tế số & Công nghệ
-  { code: "QL", name: "Quản trị nhân lực (Số, Văn phòng)" },
-  { code: "QK", name: "Quản trị kinh doanh" },
-  { code: "HQ", name: "Hệ thống thông tin quản lý / Kinh tế số" },
   { code: "CN", name: "Công nghệ thông tin" },
-  { code: "KM", name: "Kiểm toán / Thương mại điện tử & Marketing" },
-
-  // Nhóm Kinh tế - Tài chính - Kế toán
-  { code: "KT", name: "Kế toán (Quản trị, Phân tích dữ liệu)" },
-  { code: "TC", name: "Tài chính - Ngân hàng" },
-  { code: "KL", name: "Kinh tế lao động" },
-
-  // Nhóm Dịch vụ - Bảo hiểm - Ngôn ngữ
-  { code: "BH", name: "Bảo hiểm" },
-  { code: "BT", name: "Bảo hiểm - Tài chính" },
-  { code: "LOG", name: "Logistics & Chuỗi cung ứng" },
-  { code: "QD", name: "Quản trị dịch vụ du lịch và lữ hành / Khách sạn" },
-  { code: "NA", name: "Ngôn ngữ Anh" },
-
-  // Nhóm Tâm lý & Khoa học xã hội - Luật
   { code: "CT", name: "Công tác xã hội" },
+  { code: "QL", name: "Quản trị nhân lực" },
+  { code: "KT", name: "Kế toán" },
+  { code: "QK", name: "Quản trị kinh doanh" },
+  { code: "TC", name: "Tài chính - Ngân hàng" },
+  { code: "LK", name: "Luật kinh tế" },
   { code: "TL", name: "Tâm lý học" },
-  { code: "LK", name: "Luật kinh tế" }
+  { code: "NA", name: "Ngôn ngữ Anh" },
+  { code: "QD", name: "Quản trị Dịch vụ Du lịch và Lữ hành" },
+  { code: "KL", name: "Kiểm toán" },
+  { code: "HQ", name: "Hệ thống thông tin quản lý" },
+  { code: "KM", name: "Kinh tế" },
+  { code: "BH", name: "Bảo hiểm" },
+  { code: "BT", name: "Bảo trợ xã hội" }
 ];
 
 const CLASS_COUNTS = {
-  BH: { default: 1, D18: 1, D19: 1, D20: 2, D21: 1 },
-  BT: { default: 1, D18: 1, D19: 2, D20: 2, D21: 1 },
+  CN: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
   CT: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
-  TL: { default: 2, D18: 2, D19: 2, D20: 2, D21: 3 },
-  QK: { default: 5, D18: 5, D19: 6, D20: 5, D21: 6 },
-  QD: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
-  LK: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
-  KT: { default: 7, D18: 7, D19: 8, D20: 9, D21: 7 },
-  KM: { default: 1, D18: 1, D19: 1, D20: 1, D21: 1 },
-  TC: { default: 3, D18: 3, D19: 3, D20: 3, D21: 4 },
-  NA: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
   QL: { default: 8, D18: 8, D19: 8, D20: 9, D21: 13 },
+  KT: { default: 7, D18: 7, D19: 8, D20: 9, D21: 7 },
+  QK: { default: 5, D18: 5, D19: 6, D20: 5, D21: 6 },
+  TC: { default: 3, D18: 3, D19: 3, D20: 3, D21: 4 },
+  LK: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
+  TL: { default: 2, D18: 2, D19: 2, D20: 2, D21: 3 },
+  NA: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
+  QD: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
   KL: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
   HQ: { default: 1, D18: 1, D19: 1, D20: 1, D21: 1 },
-  CN: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
-  LOG: { default: 2, D18: 2, D19: 2, D20: 2, D21: 2 },
+  KM: { default: 1, D18: 1, D19: 1, D20: 1, D21: 1 },
+  BH: { default: 1, D18: 1, D19: 1, D20: 2, D21: 1 },
+  BT: { default: 1, D18: 1, D19: 2, D20: 2, D21: 1 },
 };
+
+function DatePicker({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  // Parse string value (DD/MM/YYYY) to Date
+  const parseValue = (val) => {
+    if (!val) return new Date();
+    const parts = val.split('/');
+    if (parts.length === 3) {
+      const d = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const y = parseInt(parts[2], 10);
+      const date = new Date(y, m, d);
+      if (!isNaN(date.getTime())) return date;
+    }
+    const parsed = new Date(val);
+    if (!isNaN(parsed.getTime())) return parsed;
+    return new Date();
+  };
+
+  const selectedDate = value ? parseValue(value) : null;
+  const [viewDate, setViewDate] = useState(selectedDate || new Date());
+
+  useEffect(() => {
+    if (value) {
+      setViewDate(parseValue(value));
+    }
+  }, [value]);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const currentYear = viewDate.getFullYear();
+  const currentMonth = viewDate.getMonth(); // 0-11
+
+  const handlePrevMonth = () => {
+    setViewDate(new Date(currentYear, currentMonth - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setViewDate(new Date(currentYear, currentMonth + 1, 1));
+  };
+
+  const handleSelectMonth = (m) => {
+    setViewDate(new Date(currentYear, m, 1));
+  };
+
+  const handleSelectYear = (y) => {
+    setViewDate(new Date(y, currentMonth, 1));
+  };
+
+  // Generate calendar days
+  const getDaysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+  const getFirstDayOfMonth = (y, m) => new Date(y, m, 1).getDay(); // 0 (Sun) to 6 (Sat)
+
+  const daysCount = getDaysInMonth(currentYear, currentMonth);
+  const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
+
+  // Prev month padding
+  const prevMonthDaysCount = getDaysInMonth(currentYear, currentMonth - 1);
+  const prevMonthDays = [];
+  for (let i = firstDay - 1; i >= 0; i--) {
+    prevMonthDays.push({
+      day: prevMonthDaysCount - i,
+      month: currentMonth === 0 ? 11 : currentMonth - 1,
+      year: currentMonth === 0 ? currentYear - 1 : currentYear,
+      isCurrentMonth: false,
+    });
+  }
+
+  // Current month days
+  const currentMonthDays = [];
+  for (let i = 1; i <= daysCount; i++) {
+    currentMonthDays.push({
+      day: i,
+      month: currentMonth,
+      year: currentYear,
+      isCurrentMonth: true,
+    });
+  }
+
+  // Next month padding to fill grid (6 rows of 7 days = 42 cells)
+  const totalCells = 42;
+  const nextMonthDaysCount = totalCells - (prevMonthDays.length + currentMonthDays.length);
+  const nextMonthDays = [];
+  for (let i = 1; i <= nextMonthDaysCount; i++) {
+    nextMonthDays.push({
+      day: i,
+      month: currentMonth === 11 ? 0 : currentMonth + 1,
+      year: currentMonth === 11 ? currentYear + 1 : currentYear,
+      isCurrentMonth: false,
+    });
+  }
+
+  const allDays = [...prevMonthDays, ...currentMonthDays, ...nextMonthDays];
+
+  const handleSelectDay = (dayObj) => {
+    const newDate = new Date(dayObj.year, dayObj.month, dayObj.day);
+    const dStr = String(newDate.getDate()).padStart(2, '0');
+    const mStr = String(newDate.getMonth() + 1).padStart(2, '0');
+    const yStr = newDate.getFullYear();
+    onChange(`${dStr}/${mStr}/${yStr}`);
+    setOpen(false);
+  };
+
+  const months = [
+    "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
+    "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"
+  ];
+
+  // Year range: 1970 to currentYear
+  const years = [];
+  const startY = 1970;
+  const endY = new Date().getFullYear();
+  for (let y = endY; y >= startY; y--) {
+    years.push(y);
+  }
+
+  const isToday = (day, month, year) => {
+    const today = new Date();
+    return today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
+  };
+
+  const isSelected = (day, month, year) => {
+    return selectedDate && selectedDate.getDate() === day && selectedDate.getMonth() === month && selectedDate.getFullYear() === year;
+  };
+
+  return (
+    <div className="relative w-full" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800 text-left flex items-center justify-between hover:bg-gray-100/50 transition-colors cursor-pointer"
+      >
+        <span className={value ? "text-gray-800" : "text-gray-400"}>
+          {value || "VD: 15/08/2004"}
+        </span>
+        <span className="material-symbols-outlined text-gray-400 text-base">calendar_today</span>
+      </button>
+
+      {open && (
+        <div className="absolute z-[110] mt-1 bg-white border border-gray-150 rounded-2xl shadow-xl p-2.5 w-[260px] right-0 top-full animate-in fade-in slide-in-from-top-1 duration-150">
+          {/* Header controls */}
+          <div className="flex items-center justify-between mb-2 px-1">
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              className="p-1 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">chevron_left</span>
+            </button>
+
+            <div className="flex items-center gap-1">
+              <select
+                value={currentMonth}
+                onChange={(e) => handleSelectMonth(parseInt(e.target.value, 10))}
+                className="bg-transparent text-xs font-bold text-gray-700 outline-none border-none cursor-pointer hover:bg-gray-50 p-1 rounded"
+              >
+                {months.map((m, idx) => (
+                  <option key={idx} value={idx}>{m}</option>
+                ))}
+              </select>
+
+              <select
+                value={currentYear}
+                onChange={(e) => handleSelectYear(parseInt(e.target.value, 10))}
+                className="bg-transparent text-xs font-bold text-gray-700 outline-none border-none cursor-pointer hover:bg-gray-50 p-1 rounded"
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              className="p-1 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">chevron_right</span>
+            </button>
+          </div>
+
+          {/* Weekday labels */}
+          <div className="grid grid-cols-7 gap-1 text-center mb-1">
+            {["CN", "T2", "T3", "T4", "T5", "T6", "T7"].map((wd, i) => (
+              <span key={i} className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">
+                {wd}
+              </span>
+            ))}
+          </div>
+
+          {/* Day grid */}
+          <div className="grid grid-cols-7 gap-1">
+            {allDays.map((dayObj, idx) => {
+              const current = isSelected(dayObj.day, dayObj.month, dayObj.year);
+              const today = isToday(dayObj.day, dayObj.month, dayObj.year);
+              
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSelectDay(dayObj)}
+                  className={`
+                    h-[30px] w-[30px] rounded-lg text-[11px] font-bold transition-all flex items-center justify-center cursor-pointer
+                    ${!dayObj.isCurrentMonth ? "text-gray-300 hover:bg-gray-50" : ""}
+                    ${dayObj.isCurrentMonth && !current && !today ? "text-gray-700 hover:bg-emerald-50 hover:text-emerald-700" : ""}
+                    ${today && !current ? "border border-emerald-500 text-emerald-600 font-extrabold bg-emerald-50/30" : ""}
+                    ${current ? "bg-emerald-600 text-white shadow-sm font-extrabold" : ""}
+                  `}
+                >
+                  {dayObj.day}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SettingsModal({ isOpen, onClose, api, user, showToast }) {
   const [activeTab, setActiveTab] = useState("profile") // profile | wallet | password
@@ -644,8 +864,7 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Ngày sinh</label>
-                    <input className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
-                      placeholder="VD: 15/08/2004" value={birthDate} onChange={e => setBirthDate(e.target.value)} />
+                    <DatePicker value={birthDate} onChange={setBirthDate} />
                   </div>
                 </div>
 

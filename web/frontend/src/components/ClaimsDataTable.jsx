@@ -198,53 +198,26 @@ const columns = [
   },
   {
     accessorKey: "target",
-    header: () => <div className="w-full text-right">Mục tiêu</div>,
+    header: () => <div className="w-full text-right">Số tín chỉ (UGC)</div>,
     cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Saving ${row.original.header}`,
-            success: "Hoàn thành",
-            error: "Error",
-          })
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-target`} className="sr-only">
-          Target
-        </Label>
-        <Input
-          className="h-8 w-20 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30"
-          defaultValue={row.original.target}
-          id={`${row.original.id}-target`}
-        />
-      </form>
+      <div className="w-full text-right font-extrabold text-emerald-600 pr-4">
+        {row.original.target}
+      </div>
     ),
   },
   {
-    accessorKey: "limit",
-    header: () => <div className="w-full text-right">Giới hạn</div>,
-    cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Saving ${row.original.header}`,
-            success: "Hoàn thành",
-            error: "Error",
-          })
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-limit`} className="sr-only">
-          Limit
-        </Label>
-        <Input
-          className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30"
-          defaultValue={row.original.limit}
-          id={`${row.original.id}-limit`}
-        />
-      </form>
-    ),
+    accessorKey: "createdAt",
+    header: () => <div className="w-full text-center">Ngày gửi</div>,
+    cell: ({ row }) => {
+      const dateVal = row.original.createdAt;
+      if (!dateVal) return <div className="w-full text-center text-gray-400">—</div>;
+      const formatted = new Date(dateVal).toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+      return <div className="w-full text-center font-medium text-gray-500">{formatted}</div>;
+    },
   },
   {
     accessorKey: "reviewer",
@@ -331,7 +304,7 @@ function DraggableRow({ row }) {
   )
 }
 
-function DataTable({ data: initialData }) {
+function DataTable({ data: initialData, nav }) {
   const [data, setData] = React.useState(() => initialData)
   
   React.useEffect(() => {
@@ -461,9 +434,9 @@ function DataTable({ data: initialData }) {
                 })}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={() => nav && nav('/events')}>
             <IconPlus size={16} className="mr-2" />
-            <span className="hidden lg:inline">Thêm hoạt động</span>
+            <span className="hidden lg:inline">Làm việc xanh, săn UGC! 🌿</span>
           </Button>
         </div>
       </div>
@@ -732,7 +705,7 @@ function TableCellViewer({ item }) {
                   <Input id="target" defaultValue={item.target} readOnly />
                 </div>
                 <div className="flex flex-col gap-3">
-                  <Label htmlFor="limit">Giới hạn</Label>
+                  <Label htmlFor="limit">Hạn mức (UGC)</Label>
                   <Input id="limit" defaultValue={item.limit} readOnly />
                 </div>
               </div>
@@ -786,5 +759,5 @@ export default function ClaimsDataTable({ claims, loading, nav }) {
     decidedAt: c.decided_at || null,
   }))
 
-  return <DataTable data={mappedData} />
+  return <DataTable data={mappedData} nav={nav} />
 }

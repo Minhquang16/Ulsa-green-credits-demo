@@ -433,6 +433,10 @@ app.post("/auth/login", async (req, res) => {
       full_name: user.full_name,
       role: user.role,
       wallet_address: user.wallet_address,
+      student_id: user.student_id,
+      class_name: user.class_name,
+      cohort: user.cohort,
+      birth_date: user.birth_date,
       student_card_image: user.student_card_image
     }
   });
@@ -568,7 +572,7 @@ app.get("/me/claims", authRequired, async (req, res) => {
   try {
     const rs = await pool.query(
       `SELECT c.*, e.title AS event_title, a.name AS activity_name, a.credit_amount,
-              u.full_name AS student_name
+              a.description AS activity_description, u.full_name AS student_name
        FROM claims c
        JOIN events e ON e.id = c.event_id
        JOIN activity_types a ON a.id = e.activity_type_id
@@ -584,7 +588,7 @@ app.get("/me/claims", authRequired, async (req, res) => {
 });
 
 app.get("/me", authRequired, async (req, res) => {
-  const rs = await pool.query("SELECT id, username, full_name, role, wallet_address, student_card_image, created_at FROM users WHERE id=$1", [req.user.id]);
+  const rs = await pool.query("SELECT id, username, full_name, role, wallet_address, student_id, class_name, cohort, birth_date, student_card_image, created_at FROM users WHERE id=$1", [req.user.id]);
   res.json(rs.rows[0]);
 });
 
@@ -602,9 +606,27 @@ async function checkAndUnlockAchievements(studentId) {
       }
     }
     
-    const claims = (await pool.query("SELECT * FROM claims WHERE student_id=$1 AND status='approved'", [studentId])).rows;
+    const claimsRes = await pool.query(`
+      SELECT c.*, a.name AS activity_name, e.title AS event_title 
+      FROM claims c 
+      JOIN events e ON e.id = c.event_id 
+      JOIN activity_types a ON a.id = e.activity_type_id 
+      WHERE c.student_id=$1 AND c.status='approved'
+    `, [studentId]);
+    const claims = claimsRes.rows;
     const claimsCount = claims.length;
     const hasOnChain = claims.some(c => c.approved_tx_hash || c.provenance_tx_hash);
+
+    let bloodDonationCount = 0;
+    let volunteerCount = 0;
+    let meetingCount = 0;
+
+    for (let c of claims) {
+      const searchStr = ((c.event_title || '') + ' ' + (c.activity_name || '')).toLowerCase();
+      if (searchStr.includes('hiến máu')) bloodDonationCount++;
+      if (searchStr.includes('tình nguyện') || searchStr.includes('dọn rác') || searchStr.includes('trồng cây') || searchStr.includes('mùa hè xanh')) volunteerCount++;
+      if (searchStr.includes('họp') || searchStr.includes('sinh hoạt')) meetingCount++;
+    }
 
     const achievements = (await pool.query("SELECT * FROM achievements")).rows;
     for (const ach of achievements) {
@@ -612,6 +634,9 @@ async function checkAndUnlockAchievements(studentId) {
       if (ach.target_type === 'claims_count' && claimsCount >= ach.target_value) isEligible = true;
       if (ach.target_type === 'total_ugc' && ugcBalance >= ach.target_value) isEligible = true;
       if (ach.target_type === 'on_chain' && hasOnChain) isEligible = true;
+      if (ach.target_type === 'blood_donation' && bloodDonationCount >= ach.target_value) isEligible = true;
+      if (ach.target_type === 'volunteer' && volunteerCount >= ach.target_value) isEligible = true;
+      if (ach.target_type === 'meeting' && meetingCount >= ach.target_value) isEligible = true;
 
       if (isEligible) {
         await pool.query(
@@ -1259,11 +1284,58 @@ app.get("/wallets/all", authRequired, requireRole("admin"), async (req, res) => 
   }
 });
 
+// leaderboard (public)
+app.get("/ugc/leaderboard", authRequired, async (req, res) => {
+  try {
+    const usersRes = await pool.query(
+      "SELECT id, username, full_name, role, wallet_address FROM users WHERE role = 'student'"
+    );
+    const users = usersRes.rows;
+
+    const withBalances = await Promise.all(users.map(async (u) => {
+      try {
+        if (!u.wallet_address) return { id: u.id, full_name: u.full_name, ugc_balance: 0 };
+        const bal = await ugcContract.balanceOf(u.wallet_address);
+        return { id: u.id, full_name: u.full_name, ugc_balance: Number(bal) };
+      } catch {
+        return { id: u.id, full_name: u.full_name, ugc_balance: 0 };
+      }
+    }));
+
+    const sorted = withBalances.sort((a, b) => b.ugc_balance - a.ugc_balance);
+
+    const ranked = sorted.map((u, idx) => ({
+      id: u.id,
+      full_name: u.full_name,
+      ugc_balance: u.ugc_balance,
+      rank: idx + 1
+    }));
+
+    const myRank = ranked.find(u => u.id === req.user.id);
+
+    const top3 = ranked.slice(0, 3);
+
+    res.json({
+      success: true,
+      top3,
+      me: myRank || { id: req.user.id, full_name: req.user.full_name, ugc_balance: 0, rank: Math.max(15, ranked.length + 1) }
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
 // wallet
 app.get("/wallet/balance", authRequired, async (req, res) => {
   const address = req.user.wallet_address;
-  const bal = await ugcContract.balanceOf(address);
-  res.json({ address, balance: Number(bal) });
+  if (!address) return res.json({ address: null, balance: 0 });
+  try {
+    const bal = await ugcContract.balanceOf(address);
+    res.json({ address, balance: Number(bal) });
+  } catch (e) {
+    res.json({ address, balance: 0 });
+  }
 });
 
 app.get("/wallet/contract", authRequired, async (req, res) => {
@@ -1272,9 +1344,11 @@ app.get("/wallet/contract", authRequired, async (req, res) => {
 
 app.get("/wallet/history", authRequired, async (req, res) => {
   const address = req.user.wallet_address;
+  if (!address) return res.json([]);
 
-  const issued = await ugcContract.queryFilter(ugcContract.filters.CreditsIssued(address), 0, "latest");
-  const burned = await ugcContract.queryFilter(ugcContract.filters.CreditsBurned(address), 0, "latest");
+  try {
+    const issued = await ugcContract.queryFilter(ugcContract.filters.CreditsIssued(address), 0, "latest");
+    const burned = await ugcContract.queryFilter(ugcContract.filters.CreditsBurned(address), 0, "latest");
 
   const normalize = (ev, type) => {
     const args = ev.args || [];
@@ -1302,11 +1376,14 @@ app.get("/wallet/history", authRequired, async (req, res) => {
   };
 
   const items = [
-    ...issued.map((e) => normalize(e, "ISSUE")),
-    ...burned.map((e) => normalize(e, "BURN"))
-  ].sort((a, b) => b.blockNumber - a.blockNumber);
-
+    ...issued.map(ev => normalize(ev, "ISSUE")),
+    ...burned.map(ev => normalize(ev, "BURN"))
+  ];
+  items.sort((a, b) => b.blockNumber - a.blockNumber);
   res.json(items);
+  } catch (e) {
+    res.json([]);
+  }
 });
 
 // reward categories
