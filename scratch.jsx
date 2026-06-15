@@ -1,8 +1,0 @@
-import React, { useEffect, useState, useMemo } from 'react'
-import { createPortal } from 'react-dom'
-import { useAuth } from '../auth.jsx'
-import { useToast } from '../context/ToastContext.jsx'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { Button } from '@/components/ui/button'
-import QRScanner from '../components/QRScanner.jsx'
-import QRGenerator from '../components/QRGenerator.jsx'
