@@ -164,8 +164,19 @@ export default function EventsPage() {
     setError('')
     try {
       const payload = { ...form }
-      if (payload.start_at) payload.start_at = new Date(payload.start_at).toISOString()
-      if (payload.end_at) payload.end_at = new Date(payload.end_at).toISOString()
+      if (payload.start_at) {
+        const d = new Date(payload.start_at)
+        payload.start_at = isNaN(d.getTime()) ? null : d.toISOString()
+      } else {
+        payload.start_at = null
+      }
+      
+      if (payload.end_at) {
+        const d = new Date(payload.end_at)
+        payload.end_at = isNaN(d.getTime()) ? null : d.toISOString()
+      } else {
+        payload.end_at = null
+      }
 
       if (editId) {
         await api(`/events/${editId}`, { method: 'PUT', body: JSON.stringify(payload) })

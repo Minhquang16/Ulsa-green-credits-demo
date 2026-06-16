@@ -9,3 +9,5 @@ blockchain/artifacts/
 blockchain/cache/
 web/frontend/dist/
 shared/*.json
+.DS_Store
+**/.DS_Store

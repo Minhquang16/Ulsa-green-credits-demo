@@ -719,7 +719,7 @@
         }
 
         .dashboard-page .link-text {
-            color: rgb(2, 95, 2);
+            color: #29BC3A;
             font-size: 12px;
             font-weight: 500;
             text-decoration: none;
@@ -727,7 +727,7 @@
 
         .dashboard-page .list-header .title-hd {
             font-size: 14px;
-            font-weight: 600;
+            font-weight: 700;
             color: #363a40;
         }
 
@@ -798,6 +798,64 @@
             margin-bottom: 0;
         }
 
+        /* Style cho các thành phần con bên trong li của Nhiệm vụ tuần này */
+        .dashboard-page .task-list li .task-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .dashboard-page .task-list li .task-check {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #cbd5e1;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+
+        /* Trạng thái khi nhiệm vụ đã hoàn thành */
+        .dashboard-page .task-list li.completed .task-check {
+            background: #22c55e;
+            border-color: #22c55e;
+            color: #ffffff;
+        }
+
+        .dashboard-page .task-list li .task-check i {
+            font-size: 12px;
+        }
+
+        .dashboard-page .task-list li .task-label {
+            font-weight: 500;
+            color: #666666;
+            transition: color 0.3s ease;
+        }
+
+        .dashboard-page .task-list li.completed .task-label {
+            color: #333333;
+        }
+
+        .dashboard-page .task-list li .task-progress {
+            font-weight: 500;
+            color: #666666;
+            transition: color 0.3s ease;
+        }
+
+        .dashboard-page .task-list li.completed .task-progress {
+            color: #16a34a;
+        }
+
+        /* Phần mô tả hoàn thành dưới chân */
+        .dashboard-page .task-footer-text {
+            font-size: 12px;
+            color: #888888;
+            font-weight: 500;
+            margin: 0;
+        }
+
         /* END: Nhiệm vụ tuần này */
 
         .dashboard-page .leaderboard-list li {
@@ -812,18 +870,27 @@
             margin-bottom: 0;
         }
 
-        /* Badges */
+        /* =========================================================================
+           KHU VỰC: THÀNH TÍCH NỔI BẬT (ACHIEVEMENTS CARD / BADGES)
+           ========================================================================= */
+        /* Thiết lập riêng cho thẻ Thành tích nổi bật để chiều cao tầm 115px */
+        .dashboard-page .achievements-card {
+            padding: 12px 16px;
+        }
+
+        /* Container bọc ngoài cho danh sách thành tích (cho phép cuộn ngang) */
         .dashboard-page .badges-container {
             display: flex;
             align-items: center;
             justify-content: flex-start;
-            margin-top: 6px;
+            margin-top: 0px;
             overflow-x: auto;
             gap: 10px;
-            padding-bottom: 6px;
+            padding-bottom: 4px;
             width: 100%;
         }
 
+        /* Từng ô thành tích (badge item) */
         .dashboard-page .badge-item {
             display: flex;
             align-items: center;
@@ -831,35 +898,39 @@
             flex-shrink: 0;
             background: #ffffff;
             border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 6px 10px 6px 6px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+            border-radius: 8px;
+            padding: 4px 8px 4px 4px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
             cursor: pointer;
             transition: all 0.3s ease;
         }
 
+        /* Hiệu ứng khi rê chuột vào ô thành tích */
         .dashboard-page .badge-item:hover {
             background: #f8fafc;
             border-color: #cbd5e1;
         }
 
+        /* Phần text hiển thị tên và mô tả của thành tích (mặc định giới hạn chiều rộng 90px) */
         .dashboard-page .badge-text {
             max-width: 90px;
             transition: max-width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        /* Hiệu ứng mở rộng chiều rộng của text khi rê chuột vào để hiển thị đầy đủ thông tin */
         .dashboard-page .badge-item:hover .badge-text {
             max-width: 300px;
         }
 
+        /* Phần hình tròn bọc Icon thành tích */
         .dashboard-page .badge-icon {
-            width: 34px;
-            height: 34px;
+            width: 30px;
+            height: 30px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
+            font-size: 14px;
             flex-shrink: 0;
         }
 
@@ -982,14 +1053,17 @@
         .dashboard-page .horizontal-scroll-container::-webkit-scrollbar {
             height: 6px;
         }
+
         .dashboard-page .horizontal-scroll-container::-webkit-scrollbar-track {
             background: #f8fafc;
             border-radius: 10px;
         }
+
         .dashboard-page .horizontal-scroll-container::-webkit-scrollbar-thumb {
             background: #cbd5e1;
             border-radius: 10px;
         }
+
         .dashboard-page .horizontal-scroll-container::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
         }

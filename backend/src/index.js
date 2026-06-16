@@ -266,6 +266,8 @@ async function seedIfNeeded() {
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS class_name TEXT;");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS cohort TEXT;");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date TEXT;");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS student_card_image TEXT;");
   
   // Make student_id unique but handle potential error if duplicates exist (should not exist on fresh/reset systems, but if they do, we log and ignore)
@@ -352,28 +354,87 @@ async function seedIfNeeded() {
     }
   }
 
-  // event
-  const eCount = await pool.query("SELECT COUNT(*)::int AS n FROM events");
-  if (eCount.rows[0].n === 0) {
-    console.log("Seeding one demo event...");
-    const verifier = (await pool.query("SELECT id FROM users WHERE role='verifier' LIMIT 1")).rows[0];
-    const hiemMau = (await pool.query("SELECT id FROM activity_types WHERE name='Hiến máu' LIMIT 1")).rows[0];
+  // Drop old constraint if exists
+  await pool.query('ALTER TABLE achievements DROP CONSTRAINT IF EXISTS achievements_target_type_check');
 
-    if (!verifier || !hiemMau) {
-      console.log("Could not find verifier or 'Hiến máu' activity type. Skipping demo event seeding.");
-    } else {
-      const qr_token = crypto.randomBytes(16).toString("hex");
-      const now = new Date();
-      const start = new Date(now.getTime() + 60 * 60 * 1000);
-      const end = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+  // Insert 11 default achievements safely if not exists
+  const achievementsToInsert = [
+    { icon: '🌱', label: 'Khởi đầu', description: 'Tham gia hoạt động đầu tiên', target_type: 'claims_count', target_value: 1 },
+    { icon: '🌿', label: 'Tích cực', description: 'Hoàn thành 3 hoạt động', target_type: 'claims_count', target_value: 3 },
+    { icon: '🌳', label: 'Chuyên cần', description: 'Đạt 50 UGC', target_type: 'total_ugc', target_value: 50 },
+    { icon: '🏆', label: 'Xuất sắc', description: 'Đạt 100 UGC', target_type: 'total_ugc', target_value: 100 },
+    { icon: '⭐', label: 'Huyền thoại', description: 'Đạt 200 UGC', target_type: 'total_ugc', target_value: 200 },
+    { icon: '🔗', label: 'On-chain', description: 'Có giao dịch blockchain', target_type: 'on_chain', target_value: 1 },
+    { icon: '🌱', label: 'Tân binh xanh ULSA', description: 'Đạt 50 UGC đầu tiên tại trường.', target_type: 'total_ugc', target_value: 50 },
+    { icon: '⚡', label: 'Thợ săn phong trào', description: 'Tham gia đủ 10 sự kiện ngoại khoá.', target_type: 'claims_count', target_value: 10 },
+    { icon: '❤️', label: 'Giọt máu nhân đạo', description: 'Tham gia hiến máu nhân đạo 2 lần.', target_type: 'blood_donation', target_value: 2 },
+    { icon: '🤝', label: 'Đại sứ cộng đồng', description: 'Tham gia 5 hoạt động tình nguyện xã hội.', target_type: 'volunteer', target_value: 5 },
+    { icon: '💼', label: 'Cán bộ mẫn cán', description: 'Tham gia đầy đủ 10 buổi họp/sinh hoạt.', target_type: 'meeting', target_value: 10 }
+  ];
 
+  for (const ach of achievementsToInsert) {
+    const exists = await pool.query(
+      "SELECT 1 FROM achievements WHERE label=$1 AND target_type=$2 AND target_value=$3",
+      [ach.label, ach.target_type, ach.target_value]
+    );
+    if (exists.rows.length === 0) {
       await pool.query(
-        "INSERT INTO events(activity_type_id, title, description, organizer_id, start_at, end_at, location, qr_token, status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
-        [hiemMau.id, "Sự kiện hiến máu (demo)", "Quét QR để ghi nhận tham gia và nhận tín chỉ xanh.", verifier.id, start, end, "Khu A - Hội trường", qr_token, "published"]
+        "INSERT INTO achievements (icon, label, description, target_type, target_value) VALUES ($1, $2, $3, $4, $5)",
+        [ach.icon, ach.label, ach.description, ach.target_type, ach.target_value]
       );
     }
   }
+
+  // Blockchain self-healing sync
+  try {
+    const supply = Number(await ugcContract.totalSupply());
+    if (supply === 0) {
+      console.log("🔄 Detecting fresh blockchain node (totalSupply = 0). Restoring balances from Database...");
+      
+      const balancesRes = await pool.query(`
+        SELECT 
+          u.id, 
+          u.username,
+          u.wallet_address,
+          (COALESCE(claims_sum.earned, 0) - COALESCE(redemptions_sum.spent, 0)) AS balance
+        FROM users u
+        LEFT JOIN (
+          SELECT c.student_id, SUM(a.credit_amount)::int AS earned
+          FROM claims c
+          JOIN events e ON e.id = c.event_id
+          JOIN activity_types a ON a.id = e.activity_type_id
+          WHERE c.status = 'approved'
+          GROUP BY c.student_id
+        ) claims_sum ON claims_sum.student_id = u.id
+        LEFT JOIN (
+          SELECT student_id, SUM(cost_credits)::int AS spent
+          FROM redemptions
+          GROUP BY student_id
+        ) redemptions_sum ON redemptions_sum.student_id = u.id
+        WHERE u.role = 'student' AND u.wallet_address IS NOT NULL
+      `);
+
+      const adminSigner = getSignerForRole("admin");
+      const contractWithAdmin = ugcContract.connect(adminSigner);
+
+      for (const row of balancesRes.rows) {
+        const bal = Number(row.balance);
+        if (bal > 0) {
+          console.log(`⏳ Synchronizing ${bal} UGC to user ${row.username} (${row.wallet_address})...`);
+          const refId = ethers.id("sync-" + row.username + "-" + Date.now());
+          const evidenceHash = ethers.ZeroHash;
+          const tx = await contractWithAdmin.issue(row.wallet_address, bal, refId, evidenceHash);
+          await tx.wait();
+          console.log(`✅ Restored ${bal} UGC to ${row.username}`);
+        }
+      }
+      console.log("🎉 Successfully synchronized all blockchain balances.");
+    }
+  } catch (err) {
+    console.error("❌ Error during blockchain balance recovery sync:", err.message);
+  }
 }
+
 
 // -------------------- file upload --------------------
 const storage = multer.diskStorage({
@@ -588,15 +649,20 @@ app.get("/me/claims", authRequired, async (req, res) => {
 });
 
 app.get("/me", authRequired, async (req, res) => {
-  const rs = await pool.query("SELECT id, username, full_name, role, wallet_address, student_id, class_name, cohort, birth_date, student_card_image, created_at FROM users WHERE id=$1", [req.user.id]);
+  const rs = await pool.query("SELECT id, username, full_name, email, avatar_url, role, wallet_address, student_id, class_name, cohort, birth_date, student_card_image, created_at FROM users WHERE id=$1", [req.user.id]);
   res.json(rs.rows[0]);
 });
 
+// =========================================================================
+// HÀM KIỂM TRA VÀ TỰ ĐỘNG MỞ KHÓA THÀNH TÍCH (ACHIEVEMENTS)
+// =========================================================================
 async function checkAndUnlockAchievements(studentId) {
   try {
+    // 1. Lấy địa chỉ ví của sinh viên từ Database
     const user = (await pool.query("SELECT wallet_address FROM users WHERE id=$1", [studentId])).rows[0];
     if (!user) return;
     
+    // 2. Lấy số dư UGC của sinh viên từ Smart Contract trên Blockchain
     let ugcBalance = 0;
     if (user.wallet_address) {
       try {
@@ -606,6 +672,7 @@ async function checkAndUnlockAchievements(studentId) {
       }
     }
     
+    // 3. Lấy tất cả các yêu cầu nhận tín chỉ (claims) đã được duyệt (status='approved') của sinh viên
     const claimsRes = await pool.query(`
       SELECT c.*, a.name AS activity_name, e.title AS event_title 
       FROM claims c 
@@ -614,30 +681,38 @@ async function checkAndUnlockAchievements(studentId) {
       WHERE c.student_id=$1 AND c.status='approved'
     `, [studentId]);
     const claims = claimsRes.rows;
-    const claimsCount = claims.length;
+    const claimsCount = claims.length; // Tổng số hoạt động đã hoàn thành
+    
+    // Kiểm tra xem sinh viên đã có giao dịch nào ghi lên chuỗi (on-chain) chưa
     const hasOnChain = claims.some(c => c.approved_tx_hash || c.provenance_tx_hash);
-
-    let bloodDonationCount = 0;
-    let volunteerCount = 0;
-    let meetingCount = 0;
-
+ 
+    // Khởi tạo bộ đếm các sự kiện đặc biệt
+    let bloodDonationCount = 0; // Đếm số lần hiến máu
+    let volunteerCount = 0;     // Đếm số lần tham gia hoạt động tình nguyện, dọn rác, trồng cây...
+    let meetingCount = 0;       // Đếm số lần tham gia họp/sinh hoạt đoàn hội...
+ 
+    // Duyệt qua từng hoạt động đã duyệt để đếm loại hoạt động dựa trên từ khóa tiêu đề/tên hoạt động
     for (let c of claims) {
       const searchStr = ((c.event_title || '') + ' ' + (c.activity_name || '')).toLowerCase();
       if (searchStr.includes('hiến máu')) bloodDonationCount++;
       if (searchStr.includes('tình nguyện') || searchStr.includes('dọn rác') || searchStr.includes('trồng cây') || searchStr.includes('mùa hè xanh')) volunteerCount++;
       if (searchStr.includes('họp') || searchStr.includes('sinh hoạt')) meetingCount++;
     }
-
+ 
+    // 4. Lấy danh sách toàn bộ các thành tích (achievements) được cấu hình trong Database
     const achievements = (await pool.query("SELECT * FROM achievements")).rows;
     for (const ach of achievements) {
-      let isEligible = false;
+      let isEligible = false; // Biến kiểm tra xem sinh viên có đủ điều kiện đạt thành tích này không
+      
+      // So sánh các chỉ số đạt được của sinh viên với điều kiện (target_value) của thành tích
       if (ach.target_type === 'claims_count' && claimsCount >= ach.target_value) isEligible = true;
       if (ach.target_type === 'total_ugc' && ugcBalance >= ach.target_value) isEligible = true;
       if (ach.target_type === 'on_chain' && hasOnChain) isEligible = true;
       if (ach.target_type === 'blood_donation' && bloodDonationCount >= ach.target_value) isEligible = true;
       if (ach.target_type === 'volunteer' && volunteerCount >= ach.target_value) isEligible = true;
       if (ach.target_type === 'meeting' && meetingCount >= ach.target_value) isEligible = true;
-
+ 
+      // 5. Nếu đủ điều kiện, ghi nhận thành tích đó cho sinh viên (chèn vào bảng user_achievements)
       if (isEligible) {
         await pool.query(
           "INSERT INTO user_achievements (student_id, achievement_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
@@ -650,9 +725,15 @@ async function checkAndUnlockAchievements(studentId) {
   }
 }
 
+// =========================================================================
+// API LẤY DANH SÁCH THÀNH TÍCH VÀ TRẠNG THÁI ĐẠT ĐƯỢC CỦA BẢN THÂN SINH VIÊN
+// =========================================================================
 app.get("/me/achievements", authRequired, async (req, res) => {
   try {
+    // Chạy logic tự động kiểm tra & cập nhật mở khóa thành tích trước
     await checkAndUnlockAchievements(req.user.id);
+    
+    // Truy vấn tất cả thành tích kèm theo cờ `done` (true nếu sinh viên đã đạt được, false nếu chưa)
     const rs = await pool.query(`
       SELECT a.*, (ua.unlocked_at IS NOT NULL) as done
       FROM achievements a
@@ -722,14 +803,19 @@ app.get("/activity-types", authRequired, async (req, res) => {
 });
 
 app.post("/activity-types", authRequired, requireRole("admin", "verifier"), async (req, res) => {
-  const { name, description, credit_amount, evidence_required } = req.body || {};
-  if (!name || credit_amount === undefined) return res.status(400).json({ error: "name & credit_amount required" });
+  try {
+    const { name, description, credit_amount, evidence_required } = req.body || {};
+    if (!name || credit_amount === undefined) return res.status(400).json({ error: "name & credit_amount required" });
 
-  const rs = await pool.query(
-    "INSERT INTO activity_types(name, description, credit_amount, evidence_required, created_by) VALUES($1,$2,$3,$4,$5) RETURNING *",
-    [name, description || "", Number(credit_amount), evidence_required !== false, req.user.id]
-  );
-  res.json(rs.rows[0]);
+    const rs = await pool.query(
+      "INSERT INTO activity_types(name, description, credit_amount, evidence_required, created_by) VALUES($1,$2,$3,$4,$5) RETURNING *",
+      [name, description || "", Number(credit_amount), evidence_required !== false, req.user.id]
+    );
+    res.json(rs.rows[0]);
+  } catch (e) {
+    console.error("POST /activity-types error:", e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.put("/activity-types/:id", authRequired, requireRole("admin", "verifier"), async (req, res) => {
@@ -791,30 +877,35 @@ app.get("/events", authRequired, async (req, res) => {
 });
 
 app.post("/events", authRequired, requireRole("admin","verifier"), async (req, res) => {
-  let { activity_type_id, activity_name, credit_amount, title, description, start_at, end_at, location } = req.body || {};
+  try {
+    let { activity_type_id, activity_name, credit_amount, title, description, start_at, end_at, location } = req.body || {};
 
-  if (!activity_type_id) {
-    if (!activity_name || credit_amount === undefined) {
-      return res.status(400).json({ error: "activity_type_id OR (activity_name & credit_amount) required" });
+    if (!activity_type_id) {
+      if (!activity_name || credit_amount === undefined) {
+        return res.status(400).json({ error: "activity_type_id OR (activity_name & credit_amount) required" });
+      }
+      // Create new activity type on the fly
+      const rsAct = await pool.query(
+        "INSERT INTO activity_types(name, description, credit_amount, evidence_required, created_by) VALUES($1,$2,$3,$4,$5) RETURNING id",
+        [activity_name, "", Number(credit_amount), true, req.user.id]
+      );
+      activity_type_id = rsAct.rows[0].id;
     }
-    // Create new activity type on the fly
-    const rsAct = await pool.query(
-      "INSERT INTO activity_types(name, description, credit_amount, evidence_required, created_by) VALUES($1,$2,$3,$4,$5) RETURNING id",
-      [activity_name, "", Number(credit_amount), true, req.user.id]
+
+    if (!title) return res.status(400).json({ error: "title required" });
+
+    const qr_token = crypto.randomBytes(16).toString("hex");
+    const rs = await pool.query(
+      `INSERT INTO events(activity_type_id, title, description, organizer_id, start_at, end_at, location, qr_token, status)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING *`,
+      [activity_type_id, title, description || "", req.user.id, start_at || null, end_at || null, location || "", qr_token, "published"]
     );
-    activity_type_id = rsAct.rows[0].id;
+    res.json(rs.rows[0]);
+  } catch (e) {
+    console.error("POST /events error:", e);
+    res.status(500).json({ error: e.message });
   }
-
-  if (!title) return res.status(400).json({ error: "title required" });
-
-  const qr_token = crypto.randomBytes(16).toString("hex");
-  const rs = await pool.query(
-    `INSERT INTO events(activity_type_id, title, description, organizer_id, start_at, end_at, location, qr_token, status)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
-     RETURNING *`,
-    [activity_type_id, title, description || "", req.user.id, start_at || null, end_at || null, location || "", qr_token, "published"]
-  );
-  res.json(rs.rows[0]);
 });
 
 app.put("/events/:id", authRequired, requireRole("admin","verifier"), async (req, res) => {
@@ -996,7 +1087,7 @@ app.post("/claims/:id/approve", authRequired, requireRole("admin","verifier"), a
 
   // load claim + student wallet + credit amount
   const claimRs = await pool.query(
-    `SELECT c.*, a.credit_amount, u.wallet_address
+    `SELECT c.*, a.credit_amount, a.name AS activity_name, e.title AS event_title, u.wallet_address
      FROM claims c
      JOIN events e ON e.id = c.event_id
      JOIN activity_types a ON a.id = e.activity_type_id
@@ -1294,11 +1385,11 @@ app.get("/ugc/leaderboard", authRequired, async (req, res) => {
 
     const withBalances = await Promise.all(users.map(async (u) => {
       try {
-        if (!u.wallet_address) return { id: u.id, full_name: u.full_name, ugc_balance: 0 };
+        if (!u.wallet_address) return { id: u.id, username: u.username, full_name: u.full_name, ugc_balance: 0 };
         const bal = await ugcContract.balanceOf(u.wallet_address);
-        return { id: u.id, full_name: u.full_name, ugc_balance: Number(bal) };
+        return { id: u.id, username: u.username, full_name: u.full_name, ugc_balance: Number(bal) };
       } catch {
-        return { id: u.id, full_name: u.full_name, ugc_balance: 0 };
+        return { id: u.id, username: u.username, full_name: u.full_name, ugc_balance: 0 };
       }
     }));
 
@@ -1306,6 +1397,7 @@ app.get("/ugc/leaderboard", authRequired, async (req, res) => {
 
     const ranked = sorted.map((u, idx) => ({
       id: u.id,
+      username: u.username,
       full_name: u.full_name,
       ugc_balance: u.ugc_balance,
       rank: idx + 1
@@ -1318,7 +1410,8 @@ app.get("/ugc/leaderboard", authRequired, async (req, res) => {
     res.json({
       success: true,
       top3,
-      me: myRank || { id: req.user.id, full_name: req.user.full_name, ugc_balance: 0, rank: Math.max(15, ranked.length + 1) }
+      me: myRank || { id: req.user.id, username: req.user.username, full_name: req.user.full_name, ugc_balance: 0, rank: Math.max(15, ranked.length + 1) },
+      all: ranked
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -2016,17 +2109,33 @@ app.get("/me/wallet-key", authRequired, async (req, res) => {
 
 // Cập nhật thông tin hồ sơ cá nhân
 app.put("/me/profile", authRequired, async (req, res) => {
-  const { full_name, class_name, cohort, birth_date } = req.body || {};
+  const { full_name, class_name, cohort, birth_date, email } = req.body || {};
   try {
     const rs = await pool.query(
       `UPDATE users 
        SET full_name = COALESCE($1, full_name),
            class_name = COALESCE($2, class_name),
            cohort = COALESCE($3, cohort),
-           birth_date = COALESCE($4, birth_date)
-       WHERE id = $5 
-       RETURNING id, username, full_name, role, wallet_address, student_card_image, class_name, cohort, birth_date`,
-      [full_name, class_name, cohort, birth_date, req.user.id]
+           birth_date = COALESCE($4, birth_date),
+           email = COALESCE($5, email)
+       WHERE id = $6 
+       RETURNING id, username, full_name, email, role, wallet_address, student_card_image, class_name, cohort, birth_date`,
+      [full_name, class_name, cohort, birth_date, email, req.user.id]
+    );
+    res.json({ success: true, user: rs.rows[0] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Upload ảnh đại diện
+app.post("/me/avatar", authRequired, upload.single("avatar"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Missing avatar image file" });
+  try {
+    const avatarUrl = "/uploads/" + req.file.filename;
+    const rs = await pool.query(
+      `UPDATE users SET avatar_url = $1 WHERE id = $2 RETURNING id, username, full_name, email, avatar_url, role, wallet_address, student_card_image, class_name, cohort, birth_date`,
+      [avatarUrl, req.user.id]
     );
     res.json({ success: true, user: rs.rows[0] });
   } catch (e) {

@@ -24,6 +24,29 @@ function timeAgo(d) {
 }
 
 function renderAvatar(u, sizeClass = "w-10 h-10") {
+  // Preset photo avatars for mock students to match mockup
+  if (u?.username === 'minhanh') {
+    return (
+      <div className={`${sizeClass} rounded-full overflow-hidden flex-shrink-0 border border-gray-200 shadow-sm`}>
+        <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&h=150&q=80" alt="Nguyễn Minh Anh" className="w-full h-full object-cover" />
+      </div>
+    )
+  }
+  if (u?.username === 'quocbao') {
+    return (
+      <div className={`${sizeClass} rounded-full overflow-hidden flex-shrink-0 border border-gray-200 shadow-sm`}>
+        <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&h=150&q=80" alt="Trần Quốc Bảo" className="w-full h-full object-cover" />
+      </div>
+    )
+  }
+  if (u?.username === 'giahuy') {
+    return (
+      <div className={`${sizeClass} rounded-full overflow-hidden flex-shrink-0 border border-gray-200 shadow-sm`}>
+        <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&h=150&q=80" alt="Lê Gia Huy" className="w-full h-full object-cover" />
+      </div>
+    )
+  }
+
   if (u?.student_card_image) {
     return (
       <div className={`${sizeClass} rounded-full overflow-hidden flex-shrink-0 border border-gray-200`}>
@@ -32,7 +55,7 @@ function renderAvatar(u, sizeClass = "w-10 h-10") {
     )
   }
 
-  let bgClass = "bg-green-600"
+  let bgClass = "bg-[#1e293b]" // Dark slate/navy to match mockup
   let label = "??"
   if (u?.role === 'admin') {
     bgClass = "bg-rose-600"
@@ -41,11 +64,12 @@ function renderAvatar(u, sizeClass = "w-10 h-10") {
     bgClass = "bg-indigo-600"
     label = "VF"
   } else if (u?.full_name) {
-    label = u.full_name.split(' ').pop()?.slice(0, 2).toUpperCase() || "??"
+    const cleanName = u.full_name.replace(/\s*\(Bạn\)\s*$/gi, '').trim();
+    label = cleanName.split(' ').pop()?.slice(0, 2).toUpperCase() || "??"
   }
 
   return (
-    <div className={`${sizeClass} rounded-full ${bgClass} text-white font-black flex items-center justify-center flex-shrink-0 select-none shadow-sm text-xs`}>
+    <div className={`${sizeClass} rounded-full ${bgClass} text-white font-semibold flex items-center justify-center flex-shrink-0 select-none shadow-sm text-xs`}>
       {label}
     </div>
   )
@@ -297,6 +321,8 @@ export default function DashboardPage() {
   const [studentClaims, setStudentClaims] = useState([])
   const [studentEvents, setStudentEvents] = useState([])
   const [achievements, setAchievements] = useState([])
+  const [leaderboard, setLeaderboard] = useState({ top3: [], me: null, all: [] })
+  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false)
   const isAdmin = user.role === 'admin' || user.role === 'verifier'
 
   const timePeriodLabel = { week: '7 ngày qua', month: 'Tháng này', quarter: 'Quý này', year: 'Năm nay' }[timePeriod]
@@ -332,18 +358,26 @@ export default function DashboardPage() {
         ])
         setStats(s); setBalance(b?.balance ?? null); setContract(c?.address || ''); setWallets(w || [])
       } else {
-        const [b, c, claims, events, ach] = await Promise.all([
+        const [b, c, claims, events, ach, lb] = await Promise.all([
           api('/wallet/balance').catch(() => ({ balance: null })),
           api('/wallet/contract').catch(() => ({ address: '' })),
           api('/me/claims').catch(() => []),
           api('/events').catch(() => []),
           api('/me/achievements').catch(() => []),
+          api('/ugc/leaderboard').catch(() => null),
         ])
         setBalance(b?.balance ?? null)
         setContract(c?.address || '')
         setStudentClaims(Array.isArray(claims) ? claims : [])
         setStudentEvents(Array.isArray(events) ? events : [])
         setAchievements(Array.isArray(ach) ? ach : [])
+        if (lb && lb.success) {
+          setLeaderboard({
+            top3: lb.top3 || [],
+            me: lb.me || null,
+            all: lb.all || []
+          })
+        }
       }
     } catch { showToast('⚠️ Lỗi tải dashboard') } finally { setLoading(false) }
   }, [api, isAdmin, showToast, timePeriod])
@@ -374,7 +408,7 @@ export default function DashboardPage() {
       // Check if student has submitted a claim for this event
       const claim = studentClaims.find(c => c.event_id === ev.id);
       const hasParticipated = claim && (claim.status === 'approved' || claim.status === 'submitted');
-      
+
       return {
         label: ev.title,
         progress: hasParticipated ? 1 : 0,
@@ -577,7 +611,7 @@ export default function DashboardPage() {
                 <div className="card flex flex-col">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                      <p style={{ fontSize: 16, fontWeight: 800, color: '#111', margin: 0 }} className="flex items-center gap-1">Tăng trưởng tín chỉ <i className="ph ph-info" style={{ fontSize: '16px', color: '#94a3b8', cursor: 'pointer' }}></i></p>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: '#111', margin: 0 }} className="flex items-center gap-1">Tăng trưởng tín chỉ <i className="ph ph-info" style={{ fontSize: '16px', color: '#94a3b8', cursor: 'pointer' }}></i></p>
                       <p style={{ fontSize: 13, color: '#888', marginTop: 4, fontWeight: 500 }}>Thống kê 7 ngày gần nhất</p>
                     </div>
                   </div>
@@ -643,22 +677,34 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Thành tích nổi bật */}
-              <div className="card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <p style={{ fontSize: 16, fontWeight: 800, color: '#111', margin: 0 }}>Thành tích nổi bật</p>
-                  <button className="text-[13px] font-bold text-green-600 hover:underline">Xem tất cả</button>
+              {/* =========================================================================
+                  KHU VỰC: THÀNH TÍCH NỔI BẬT (ACHIEVEMENTS CARD)
+                  ========================================================================= */}
+              <div className="card achievements-card">
+                {/* Tiêu đề phần Thành tích nổi bật */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: '#111', margin: 0 }}>Thành tích nổi bật</p>
+                  <button className="link-text hover:underline" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>Xem tất cả</button>
                 </div>
-                <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '12px' }} className="horizontal-scroll-container">
+
+                {/* Danh sách thành tích sử dụng class badges-container từ dashboard.css */}
+                <div className="badges-container horizontal-scroll-container">
                   {achievements.map((a, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow" style={{ flexShrink: 0, width: '220px' }}>
-                      <div className={`w-11 h-11 rounded-full flex items-center justify-center text-xl flex-shrink-0 ${a.done ? 'bg-green-50 border border-green-100' : 'bg-gray-50 opacity-40 border border-gray-200'}`}>
+                    // Mỗi thành tích là một badge-item, nếu chưa đạt (a.done = false) sẽ bị mờ đi
+                    <div key={i} className="badge-item" style={{ opacity: a.done ? 1 : 0.4 }}>
+
+                      {/* Vòng tròn Icon (badge-icon) */}
+                      <div className={`badge-icon ${a.done ? 'bg-green-50 border border-green-100' : 'bg-gray-50 border border-gray-200'}`}>
                         {a.icon}
                       </div>
-                      <div className="min-w-0">
-                        <p className={`text-[13px] font-bold m-0 truncate ${a.done ? 'text-gray-800' : 'text-gray-400'}`}>{a.label}</p>
-                        <p className="text-[11px] text-gray-500 m-0 mt-0.5 truncate">{a.description}</p>
+
+                      {/* Tên danh hiệu & Mô tả (badge-text): 
+                          Có hiệu ứng chuyển đổi độ rộng chữ mượt mà khi hover chuột */}
+                      <div className="badge-text min-w-0">
+                        <p className={`text-[12px] font-bold m-0 truncate ${a.done ? 'text-gray-800' : 'text-gray-400'}`}>{a.label}</p>
+                        <p className="text-[10px] text-gray-500 m-0 mt-0.5 truncate">{a.description}</p>
                       </div>
+
                     </div>
                   ))}
                 </div>
@@ -703,16 +749,16 @@ export default function DashboardPage() {
                   <Link to="/events" className="link-text">Xem thêm</Link>
                 </div>
                 <div className="flex-1">
-                  <ul className="task-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                  <ul className="task-list">
                     {tasksList.map((task, i) => (
-                      <li key={i}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${task.done ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'}`}>
-                            {task.done && <i className="ph-bold ph-check" style={{ fontSize: '12px' }}></i>}
+                      <li key={i} className={task.done ? 'completed' : ''}>
+                        <div className="task-info">
+                          <div className="task-check">
+                            {task.done && <i className="ph-bold ph-check"></i>}
                           </div>
-                          <span style={{ fontWeight: 500, color: task.done ? '#333' : '#666' }}>{task.label}</span>
+                          <span className="task-label">{task.label}</span>
                         </div>
-                        <span style={{ fontWeight: 700, color: task.done ? '#16a34a' : '#9ca3af' }}>{task.progress}/{task.total}</span>
+                        <span className="task-progress">{task.progress}/{task.total}</span>
                       </li>
                     ))}
                   </ul>
@@ -720,44 +766,100 @@ export default function DashboardPage() {
                     <div className="w-full bg-gray-100 h-[6px] rounded-full mb-2 overflow-hidden">
                       <div className="bg-green-500 h-[6px] rounded-full transition-all duration-500" style={{ width: `${tasksProgressPct}%` }}></div>
                     </div>
-                    <p style={{ fontSize: '12px', color: '#888', fontWeight: 500, margin: 0 }}>{tasksCompleted} / {tasksTotal} hoàn thành</p>
+                    <p className="task-footer-text">{tasksCompleted} / {tasksTotal} hoàn thành</p>
                   </div>
                 </div>
               </div>
 
               {/* Bảng xếp hạng */}
               <div className="card mt-5">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <p style={{ fontSize: 16, fontWeight: 800, color: '#111', margin: 0 }}>Bảng xếp hạng</p>
-                  <button className="text-[13px] font-bold text-green-600 hover:underline">Xem thêm</button>
+                <div className="list-header">
+                  <p className="title-hd m-0">Bảng xếp hạng</p>
+                  <button onClick={() => setShowLeaderboardModal(true)} className="link-text hover:underline" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>Xem thêm</button>
                 </div>
-                <div className="space-y-1">
-                  {[
-                    { rank: 1, name: 'Nguyễn Minh Anh', score: 560, isMe: false },
-                    { rank: 2, name: 'Trần Quốc Bảo', score: 540, isMe: false },
-                    { rank: 3, name: 'Lê Gia Huy', score: 520, isMe: false },
-                    { rank: 15, name: user.full_name || 'Hoàng Trường', score: bal, isMe: true },
-                  ].map((u, i) => (
-                    <div key={i} className={`flex items-center justify-between p-2.5 rounded-xl ${u.isMe ? 'bg-green-50' : 'hover:bg-gray-50 transition-colors'}`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${u.rank === 1 ? 'bg-orange-100 text-orange-600' : u.rank === 2 ? 'bg-gray-200 text-gray-600' : u.rank === 3 ? 'bg-orange-50 text-orange-500' : 'bg-transparent text-gray-600'}`}>
-                          {u.rank}
+                <ul className="leaderboard-list">
+                  {leaderboard.top3.map((u, i) => {
+                    const isMe = u.id === user.id;
+                    const rankClass = u.rank === 1 ? 'rank-1' : u.rank === 2 ? 'rank-2' : u.rank === 3 ? 'rank-3' : 'rank-15';
+                    return (
+                      <li key={i} className={isMe ? 'bg-[#F0FDF4] -mx-5 px-5 py-2' : ''}>
+                        <div className="flex items-center gap-3">
+                          <div className={`rank-circle ${rankClass}`}>
+                            {u.rank}
+                          </div>
+                          {renderAvatar(u, "w-9 h-9")}
+                          <span className="font-semibold text-gray-800">{u.full_name} {isMe && '(Bạn)'}</span>
                         </div>
-                        <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden flex items-center justify-center text-[10px] font-black text-slate-500">
-                          {u.name.split(' ').pop().slice(0, 2).toUpperCase()}
-                        </div>
-                        <span className={`text-[13px] font-bold ${u.isMe ? 'text-green-700' : 'text-gray-800'}`}>{u.name} {u.isMe && '(Bạn)'}</span>
+                        <span className="font-semibold text-green">{u.ugc_balance} UGC</span>
+                      </li>
+                    );
+                  })}
+
+                  {leaderboard.top3.length === 0 && (
+                    <p className="text-sm text-gray-500 text-center py-4 m-0">Đang tải bảng xếp hạng...</p>
+                  )}
+                </ul>
+
+                {leaderboard.me && leaderboard.me.rank > 3 && (
+                  <div className="highlight-row flex items-center justify-between mt-3">
+                    <div className="flex items-center gap-3">
+                      <div className="rank-circle rank-15">
+                        {leaderboard.me.rank}
                       </div>
-                      <span className="text-[13px] font-bold text-gray-800">{u.score} UGC</span>
+                      {renderAvatar(leaderboard.me, "w-9 h-9")}
+                      <span className="font-semibold text-gray-800">{leaderboard.me.full_name} (Bạn)</span>
                     </div>
-                  ))}
-                </div>
+                    <span className="font-semibold text-green">{leaderboard.me.ugc_balance} UGC</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* ROW 4: CLAIMS TABLE — Full Shadcn Theme */}
           <ClaimsDataTable claims={studentClaims} loading={loading} nav={nav} />
+
+          {/* Leaderboard Modal */}
+          {showLeaderboardModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowLeaderboardModal(false)}>
+              <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4 flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+                  <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-green-600">leaderboard</span> Bảng xếp hạng toàn trường
+                  </h2>
+                  <button onClick={() => setShowLeaderboardModal(false)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors">
+                    <span className="material-symbols-outlined text-gray-500">close</span>
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 pr-1 space-y-1.5 scrollbar-thin">
+                  {leaderboard.all.map((u, i) => {
+                    const isMe = u.id === user.id;
+                    const rankClass = u.rank === 1 ? 'rank-1' : u.rank === 2 ? 'rank-2' : u.rank === 3 ? 'rank-3' : 'rank-15';
+                    return (
+                      <div key={i} className={`flex items-center justify-between p-3 rounded-xl transition-all ${isMe ? 'bg-[#F0FDF4] border border-green/20 shadow-sm' : 'hover:bg-gray-50'}`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`rank-circle ${rankClass} flex-shrink-0`}>
+                            {u.rank}
+                          </div>
+                          {renderAvatar(u, "w-9 h-9")}
+                          <span className={`text-[13.5px] font-semibold ${isMe ? 'text-gray-800 font-bold' : 'text-gray-700'}`}>
+                            {u.full_name} {isMe && '(Bạn)'}
+                          </span>
+                        </div>
+                        <span className={`text-[13.5px] font-bold ${isMe ? 'text-green' : 'text-gray-600'}`}>
+                          {u.ugc_balance} UGC
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {leaderboard.all.length === 0 && (
+                    <p className="text-sm text-gray-500 text-center py-8">Chưa có dữ liệu bảng xếp hạng.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
         </div>
       </div>

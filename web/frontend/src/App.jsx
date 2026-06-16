@@ -13,6 +13,7 @@ import AdminPage from './pages/AdminPage.jsx'
 import TreasuryPage from './pages/TreasuryPage.jsx'
 import ProvenancePage from './pages/ProvenancePage.jsx'
 import TrainingPointsPage from './pages/TrainingPointsPage.jsx'
+import ProfilePage from './pages/ProfilePage.jsx'
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import ChatBot from './components/ChatBot.jsx'
 // Prototype Styles
@@ -28,6 +29,12 @@ function Layout({ children }) {
   const [studentStats, setStudentStats] = useState({ pending: 0, totalEarned: 0 })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+
+  useEffect(() => {
+    const handleOpenSettings = () => setShowSettings(true)
+    window.addEventListener('open-settings', handleOpenSettings)
+    return () => window.removeEventListener('open-settings', handleOpenSettings)
+  }, [])
   const loc = useLocation()
   const nav = useNavigate()
 
@@ -245,7 +252,7 @@ function Layout({ children }) {
                         </div>
                         <div className="p-1">
                           <button 
-                            onClick={() => { setShowProfile(false); showToast('Tính năng Hồ sơ đang được phát triển!') }}
+                            onClick={() => { setShowProfile(false); nav('/profile'); }}
                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 text-xs text-gray-700 transition-colors"
                           >
                             <span className="material-symbols-outlined text-[18px]">person</span>
@@ -652,6 +659,7 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
 
   // Hồ sơ sinh viên
   const [fullName, setFullName] = useState(user?.full_name || "")
+  const [email, setEmail] = useState(user?.email || (user?.username?.includes('@') ? user.username : ""))
   const [className, setClassName] = useState("")
   const [cohort, setCohort] = useState("")
   const [birthDate, setBirthDate] = useState("")
@@ -694,6 +702,7 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
       api('/me').then(res => {
         if (res) {
           setFullName(res.full_name || "")
+          setEmail(res.email || (res.username?.includes('@') ? res.username : ""))
           setClassName(res.class_name || "")
           setCohort(res.cohort || "")
           setBirthDate(res.birth_date || "")
@@ -736,6 +745,7 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
         method: 'PUT',
         body: JSON.stringify({
           full_name: fullName,
+          email: email, // Gửi email lên backend (cần update backend để hỗ trợ lưu email)
           class_name: className,
           cohort: cohort,
           birth_date: birthDate
@@ -866,6 +876,12 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Ngày sinh</label>
                     <DatePicker value={birthDate} onChange={setBirthDate} />
                   </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Địa chỉ Email</label>
+                  <input className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
+                    type="email" placeholder="Ví dụ: student@ulsa.edu.vn" value={email} onChange={e => setEmail(e.target.value)} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -1134,6 +1150,7 @@ export default function App() {
             <Route path="/treasury" element={<RequireAuth><TreasuryPage /></RequireAuth>} />
             <Route path="/provenance" element={<RequireAuth><ProvenancePage /></RequireAuth>} />
             <Route path="/training-points" element={<RequireAuth><TrainingPointsPage /></RequireAuth>} />
+            <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Layout>

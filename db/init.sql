@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS achievements (
   icon TEXT NOT NULL,
   label TEXT NOT NULL,
   description TEXT,
-  target_type TEXT NOT NULL CHECK (target_type IN ('claims_count', 'total_ugc', 'on_chain')),
+  target_type TEXT NOT NULL CHECK (target_type IN ('claims_count', 'total_ugc', 'on_chain', 'blood_donation', 'volunteer', 'meeting')),
   target_value INT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -143,5 +143,10 @@ INSERT INTO achievements (icon, label, description, target_type, target_value) V
   ('🌳', 'Chuyên cần', 'Đạt 50 UGC', 'total_ugc', 50),
   ('🏆', 'Xuất sắc', 'Đạt 100 UGC', 'total_ugc', 100),
   ('⭐', 'Huyền thoại', 'Đạt 200 UGC', 'total_ugc', 200),
-  ('🔗', 'On-chain', 'Có giao dịch blockchain', 'on_chain', 1)
+  ('🔗', 'On-chain', 'Có giao dịch blockchain', 'on_chain', 1),
+  ('🌱', 'Tân binh xanh ULSA', 'Đạt 50 UGC đầu tiên tại trường.', 'total_ugc', 50),
+  ('⚡', 'Thợ săn phong trào', 'Tham gia đủ 10 sự kiện ngoại khoá.', 'claims_count', 10),
+  ('❤️', 'Giọt máu nhân đạo', 'Tham gia hiến máu nhân đạo 2 lần.', 'blood_donation', 2),
+  ('🤝', 'Đại sứ cộng đồng', 'Tham gia 5 hoạt động tình nguyện xã hội.', 'volunteer', 5),
+  ('💼', 'Cán bộ mẫn cán', 'Tham gia đầy đủ 10 buổi họp/sinh hoạt.', 'meeting', 10)
 ON CONFLICT DO NOTHING;
