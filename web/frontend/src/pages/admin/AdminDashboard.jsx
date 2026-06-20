@@ -8,8 +8,8 @@ import ClaimsDataTable from '../../components/ClaimsDataTable'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 
-import iconCard1 from '../../assets/icon_dashboard/ô_1.png'
-import iconCard4 from '../../assets/icon_dashboard/ô_4.png'
+import iconCard1 from '../../assets/icon_dashboard/o_1.png'
+import iconCard4 from '../../assets/icon_dashboard/o_4.png'
 import logoWeb from '../../logo_web.png'
 import '../../styles/admin/admin-dashboard.css'
 
