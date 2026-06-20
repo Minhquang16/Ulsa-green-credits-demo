@@ -18,7 +18,7 @@ import TreasuryPage from './pages/admin/TreasuryPage.jsx'
 import ProvenancePage from './pages/admin/ProvenancePage.jsx'
 import TrainingPointsPage from './pages/shared/TrainingPointsPage.jsx'
 import ProfilePage from './pages/shared/ProfilePage.jsx'
-import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import ChatBot from './components/ChatBot.jsx'
 // Prototype Styles
 import './styles/base.css'
@@ -314,7 +314,7 @@ function Layout({ children }) {
                     <AvatarFallback className="bg-slate-800 text-white font-black text-[12px]">
                       {user.full_name?.split(' ').pop()?.slice(0, 2).toUpperCase() || 'SV'}
                     </AvatarFallback>
-                    <AvatarBadge className="bg-green-500" />
+                    <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white bg-green-500"></span>
                   </Avatar>
                   <div className="hidden md:flex flex-col text-left justify-center">
                     <span className="text-[14px] font-extrabold text-[#111214] leading-tight">{user.full_name || 'Sinh viên ULSA'}</span>
