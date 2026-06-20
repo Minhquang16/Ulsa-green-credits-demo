@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import logoWeb from '../logo_web.png'
+import '../styles/shared/chatbot.css'
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ''
 
@@ -195,7 +196,7 @@ export default function ChatBot() {
     <>
       {/* Chat Window */}
       <div
-        className="chatbot-window"
+        className="chatbot__window"
         style={{
           position: 'fixed',
           bottom: open ? '150px' : '-600px',
@@ -493,19 +494,6 @@ export default function ChatBot() {
           }} />
         )}
       </button>
-
-      <style>{`
-        @keyframes bounce {
-          0%, 60%, 100% { transform: translateY(0); }
-          30% { transform: translateY(-5px); }
-        }
-        @keyframes pulse-ring {
-          0% { transform: scale(1); opacity: 0.8; }
-          100% { transform: scale(1.6); opacity: 0; }
-        }
-        .chatbot-window::-webkit-scrollbar { width: 4px; }
-        .chatbot-window::-webkit-scrollbar-thumb { background: #c8e6c9; border-radius: 2px; }
-      `}</style>
     </>
   )
 }

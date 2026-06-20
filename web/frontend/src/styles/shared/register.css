@@ -1,0 +1,29 @@
+/* ══════════════════════════════════════════════════════
+   RegisterPage — Registration page animations
+   ══════════════════════════════════════════════════════ */
+
+@keyframes orbitSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes orbitSpin2 {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+.register-left-panel {
+  background: linear-gradient(135deg, #2A925A 0%, #60b651 50%, #96D947 100%);
+  z-index: 2;
+  clip-path: polygon(0% 0%, 100% 0%, 100% 92%, 50% 96%, 0% 92%);
+  transition: clip-path 0.3s ease-in-out;
+}
+
+@media (min-width: 768px) {
+  .register-left-panel {
+    clip-path: polygon(0% 0%, 100% 0%, 92% 50%, 100% 100%, 0% 100%);
+  }
+}

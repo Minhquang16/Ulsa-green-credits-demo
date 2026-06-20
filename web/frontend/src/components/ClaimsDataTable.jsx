@@ -165,7 +165,7 @@ const columns = [
   },
   {
     accessorKey: "header",
-    header: "Hoạt động",
+    header: () => <div className="whitespace-nowrap">Hoạt động</div>,
     cell: ({ row }) => {
       return <TableCellViewer item={row.original} />
     },
@@ -173,9 +173,9 @@ const columns = [
   },
   {
     accessorKey: "type",
-    header: "Loại",
+    header: () => <div className="whitespace-nowrap">Loại</div>,
     cell: ({ row }) => (
-      <div className="w-32">
+      <div className="w-32 whitespace-nowrap">
         <Badge variant="outline" className="px-1.5 text-muted-foreground">
           {row.original.type}
         </Badge>
@@ -184,30 +184,32 @@ const columns = [
   },
   {
     accessorKey: "status",
-    header: "Trạng thái",
+    header: () => <div className="whitespace-nowrap">Trạng thái</div>,
     cell: ({ row }) => (
-      <Badge variant="outline" className="px-1.5 text-muted-foreground whitespace-nowrap">
-        {row.original.status === "Hoàn thành" ? (
-          <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400 mr-1" size={14} />
-        ) : (
-          <IconLoader className="animate-spin mr-1" size={14} />
-        )}
-        {row.original.status}
-      </Badge>
+      <div className="whitespace-nowrap">
+        <Badge variant="outline" className="px-1.5 text-muted-foreground whitespace-nowrap">
+          {row.original.status === "Hoàn thành" ? (
+            <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400 mr-1" size={14} />
+          ) : (
+            <IconLoader className="animate-spin mr-1" size={14} />
+          )}
+          {row.original.status}
+        </Badge>
+      </div>
     ),
   },
   {
     accessorKey: "target",
-    header: () => <div className="w-full text-right">Số tín chỉ (UGC)</div>,
+    header: () => <div className="w-full text-right whitespace-nowrap">Số tín chỉ (UGC)</div>,
     cell: ({ row }) => (
-      <div className="w-full text-right font-extrabold text-emerald-600 pr-4">
+      <div className="w-full text-right font-extrabold text-emerald-600 pr-4 whitespace-nowrap">
         {row.original.target}
       </div>
     ),
   },
   {
     accessorKey: "createdAt",
-    header: () => <div className="w-full text-center">Ngày gửi</div>,
+    header: () => <div className="w-full text-center whitespace-nowrap">Ngày gửi</div>,
     cell: ({ row }) => {
       const dateVal = row.original.createdAt;
       if (!dateVal) return <div className="w-full text-center text-gray-400">—</div>;
@@ -216,17 +218,17 @@ const columns = [
         month: "2-digit",
         year: "numeric",
       });
-      return <div className="w-full text-center font-medium text-gray-500">{formatted}</div>;
+      return <div className="w-full text-center font-medium text-gray-500 whitespace-nowrap">{formatted}</div>;
     },
   },
   {
     accessorKey: "reviewer",
-    header: "Người duyệt",
+    header: () => <div className="whitespace-nowrap">Người duyệt</div>,
     cell: ({ row }) => {
       const isAssigned = row.original.reviewer && row.original.reviewer !== "Chọn người duyệt"
 
       if (isAssigned) {
-        return <span className="text-sm font-medium">{row.original.reviewer}</span>
+        return <span className="text-sm font-medium whitespace-nowrap">{row.original.reviewer}</span>
       }
 
       return (
@@ -268,11 +270,8 @@ const columns = [
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-32">
-          <DropdownMenuItem>Chỉnh sửa</DropdownMenuItem>
-          <DropdownMenuItem>Tạo bản sao</DropdownMenuItem>
-          <DropdownMenuItem>Yêu thích</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-red-600">Xóa</DropdownMenuItem>
+          <DropdownMenuItem>Xem chi tiết</DropdownMenuItem>
+          <DropdownMenuItem>In biên lai</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     ),
@@ -372,7 +371,7 @@ function DataTable({ data: initialData, nav }) {
       defaultValue="outline"
       className="w-full flex-col justify-start gap-6 bg-white border border-gray-200 rounded-xl pt-4 pb-2"
     >
-      <div className="flex items-center justify-between px-4 lg:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 px-4 lg:px-6">
         <Label htmlFor="view-selector" className="sr-only">
           View
         </Label>
@@ -600,7 +599,7 @@ function TableCellViewer({ item }) {
   return (
     <Drawer direction={isMobile ? "bottom" : "right"}>
       <DrawerTrigger asChild>
-        <Button variant="link" className="w-fit px-0 text-left text-foreground font-semibold">
+        <Button variant="link" className="w-fit px-0 text-left text-foreground font-semibold whitespace-nowrap">
           {item.header}
         </Button>
       </DrawerTrigger>
@@ -716,9 +715,8 @@ function TableCellViewer({ item }) {
             </form>
           </div>
           <DrawerFooter className="pt-2">
-            <Button className="bg-green-600 hover:bg-green-700">Lưu thay đổi</Button>
             <DrawerClose asChild>
-              <Button variant="outline">Đóng</Button>
+              <Button variant="outline" className="w-full bg-green-600 hover:bg-green-700 text-white">Đóng</Button>
             </DrawerClose>
           </DrawerFooter>
         </div>

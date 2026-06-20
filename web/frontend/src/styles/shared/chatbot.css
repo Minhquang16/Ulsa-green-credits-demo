@@ -1,0 +1,22 @@
+/* ══════════════════════════════════════════════════════
+   ChatBot — Chat Assistant animations & styles (BEM)
+   ══════════════════════════════════════════════════════ */
+
+@keyframes bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-5px); }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.chatbot__window::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chatbot__window::-webkit-scrollbar-thumb {
+  background: #c8e6c9;
+  border-radius: 2px;
+}

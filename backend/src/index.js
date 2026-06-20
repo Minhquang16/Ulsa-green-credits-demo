@@ -746,6 +746,14 @@ app.get("/me/achievements", authRequired, async (req, res) => {
   }
 });
 
+const selfAssessments = new Map();
+
+// POST: save self-assessment (sections I, II, V) — keyed by student_id:semester
+app.post("/me/training-points/self-assessment", authRequired, (req, res) => {
+  const semester = req.body.semester || 'HK1-2025-2026';
+  selfAssessments.set(`${req.user.id}:${semester}`, req.body);
+  res.json({ ok: true });
+});
 
 app.get("/me/training-points", authRequired, async (req, res) => {
   try {
@@ -778,18 +786,49 @@ app.get("/me/training-points", authRequired, async (req, res) => {
 
     const totalUgc = approvedClaims.reduce((sum, c) => sum + (c.credit_amount || 0), 0);
 
+    // ── UGC → ĐRL: 3 UGC = 1 điểm rèn luyện ──
+    const UGC_PER_POINT = 3;
+    function classifyActivity(name, title) {
+      const s = ((name || '') + ' ' + (title || '')).toLowerCase();
+      if (s.includes('hiến máu') || s.includes('chính trị') || s.includes('xã hội')) return 'iii_1';
+      if (s.includes('văn hóa') || s.includes('văn hoá') || s.includes('văn nghệ') || s.includes('thể thao') || s.includes('thể dục')) return 'iii_2';
+      if (s.includes('tnxh') || s.includes('tệ nạn') || s.includes('phòng chống')) return 'iii_3';
+      if (s.includes('svtn') || s.includes('tình nguyện') || s.includes('clb') || s.includes('câu lạc bộ')) return 'iii_4';
+      if (s.includes('từ thiện') || s.includes('đoàn kết') || s.includes('nhân đạo')) return 'iv_3';
+      if (s.includes('địa phương') || s.includes('cộng đồng') || s.includes('dọn rác') || s.includes('trồng cây') || s.includes('phủ xanh') || s.includes('môi trường') || s.includes('vệ sinh')) return 'iv_4';
+      return 'iii_1';
+    }
+    const ugcBySection = { iii_1: 0, iii_2: 0, iii_3: 0, iii_4: 0, iii_5: 0, iv_1: 0, iv_2: 0, iv_3: 0, iv_4: 0 };
+    const claimsBySection = { iii_1: [], iii_2: [], iii_3: [], iii_4: [], iii_5: [], iv_1: [], iv_2: [], iv_3: [], iv_4: [] };
+    for (const c of approvedClaims) {
+      const key = classifyActivity(c.activity_name, c.event_title);
+      ugcBySection[key] = (ugcBySection[key] || 0) + (c.credit_amount || 0);
+      if (claimsBySection[key]) claimsBySection[key].push(c);
+    }
+    const maxPts = { iii_1: 5, iii_2: 5, iii_3: 4, iii_4: 3, iii_5: 3, iv_1: 10, iv_2: 5, iv_3: 5, iv_4: 5 };
+    const ugcBreakdown = {};
+    for (const key of Object.keys(maxPts)) {
+      const ugc = ugcBySection[key] || 0;
+      const points = Math.min(Math.floor(ugc / UGC_PER_POINT), maxPts[key]);
+      ugcBreakdown[key] = {
+        ugc, points, maxPoints: maxPts[key],
+        claims: (claimsBySection[key] || []).map(c => ({
+          id: c.id, event_title: c.event_title, activity_name: c.activity_name,
+          credit_amount: c.credit_amount, approved_at: c.updated_at, provenance_tx_hash: c.provenance_tx_hash
+        }))
+      };
+    }
+    const semester = req.query.semester || 'HK1-2025-2026';
+    const selfAssessment = selfAssessments.get(`${req.user.id}:${semester}`) || {};
+
     res.json({
       user,
-      stats: {
-        totalClaims,
-        totalApproved,
-        approvalRatio,
-        frequency,
-        diversityCount,
-        score: Math.round(score),
-        totalUgc
-      },
-      history: approvedClaims
+      stats: { totalClaims, totalApproved, approvalRatio, frequency, diversityCount, score: Math.round(score), totalUgc },
+      history: approvedClaims,
+      ugcBreakdown,
+      selfAssessment,
+      semester,
+      ugcPerPoint: UGC_PER_POINT
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

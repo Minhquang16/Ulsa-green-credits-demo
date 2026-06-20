@@ -1,0 +1,17 @@
+services:
+  backend:
+    command: node --watch src/index.js
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    environment:
+      BACKEND_URL: http://backend:8080
+    volumes:
+      - ./web/frontend:/app
+      - /app/node_modules
+    # Không định nghĩa ports ở đây nữa để tránh bị trùng với cổng 3000 ở file gốc

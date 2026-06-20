@@ -1,0 +1,4 @@
+FROM node:20-slim
+WORKDIR /app
+# Cài đặt thư viện và chạy Vite server trên cổng 80 (để khớp với docker-compose.yml gốc)
+CMD sh -c "npm install && npm run dev -- --port 80 --host"
