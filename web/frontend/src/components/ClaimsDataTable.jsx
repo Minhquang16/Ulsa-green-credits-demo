@@ -192,6 +192,8 @@ const columns = [
             <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400 mr-1" size={14} />
           ) : row.original.status === "Từ chối" ? (
             <IconCircleXFilled className="fill-red-500 dark:fill-red-400 mr-1" size={14} />
+          ) : row.original.status === "Chưa tham gia" ? (
+            <div className="size-3.5 mr-1 rounded-full border-2 border-gray-300"></div>
           ) : (
             <IconLoader className="animate-spin mr-1" size={14} />
           )}
@@ -736,7 +738,7 @@ function TableCellViewer({ item }) {
 }
 
 // Wrapper to format data from API to the exact schema requested
-export default function ClaimsDataTable({ claims, loading, nav }) {
+export default function ClaimsDataTable({ claims, events, loading, nav }) {
   if (loading) {
     return (
       <div className="flex justify-center p-12 bg-white rounded-xl border border-gray-200">
@@ -745,16 +747,22 @@ export default function ClaimsDataTable({ claims, loading, nav }) {
     )
   }
 
-  if (!claims || claims.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center p-16 bg-white rounded-xl border border-gray-200 text-gray-400 gap-2">
-        <IconCircleCheckFilled size={48} className="opacity-20" />
-        <p>Chưa có dữ liệu</p>
-      </div>
-    )
-  }
-
-  const mappedData = claims.map(c => ({
+  const mappedData = events ? events.map(ev => {
+    const claim = claims?.find(c => c.event_id === ev.id)
+    return {
+      id: ev.id,
+      header: ev.activity_name || "Hoạt động xanh",
+      eventName: ev.title || "Sự kiện ngoại khóa",
+      type: "Sự kiện",
+      status: claim ? (claim.status === "approved" ? "Hoàn thành" : claim.status === "rejected" ? "Từ chối" : "Chờ xử lý") : "Chưa tham gia",
+      target: ev.credit_amount ? (claim?.status === "rejected" ? `-${ev.credit_amount}` : `+${ev.credit_amount}`) : "0",
+      limit: "0",
+      reviewer: claim?.verifier_name || "Hệ thống",
+      txHash: claim?.tx_hash || null,
+      createdAt: claim?.created_at || ev.start_at || ev.created_at || null,
+      decidedAt: claim?.decided_at || null,
+    }
+  }) : (claims || []).map(c => ({
     id: c.id,
     header: c.activity_name || "Hoạt động xanh",
     eventName: c.event_title || "Sự kiện ngoại khóa",
@@ -767,6 +775,15 @@ export default function ClaimsDataTable({ claims, loading, nav }) {
     createdAt: c.created_at || null,
     decidedAt: c.decided_at || null,
   }))
+
+  if (!mappedData || mappedData.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-16 bg-white rounded-xl border border-gray-200 text-gray-400 gap-2">
+        <IconCircleCheckFilled size={48} className="opacity-20" />
+        <p>Chưa có dữ liệu</p>
+      </div>
+    )
+  }
 
   return <DataTable data={mappedData} nav={nav} />
 }

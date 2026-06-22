@@ -99,8 +99,8 @@ export default function StudentDashboard() {
         api('/ugc/leaderboard').catch(() => null),
       ])
       setBalance(b?.balance ?? null)
-      setStudentClaims(Array.isArray(claims) ? claims : [])
-      setStudentEvents(Array.isArray(events) ? events : [])
+      setStudentClaims(claims && claims.claims ? claims.claims : (Array.isArray(claims) ? claims : []))
+      setStudentEvents(events && events.events ? events.events : (Array.isArray(events) ? events : []))
       setAchievements(Array.isArray(ach) ? ach : [])
       if (lb && lb.success) {
         setLeaderboard({
@@ -158,12 +158,19 @@ export default function StudentDashboard() {
   }
 
   const progressPct = isTop1 ? 100 : Math.min((bal / (nextGoal || 1)) * 100, 100);
+  const nowTime = new Date();
+  const dayOfWeek = nowTime.getDay() || 7; // Chủ nhật (0) -> 7
+  const startOfThisWeek = new Date(nowTime);
+  startOfThisWeek.setHours(0, 0, 0, 0);
+  startOfThisWeek.setDate(nowTime.getDate() - dayOfWeek + 1); // Trở về Thứ Hai
+
   const upcomingEvents = studentEvents
-    .filter(e => e.status === 'published' && new Date(e.end_at) > new Date())
+    .filter(e => e.status === 'published' && (!e.end_at || new Date(e.end_at) > nowTime))
+    .filter(e => new Date(e.start_at || e.created_at) >= startOfThisWeek)
     .slice(0, 4)
 
-  // Tasks based on events
-  let tasksList = studentEvents.map(ev => {
+  // Tasks based on events (use upcoming events for tasks)
+  let tasksList = upcomingEvents.map(ev => {
     const claim = studentClaims.find(c => c.event_id === ev.id)
     const isApproved = claim && claim.status === 'approved'
     return {
@@ -176,8 +183,26 @@ export default function StudentDashboard() {
   })
 
   const tasksCompleted = tasksList.filter(t => t.done).length
-  const tasksTotal = tasksList.length || 1
-  const tasksProgressPct = tasksList.length ? (tasksCompleted / tasksTotal) * 100 : 0
+  const tasksTotal = tasksList.length
+  const tasksProgressPct = tasksTotal ? (tasksCompleted / tasksTotal) * 100 : 0
+  
+  // Recent activities calculation (Last 3 days)
+  const recentActivities = [...studentEvents]
+    .filter(ev => {
+      const claim = studentClaims.find(c => c.event_id === ev.id);
+      const actDate = claim ? new Date(claim.updated_at || claim.created_at) : new Date(ev.start_at || ev.created_at);
+      const diff = nowTime.getTime() - actDate.getTime();
+      // Within last 3 days
+      return diff >= 0 && diff <= 3 * 24 * 60 * 60 * 1000;
+    })
+    .sort((a, b) => {
+      const claimA = studentClaims.find(c => c.event_id === a.id);
+      const dateA = claimA ? new Date(claimA.updated_at || claimA.created_at) : new Date(a.start_at || a.created_at);
+      const claimB = studentClaims.find(c => c.event_id === b.id);
+      const dateB = claimB ? new Date(claimB.updated_at || claimB.created_at) : new Date(b.start_at || b.created_at);
+      return dateB - dateA;
+    })
+    .slice(0, 5)
 
   // Trend calculations
   const now = new Date()
@@ -396,14 +421,8 @@ export default function StudentDashboard() {
                 </div>
                 <ScrollArea className="flex-1 pr-3 mr-[-15px] dashboard-page__activity-scroll">
                   <ul className="dashboard-page__activity-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                    {[...studentClaims]
-                      .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))
-                      .filter((c, index, self) => self.findIndex(x => x.event_id === c.event_id) === index)
-                      .filter(c => {
-                        const claimDate = new Date(c.updated_at || c.created_at);
-                        return (new Date() - claimDate) <= 24 * 60 * 60 * 1000;
-                      })
-                      .map((c, i) => {
+                    {recentActivities.map((ev, i) => {
+                        const c = studentClaims.find(claim => claim.event_id === ev.id)
                         const imageMap = {
                           'hiến máu': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCa5hqxGqi0xefKNJWNuFNGScvF7fvvyqTIOZ8D1qoLwE4-Z2JtDqiXj4Y4q-uTlv2U13UoAQIBW6rEAVkzXOChWH_jVZLnIVUaxTgLldXppdkEvndQofXNuVa634y5_HMxSE1dNQOKxGJiOBmLC59aZ-5VqOAX_SYAMXAEtWTUfMq7tiqsIfNSDzW0y8CQaFTAkSE8IqBrfzFjfNgYgyo_ez7BAGZIShCFnjPLDLqXXJgz7soAXOonZmWpPn56V9_Il7tfSQHKVaw',
                           'dọn rác': 'https://lh3.googleusercontent.com/aida-public/AB6AXuC14SOlq3R0r-3nDYB6Ko1XoLKnyxNGVKOXJ2dA-_6ik43yNN5K2S1sfW7LsskwyM7tM7-4DY3U-fZMxoMb5TVd5PIPFe7wuMX87JW2uZlRFGH8I4591sojg0ia--U5JX_qf24qJU5peW3GFd4JzeF5WHKcCCtV4xbuwPc1T9oq0Cf0IileiEHzkZOjTiVxCfDmO5QyTmv8DibNeqzxFsItPJu7MTf0geKtk26NeyAo9ph1h6mOO2Cd0VjAWHupo0dG8PIe_fhnI7I',
@@ -414,33 +433,42 @@ export default function StudentDashboard() {
                           'nước': 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=150&auto=format&fit=crop&q=60'
                         }
                         const defaultImg = 'https://lh3.googleusercontent.com/aida-public/AB6AXuDtIhg0ZWFRXbL0h7Ube3PNjJGRZUluIeMrOkrS8c5_TNs-4VIrnRpbn5aRh_6vrT3C1rusVFoSkVOjL-QhfD7gTO-391AWkUkdPxx4jN63csv3uyUv0Notw0GmGi3j7JGIz7N-xAk5CUxeFnaOht3B-ab987F7-GPw64Z4k_fQAeWKRYP0CC-Xwz12teASa0qKElDVHEbNODdqNcHKysdNyCdFTTK2ieEKjHi0iEOq6xi4g634UwSu2eaoI3mlLoy3OzgyjYcK2w8'
-                        const ev = studentEvents.find(e => e.id === c.event_id)
 
                         let imgSrc = defaultImg
                         if (ev && ev.activity_description && ev.activity_description.startsWith('/uploads')) {
                           imgSrc = `/api${ev.activity_description}`
-                        } else if (c.activity_description && c.activity_description.startsWith('/uploads')) {
+                        } else if (c && c.activity_description && c.activity_description.startsWith('/uploads')) {
                           imgSrc = `/api${c.activity_description}`
                         } else {
-                          const searchStr = (((ev ? ev.title : '') || c.event_title || '') + ' ' + (c.activity_name || '')).toLowerCase()
+                          const searchStr = (((ev ? ev.title : '') || (c ? c.event_title : '') || '') + ' ' + (ev.activity_name || '')).toLowerCase()
                           const matchedKey = Object.keys(imageMap).find(k => searchStr.includes(k))
                           if (matchedKey) imgSrc = imageMap[matchedKey]
                         }
 
-                        const isPending = c.status === 'submitted'
-                        const isRejected = c.status === 'rejected'
+                        let statusClass = ''
+                        let statusStyle = {}
+                        let statusText = 'Chưa tham gia'
+                        
+                        if (c) {
+                          const isPending = c.status === 'submitted'
+                          const isRejected = c.status === 'rejected'
 
-                        let statusClass = 'dashboard-page__activity-status--approved'
-                        let statusText = `+${c.credit_amount} UGC`
-                        if (isPending) {
-                          statusClass = 'dashboard-page__activity-status--pending'
-                          statusText = 'Đang duyệt'
-                        } else if (isRejected) {
-                          statusClass = 'dashboard-page__activity-status--rejected'
-                          statusText = 'Từ chối'
+                          if (isPending) {
+                            statusClass = 'dashboard-page__activity-status--pending'
+                            statusText = 'Đang duyệt'
+                          } else if (isRejected) {
+                            statusClass = 'dashboard-page__activity-status--rejected'
+                            statusText = 'Từ chối'
+                          } else {
+                            statusClass = 'dashboard-page__activity-status--approved'
+                            statusText = `+${c.credit_amount || ev.credit_amount} UGC`
+                          }
+                        } else {
+                          statusStyle = { color: '#64748b', fontWeight: 600 }
                         }
 
-                        const titleToShow = ev ? ev.title : c.activity_name
+                        const titleToShow = ev.title || ev.activity_name
+                        const actDate = c ? new Date(c.updated_at || c.created_at) : new Date(ev.start_at || ev.created_at)
 
                         return (
                           <li key={i}>
@@ -451,17 +479,17 @@ export default function StudentDashboard() {
                               <div style={{ display: 'flex', flexDirection: 'column' }}>
                                 <span style={{ fontWeight: 600, color: '#333' }} className="line-clamp-1">{titleToShow}</span>
                                 <span style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
-                                  {new Date(c.updated_at || c.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {new Date(c.updated_at || c.created_at).toLocaleDateString('vi-VN')}
+                                  {actDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {actDate.toLocaleDateString('vi-VN')}
                                 </span>
                               </div>
                             </div>
-                            <div className={`dashboard-page__activity-status ${statusClass}`}>
+                            <div className={`dashboard-page__activity-status ${statusClass}`} style={statusStyle}>
                               {statusText}
                             </div>
                           </li>
                         )
                       })}
-                    {studentClaims.length === 0 && <p className="text-sm text-gray-500 text-center py-4 m-0">Chưa có hoạt động nào</p>}
+                    {recentActivities.length === 0 && <li className="text-sm text-gray-500 text-center py-4 m-0 flex-col flex items-center justify-center gap-2"><span className="material-symbols-outlined text-[24px] text-gray-300">history</span> Chưa có hoạt động nào trong 3 ngày qua</li>}
                   </ul>
                 </ScrollArea>
               </div>
@@ -489,7 +517,7 @@ export default function StudentDashboard() {
             </div>
             {/* Claims Table */}
             <div className="mt-5 mb-2 w-full max-w-full overflow-hidden relative">
-              <ClaimsDataTable claims={studentClaims} loading={loading} nav={nav} />
+              <ClaimsDataTable claims={studentClaims} events={studentEvents} loading={loading} nav={nav} />
             </div>
 
           </div>
@@ -515,6 +543,7 @@ export default function StudentDashboard() {
                       <span className="dashboard-page__task-progress">{task.progress}/{task.total}</span>
                     </li>
                   ))}
+                  {tasksList.length === 0 && <li className="text-sm text-gray-500 text-center py-4 m-0 flex-col flex items-center justify-center gap-2"><span className="material-symbols-outlined text-[24px] text-gray-300">event_available</span> Tuần này chưa có nhiệm vụ mới</li>}
                 </ul>
               </ScrollArea>
               <div className="dashboard-page__task-summary-footer">
@@ -522,7 +551,7 @@ export default function StudentDashboard() {
                   <div className="dashboard-page__task-summary-track">
                     <div className="dashboard-page__task-summary-fill" style={{ width: `${tasksProgressPct}%` }}></div>
                   </div>
-                  <span className="dashboard-page__task-summary-text">{tasksCompleted} / {tasksTotal} hoàn thành</span>
+                  <span className="dashboard-page__task-summary-text">{tasksTotal ? `${tasksCompleted} / ${tasksTotal} hoàn thành` : `Đã hoàn thành`}</span>
                 </div>
                 <button className="dashboard-page__task-summary-btn">
                   <i className="ph-fill ph-gift"></i>

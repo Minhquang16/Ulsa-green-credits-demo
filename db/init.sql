@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS events (
   location TEXT,
   qr_token TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('draft','published','ended')),
+  image_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

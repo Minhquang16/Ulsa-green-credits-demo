@@ -3,6 +3,17 @@ import { Navigate, Route, Routes, Link, useLocation, useNavigate } from 'react-r
 import { AuthProvider, useAuth } from './auth.jsx'
 import { ToastProvider, useToast } from './context/ToastContext.jsx'
 
+// Global Error Catcher for debugging White Screen
+window.addEventListener('error', (e) => {
+  const errDiv = document.createElement('div');
+  errDiv.style = "position:fixed;top:0;left:0;right:0;z-index:99999;background:#fef2f2;color:#991b1b;padding:20px;border-bottom:2px solid #ef4444;font-family:monospace;font-size:12px;white-space:pre-wrap;box-shadow:0 4px 6px rgba(0,0,0,0.1);";
+  errDiv.innerHTML = `<b>🚨 Ứng dụng bị sập (Crash):</b><br/>${e.message}<br/><br/><i>${e.filename}:${e.lineno}</i><br/><br/><button onclick="this.parentElement.remove()" style="padding:4px 12px;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;">Đóng</button>`;
+  document.body.appendChild(errDiv);
+});
+
+// Polyfill process for browser
+window.process = { env: { NODE_ENV: 'development' } }
+
 import LoginPage from './pages/auth/LoginPage.jsx'
 import RegisterPage from './pages/auth/RegisterPage.jsx'
 import AdminDashboard from './pages/admin/AdminDashboard.jsx'

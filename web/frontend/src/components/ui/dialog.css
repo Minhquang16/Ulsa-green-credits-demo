@@ -1,0 +1,151 @@
+/* OVERLAY */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background-color: rgba(0, 0, 0, 0.8);
+}
+.dialog-overlay[data-state="open"] {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+.dialog-overlay[data-state="closed"] {
+  animation: fadeOut 0.2s ease-in forwards;
+}
+
+/* CONTENT CONTAINER */
+/* Using :where() so these base styles don't override Tailwind utility classes */
+:where(.dialog-content) {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 50;
+  display: grid;
+  width: 100%;
+  max-width: 32rem; /* 512px */
+  transform: translate(-50%, -50%);
+  gap: 1rem;
+  border: 1px solid hsl(var(--border, 214.3 31.8% 91.4%));
+  background-color: hsl(var(--background, 0 0% 100%));
+  padding: 1.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  transition-duration: 200ms;
+}
+@media (min-width: 640px) {
+  :where(.dialog-content) {
+    border-radius: 0.5rem;
+  }
+}
+.dialog-content[data-state="open"] {
+  animation: dialogZoomIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.dialog-content[data-state="closed"] {
+  animation: dialogZoomOut 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* CLOSE BUTTON */
+.dialog-close {
+  position: absolute;
+  right: 1rem;
+  top: 1rem;
+  border-radius: 0.125rem;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+.dialog-close:hover {
+  opacity: 1;
+}
+.dialog-close:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--ring, 215 20.2% 65.1%));
+}
+.dialog-close:disabled {
+  pointer-events: none;
+}
+.dialog-close[data-state="open"] {
+  background-color: hsl(var(--accent, 210 40% 96.1%));
+  color: hsl(var(--muted-foreground, 215.4 16.3% 46.9%));
+}
+
+/* HEADER */
+:where(.dialog-header) {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+:where(.dialog-header) > * + * {
+  margin-top: 0.375rem;
+}
+@media (min-width: 640px) {
+  :where(.dialog-header) {
+    text-align: left;
+  }
+}
+
+/* FOOTER */
+:where(.dialog-footer) {
+  display: flex;
+  flex-direction: column-reverse;
+}
+@media (min-width: 640px) {
+  :where(.dialog-footer) {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+  :where(.dialog-footer) > * + * {
+    margin-left: 0.5rem;
+  }
+}
+
+/* TYPOGRAPHY */
+:where(.dialog-title) {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  color: #0f172a;
+}
+:where(.dialog-description) {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground, 215.4 16.3% 46.9%));
+}
+
+/* ANIMATIONS KEYFRAMES */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes dialogZoomIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes dialogZoomOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.95);
+  }
+}

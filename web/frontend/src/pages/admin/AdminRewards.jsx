@@ -302,7 +302,7 @@ export default function AdminRewards() {
           <article key={r.id} className="group bg-white rounded-[24px] overflow-hidden border border-slate-100 shadow-[0_4px_12px_rgb(0,0,0,0.03)] hover:shadow-[0_15px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1.5 transition-all duration-500 flex flex-col w-[258px] h-[365px] mx-auto">
             {/* Media Area - 2/3 Height (243px) */}
             <div className="relative h-[243px] overflow-hidden shrink-0">
-              <img alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-[1500ms]" src={r.image_url || DEFAULT_IMG} />
+              <img alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" src={r.image_url || DEFAULT_IMG} />
               <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-60" />
 
               <div className="absolute top-3 left-3 flex flex-col gap-1.5">

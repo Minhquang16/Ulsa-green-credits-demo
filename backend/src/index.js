@@ -16,7 +16,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 const MNEMONIC = process.env.MNEMONIC || "test test test test test test test test test test test junk";
 const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:8545";
 const CONTRACTS_PATH = process.env.CONTRACTS_PATH || (
-  fs.existsSync(path.join(__dirname, "../shared/contracts.json")) 
+  fs.existsSync(path.join(__dirname, "../shared/contracts.json"))
     ? path.join(__dirname, "../shared/contracts.json")
     : path.join(__dirname, "../../shared/contracts.json")
 );
@@ -128,7 +128,7 @@ async function initBlockchain() {
     if (fs.existsSync(treasuryAbiPath)) {
       treasuryAbi = JSON.parse(fs.readFileSync(treasuryAbiPath, "utf8"));
       treasuryContract = new ethers.Contract(treasuryAddress, treasuryAbi, provider);
-      
+
       // Blockchain Watcher
       treasuryContract.on("ProposalExecuted", async (idEvent) => {
         const id = Number(idEvent);
@@ -255,6 +255,9 @@ async function seedIfNeeded() {
   // Provenance: add column to claims table
   await pool.query("ALTER TABLE claims ADD COLUMN IF NOT EXISTS provenance_tx_hash TEXT;");
 
+  // Events: add image_url
+  await pool.query("ALTER TABLE events ADD COLUMN IF NOT EXISTS image_url TEXT;");
+
   // Make sure users table has status column & other registration fields
   await pool.query("ALTER TABLE users ALTER COLUMN wallet_index DROP NOT NULL;");
   await pool.query("ALTER TABLE users ALTER COLUMN wallet_address DROP NOT NULL;");
@@ -269,7 +272,7 @@ async function seedIfNeeded() {
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS student_card_image TEXT;");
-  
+
   // Make student_id unique but handle potential error if duplicates exist (should not exist on fresh/reset systems, but if they do, we log and ignore)
   try {
     await pool.query("ALTER TABLE users ADD CONSTRAINT users_student_id_key UNIQUE (student_id);");
@@ -282,8 +285,8 @@ async function seedIfNeeded() {
   if (uCount.rows[0].n === 0) {
     console.log("Seeding users...");
     const users = [
-      { username: "admin",    full_name: "Admin ULSA (Hội đồng 1)", role: "admin", wallet_index: 0, password: "admin123" },
-      { username: "admin2",   full_name: "Admin ULSA (Hội đồng 2)", role: "admin", wallet_index: 1, password: "admin456" },
+      { username: "admin", full_name: "Admin ULSA (Hội đồng 1)", role: "admin", wallet_index: 0, password: "admin123" },
+      { username: "admin2", full_name: "Admin ULSA (Hội đồng 2)", role: "admin", wallet_index: 1, password: "admin456" },
       { username: "verifier", full_name: "Verifier (Đoàn/Hội)", role: "verifier", wallet_index: 2, password: "verifier123" },
       { username: "student1", full_name: "Sinh viên 1", role: "student", wallet_index: 3, password: "student123" },
       { username: "student2", full_name: "Sinh viên 2", role: "student", wallet_index: 4, password: "student123" }
@@ -390,7 +393,7 @@ async function seedIfNeeded() {
     const supply = Number(await ugcContract.totalSupply());
     if (supply === 0) {
       console.log("🔄 Detecting fresh blockchain node (totalSupply = 0). Restoring balances from Database...");
-      
+
       const balancesRes = await pool.query(`
         SELECT 
           u.id, 
@@ -559,7 +562,7 @@ Nếu ảnh không rõ hoặc không phải thẻ sinh viên: is_student_card=fa
     // Compare with form data
     const { student_id: providedId, full_name: providedName } = req.body || {};
 
-    const normId  = (s) => (s || "").replace(/\s/g, "");
+    const normId = (s) => (s || "").replace(/\s/g, "");
     const normName = (s) => (s || "").normalize("NFC").toUpperCase().replace(/\s+/g, " ").trim();
 
     const idMatch = !providedId || normId(extracted.student_id) === normId(providedId);
@@ -588,7 +591,7 @@ Nếu ảnh không rõ hoặc không phải thẻ sinh viên: is_student_card=fa
 
 app.post("/auth/register", upload.single("student_card"), async (req, res) => {
   const { username, password, full_name, student_id } = req.body || {};
-  
+
   if (!username || !password || !full_name || !student_id) {
     return res.status(400).json({ error: "Vui lòng nhập đầy đủ các trường thông tin bắt buộc." });
   }
@@ -661,7 +664,7 @@ async function checkAndUnlockAchievements(studentId) {
     // 1. Lấy địa chỉ ví của sinh viên từ Database
     const user = (await pool.query("SELECT wallet_address FROM users WHERE id=$1", [studentId])).rows[0];
     if (!user) return;
-    
+
     // 2. Lấy số dư UGC của sinh viên từ Smart Contract trên Blockchain
     let ugcBalance = 0;
     if (user.wallet_address) {
@@ -671,7 +674,7 @@ async function checkAndUnlockAchievements(studentId) {
         console.error("Error fetching balance:", e);
       }
     }
-    
+
     // 3. Lấy tất cả các yêu cầu nhận tín chỉ (claims) đã được duyệt (status='approved') của sinh viên
     const claimsRes = await pool.query(`
       SELECT c.*, a.name AS activity_name, e.title AS event_title 
@@ -682,15 +685,15 @@ async function checkAndUnlockAchievements(studentId) {
     `, [studentId]);
     const claims = claimsRes.rows;
     const claimsCount = claims.length; // Tổng số hoạt động đã hoàn thành
-    
+
     // Kiểm tra xem sinh viên đã có giao dịch nào ghi lên chuỗi (on-chain) chưa
     const hasOnChain = claims.some(c => c.approved_tx_hash || c.provenance_tx_hash);
- 
+
     // Khởi tạo bộ đếm các sự kiện đặc biệt
     let bloodDonationCount = 0; // Đếm số lần hiến máu
     let volunteerCount = 0;     // Đếm số lần tham gia hoạt động tình nguyện, dọn rác, trồng cây...
     let meetingCount = 0;       // Đếm số lần tham gia họp/sinh hoạt đoàn hội...
- 
+
     // Duyệt qua từng hoạt động đã duyệt để đếm loại hoạt động dựa trên từ khóa tiêu đề/tên hoạt động
     for (let c of claims) {
       const searchStr = ((c.event_title || '') + ' ' + (c.activity_name || '')).toLowerCase();
@@ -698,12 +701,12 @@ async function checkAndUnlockAchievements(studentId) {
       if (searchStr.includes('tình nguyện') || searchStr.includes('dọn rác') || searchStr.includes('trồng cây') || searchStr.includes('mùa hè xanh')) volunteerCount++;
       if (searchStr.includes('họp') || searchStr.includes('sinh hoạt')) meetingCount++;
     }
- 
+
     // 4. Lấy danh sách toàn bộ các thành tích (achievements) được cấu hình trong Database
     const achievements = (await pool.query("SELECT * FROM achievements")).rows;
     for (const ach of achievements) {
       let isEligible = false; // Biến kiểm tra xem sinh viên có đủ điều kiện đạt thành tích này không
-      
+
       // So sánh các chỉ số đạt được của sinh viên với điều kiện (target_value) của thành tích
       if (ach.target_type === 'claims_count' && claimsCount >= ach.target_value) isEligible = true;
       if (ach.target_type === 'total_ugc' && ugcBalance >= ach.target_value) isEligible = true;
@@ -711,7 +714,7 @@ async function checkAndUnlockAchievements(studentId) {
       if (ach.target_type === 'blood_donation' && bloodDonationCount >= ach.target_value) isEligible = true;
       if (ach.target_type === 'volunteer' && volunteerCount >= ach.target_value) isEligible = true;
       if (ach.target_type === 'meeting' && meetingCount >= ach.target_value) isEligible = true;
- 
+
       // 5. Nếu đủ điều kiện, ghi nhận thành tích đó cho sinh viên (chèn vào bảng user_achievements)
       if (isEligible) {
         await pool.query(
@@ -732,7 +735,7 @@ app.get("/me/achievements", authRequired, async (req, res) => {
   try {
     // Chạy logic tự động kiểm tra & cập nhật mở khóa thành tích trước
     await checkAndUnlockAchievements(req.user.id);
-    
+
     // Truy vấn tất cả thành tích kèm theo cờ `done` (true nếu sinh viên đã đạt được, false nếu chưa)
     const rs = await pool.query(`
       SELECT a.*, (ua.unlocked_at IS NOT NULL) as done
@@ -775,8 +778,8 @@ app.get("/me/training-points", authRequired, async (req, res) => {
     const approvedClaims = claims.filter(c => c.status === 'approved');
     const totalApproved = approvedClaims.length;
     const approvalRatio = totalClaims > 0 ? (totalApproved / totalClaims) : 0;
-    
-    const frequency = totalApproved; 
+
+    const frequency = totalApproved;
     const uniqueTypes = new Set(approvedClaims.map(c => c.activity_type_id));
     const diversityCount = uniqueTypes.size;
 
@@ -906,18 +909,54 @@ app.get("/config", (req, res) => {
 
 // events
 app.get("/events", authRequired, async (req, res) => {
-  const rs = await pool.query(
-    `SELECT e.*, a.name AS activity_name, a.credit_amount, a.description AS activity_description
-     FROM events e
-     JOIN activity_types a ON a.id = e.activity_type_id
-     ORDER BY e.created_at DESC`
-  );
-  res.json(rs.rows);
+  const { status, search } = req.query || {};
+  let params = [];
+  let whereClauses = [];
+
+  if (search) {
+    params.push(`%${search}%`);
+    whereClauses.push(`e.title ILIKE $${params.length}`);
+  }
+
+  if (status && status !== 'all' && status !== 'latest' && status !== 'near') {
+    if (status === 'upcoming') {
+      whereClauses.push(`NOW() < e.start_at`);
+    } else if (status === 'completed') {
+      whereClauses.push(`e.end_at IS NOT NULL AND NOW() > e.end_at`);
+    } else if (status === 'ongoing') {
+      whereClauses.push(`(e.start_at IS NULL OR NOW() >= e.start_at) AND (e.end_at IS NULL OR NOW() <= e.end_at)`);
+    }
+  }
+
+  let orderBy = "e.created_at DESC";
+  if (status === 'latest') {
+    orderBy = "COALESCE(e.start_at, e.created_at) DESC";
+  }
+
+  const whereStr = whereClauses.length > 0 ? "WHERE " + whereClauses.join(" AND ") : "";
+
+  const query = `
+    SELECT e.*, a.name AS activity_name, a.credit_amount, a.description AS activity_description
+    FROM events e
+    JOIN activity_types a ON a.id = e.activity_type_id
+    ${whereStr}
+    ORDER BY ${orderBy}
+  `;
+
+  const rs = await pool.query(query, params);
+  res.json({
+    server_time: new Date().toISOString(),
+    events: rs.rows
+  });
 });
 
-app.post("/events", authRequired, requireRole("admin","verifier"), async (req, res) => {
+app.post("/events", authRequired, requireRole("admin", "verifier"), upload.single("image"), async (req, res) => {
   try {
     let { activity_type_id, activity_name, credit_amount, title, description, start_at, end_at, location } = req.body || {};
+    let image_url = null;
+    if (req.file) {
+      image_url = `/uploads/${req.file.filename}`;
+    }
 
     if (!activity_type_id) {
       if (!activity_name || credit_amount === undefined) {
@@ -935,10 +974,10 @@ app.post("/events", authRequired, requireRole("admin","verifier"), async (req, r
 
     const qr_token = crypto.randomBytes(16).toString("hex");
     const rs = await pool.query(
-      `INSERT INTO events(activity_type_id, title, description, organizer_id, start_at, end_at, location, qr_token, status)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `INSERT INTO events(activity_type_id, title, description, organizer_id, start_at, end_at, location, qr_token, status, image_url)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING *`,
-      [activity_type_id, title, description || "", req.user.id, start_at || null, end_at || null, location || "", qr_token, "published"]
+      [activity_type_id, title, description || "", req.user.id, start_at || null, end_at || null, location || "", qr_token, "published", image_url]
     );
     res.json(rs.rows[0]);
   } catch (e) {
@@ -947,28 +986,32 @@ app.post("/events", authRequired, requireRole("admin","verifier"), async (req, r
   }
 });
 
-app.put("/events/:id", authRequired, requireRole("admin","verifier"), async (req, res) => {
+app.put("/events/:id", authRequired, requireRole("admin", "verifier"), upload.single("image"), async (req, res) => {
   try {
     let { activity_name, credit_amount, title, description, start_at, end_at, location } = req.body || {};
     if (!title) return res.status(400).json({ error: "title required" });
 
-    const evRs = await pool.query("SELECT activity_type_id FROM events WHERE id=$1", [req.params.id]);
+    const evRs = await pool.query("SELECT activity_type_id, image_url FROM events WHERE id=$1", [req.params.id]);
     if (evRs.rows.length === 0) return res.status(404).json({ error: "Event not found" });
 
     let activity_type_id = evRs.rows[0].activity_type_id;
+    let image_url = evRs.rows[0].image_url;
+    if (req.file) {
+      image_url = `/uploads/${req.file.filename}`;
+    }
 
     if (activity_name && credit_amount !== undefined) {
-       const rsAct = await pool.query(
+      const rsAct = await pool.query(
         "INSERT INTO activity_types(name, description, credit_amount, evidence_required, created_by) VALUES($1,$2,$3,$4,$5) RETURNING id",
         [activity_name, "", Number(credit_amount), true, req.user.id]
-       );
-       activity_type_id = rsAct.rows[0].id;
+      );
+      activity_type_id = rsAct.rows[0].id;
     }
 
     const rs = await pool.query(
-      `UPDATE events SET activity_type_id=$1, title=$2, description=$3, start_at=$4, end_at=$5, location=$6
-       WHERE id=$7 RETURNING *`,
-      [activity_type_id, title, description || "", start_at || null, end_at || null, location || "", req.params.id]
+      `UPDATE events SET activity_type_id=$1, title=$2, description=$3, start_at=$4, end_at=$5, location=$6, image_url=$7
+       WHERE id=$8 RETURNING *`,
+      [activity_type_id, title, description || "", start_at || null, end_at || null, location || "", image_url, req.params.id]
     );
     res.json(rs.rows[0]);
   } catch (e) {
@@ -977,7 +1020,7 @@ app.put("/events/:id", authRequired, requireRole("admin","verifier"), async (req
   }
 });
 
-app.delete("/events/:id", authRequired, requireRole("admin","verifier"), async (req, res) => {
+app.delete("/events/:id", authRequired, requireRole("admin", "verifier"), async (req, res) => {
   try {
     console.log("Attempting to delete event:", req.params.id);
     const result = await pool.query("DELETE FROM events WHERE id=$1", [req.params.id]);
@@ -1121,7 +1164,7 @@ app.get("/claims", authRequired, async (req, res) => {
   res.json(rs.rows);
 });
 
-app.post("/claims/:id/approve", authRequired, requireRole("admin","verifier"), async (req, res) => {
+app.post("/claims/:id/approve", authRequired, requireRole("admin", "verifier"), async (req, res) => {
   const claimId = req.params.id;
 
   // load claim + student wallet + credit amount
@@ -1166,7 +1209,7 @@ app.post("/claims/:id/approve", authRequired, requireRole("admin","verifier"), a
   if (provenanceContract) {
     try {
       const activityHash = ethers.id(claim.activity_name || "");
-      const eventHash    = ethers.id(claim.event_title || "");
+      const eventHash = ethers.id(claim.event_title || "");
       // Reuse the same signer instance and explicitly pass the next nonce
       const provContractWithSigner = provenanceContract.connect(signer);
       const provTx = await provContractWithSigner.record(
@@ -1205,7 +1248,7 @@ app.post("/claims/:id/approve", authRequired, requireRole("admin","verifier"), a
   res.json(update.rows[0]);
 });
 
-app.post("/claims/:id/reject", authRequired, requireRole("admin","verifier"), async (req, res) => {
+app.post("/claims/:id/reject", authRequired, requireRole("admin", "verifier"), async (req, res) => {
   const claimId = req.params.id;
   const claimRs = await pool.query("SELECT * FROM claims WHERE id=$1", [claimId]);
   const claim = claimRs.rows[0];
@@ -1259,10 +1302,10 @@ app.post("/admin/users", authRequired, requireRole("admin"), async (req, res) =>
     const rsMax = await pool.query("SELECT MAX(wallet_index) as m FROM users");
     const maxIdx = rsMax.rows[0].m !== null ? rsMax.rows[0].m : -1;
     const nextIdx = maxIdx + 1;
-    
+
     const wallet = deriveWallet(nextIdx);
     const password_hash = bcrypt.hashSync(password, 10);
-    
+
     const rs = await pool.query(
       "INSERT INTO users(username, password_hash, full_name, role, wallet_index, wallet_address) VALUES($1,$2,$3,$4,$5,$6) RETURNING id, username, full_name, role, wallet_address, status, created_at",
       [username, password_hash, full_name, role, nextIdx, wallet.address]
@@ -1483,37 +1526,37 @@ app.get("/wallet/history", authRequired, async (req, res) => {
     const issued = await ugcContract.queryFilter(ugcContract.filters.CreditsIssued(address), 0, "latest");
     const burned = await ugcContract.queryFilter(ugcContract.filters.CreditsBurned(address), 0, "latest");
 
-  const normalize = (ev, type) => {
-    const args = ev.args || [];
-    if (type === "ISSUE") {
+    const normalize = (ev, type) => {
+      const args = ev.args || [];
+      if (type === "ISSUE") {
+        return {
+          type,
+          blockNumber: ev.blockNumber,
+          txHash: ev.transactionHash,
+          to: args[0],
+          amount: Number(args[1]),
+          refId: args[2],
+          evidenceHash: args[3]
+        };
+      }
       return {
         type,
         blockNumber: ev.blockNumber,
         txHash: ev.transactionHash,
-        to: args[0],
+        from: args[0],
         amount: Number(args[1]),
-        refId: args[2],
-        evidenceHash: args[3]
+        burnType: Number(args[2]),
+        refId: args[3],
+        reasonHash: args[4]
       };
-    }
-    return {
-      type,
-      blockNumber: ev.blockNumber,
-      txHash: ev.transactionHash,
-      from: args[0],
-      amount: Number(args[1]),
-      burnType: Number(args[2]),
-      refId: args[3],
-      reasonHash: args[4]
     };
-  };
 
-  const items = [
-    ...issued.map(ev => normalize(ev, "ISSUE")),
-    ...burned.map(ev => normalize(ev, "BURN"))
-  ];
-  items.sort((a, b) => b.blockNumber - a.blockNumber);
-  res.json(items);
+    const items = [
+      ...issued.map(ev => normalize(ev, "ISSUE")),
+      ...burned.map(ev => normalize(ev, "BURN"))
+    ];
+    items.sort((a, b) => b.blockNumber - a.blockNumber);
+    res.json(items);
   } catch (e) {
     res.json([]);
   }
@@ -1792,13 +1835,13 @@ app.get("/provenance/claim/:claimId", authRequired, async (req, res) => {
         if (hasRecord) {
           const rec = await provenanceContract.getRecord(refId);
           onChainRecord = {
-            claimId:      rec.claimId,
+            claimId: rec.claimId,
             activityHash: rec.activityHash,
-            eventHash:    rec.eventHash,
+            eventHash: rec.eventHash,
             evidenceHash: rec.evidenceHash,
-            student:      rec.student,
-            approver:     rec.approver,
-            timestamp:    Number(rec.timestamp),
+            student: rec.student,
+            approver: rec.approver,
+            timestamp: Number(rec.timestamp),
             creditAmount: Number(rec.creditAmount)
           };
         }
@@ -1824,7 +1867,7 @@ app.get("/provenance/claim/:claimId", authRequired, async (req, res) => {
           const block = await provider.getBlock(receipt.blockNumber);
           issueTxBlock = {
             blockNumber: receipt.blockNumber,
-            timestamp:   block ? Number(block.timestamp) : null
+            timestamp: block ? Number(block.timestamp) : null
           };
         }
       } catch (e) {
@@ -1889,10 +1932,10 @@ app.get("/provenance/verify/:txHash", authRequired, async (req, res) => {
       found: issueRs.rows.length > 0,
       claim: issueRs.rows[0] || null,
       receipt: receipt ? {
-        blockNumber:     receipt.blockNumber,
-        status:          receipt.status, // 1 = success
+        blockNumber: receipt.blockNumber,
+        status: receipt.status, // 1 = success
         contractAddress: receipt.to,
-        gasUsed:         receipt.gasUsed?.toString()
+        gasUsed: receipt.gasUsed?.toString()
       } : null,
       blockTimestamp: block ? Number(block.timestamp) : null,
       contracts: { ugcAddress, provenanceAddress }

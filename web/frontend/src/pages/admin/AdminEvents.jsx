@@ -60,8 +60,8 @@ export default function AdminEvents() {
     setError('')
     try {
       const [ev, at] = await Promise.all([api('/events'), api('/activity-types')])
-      setEvents(ev)
-      setActivityTypes(at)
+      setEvents(ev && ev.events ? ev.events : (Array.isArray(ev) ? ev : []))
+      setActivityTypes(Array.isArray(at) ? at : [])
     } catch (e) {
       setError(e.message)
       showToast('❌ Lỗi tải dữ liệu')
@@ -127,9 +127,9 @@ export default function AdminEvents() {
         showToast('✅ Đã tạo loại nhiệm vụ mới!')
       }
       setAtEditId(null)
-      const at = await api('/activity-types')
-      setActivityTypes(at)
+      await loadAll() // Reload all events and activity types to reflect the new image across all event cards
       if (!atEditId) {
+        const at = await api('/activity-types')
         const newAT = at.find(a => a.name === atForm.name)
         if (newAT) setForm(f => ({ ...f, activity_type_id: String(newAT.id) }))
       }
@@ -178,7 +178,7 @@ export default function AdminEvents() {
   }
 
   const filteredEvents = useMemo(() => {
-    let result = [...events]
+    let result = Array.isArray(events) ? [...events] : []
     if (statusFilter !== 'all' && statusFilter !== 'latest' && statusFilter !== 'near') {
       result = result.filter(ev => getEventStatus(ev.start_at, ev.end_at) === statusFilter)
     }
