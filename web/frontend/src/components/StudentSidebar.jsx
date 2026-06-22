@@ -27,7 +27,7 @@ export default function StudentSidebar({ isCollapsed, setIsCollapsed }) {
   }, [isCollapsed])
 
   const navItems = [
-    { path: '/student/dashboard', label: 'Tổng quan', icon: 'dashboard' },
+    { path: '/student/dashboard', label: 'Trang chủ', icon: 'dashboard' },
     { path: '/student/events', label: 'Hoạt động', icon: 'event_note' },
     { path: '/student/claims', label: 'Ghi nhận', icon: 'verified' },
     { path: '/training-points', label: 'Điểm rèn luyện', icon: 'school' },

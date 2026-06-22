@@ -29,6 +29,15 @@ export function timeAgo(d) {
 // ── Avatar Renderer ────────────────────────────────────────────────────────────
 
 export function renderAvatar(u, sizeClass = 'w-10 h-10') {
+  if (u?.avatar_url) {
+    const src = u.avatar_url.startsWith('http') ? u.avatar_url : u.avatar_url;
+    return (
+      <div className={`${sizeClass} rounded-full overflow-hidden flex-shrink-0 border border-gray-200 shadow-sm`}>
+        <img src={src} alt="avatar" className="w-full h-full object-cover" />
+      </div>
+    )
+  }
+
   // Preset photo avatars for mock students to match mockup
   if (u?.username === 'minhanh') {
     return (
@@ -38,13 +47,13 @@ export function renderAvatar(u, sizeClass = 'w-10 h-10') {
     )
   }
 
-  let bgClass = 'bg-emerald-600'
+  let bgColor = '#2a3d34'
   let label = '??'
   if (u?.role === 'admin') {
-    bgClass = 'bg-rose-600'
+    bgColor = '#e11d48' // rose-600
     label = 'AD'
   } else if (u?.role === 'verifier') {
-    bgClass = 'bg-indigo-600'
+    bgColor = '#4f46e5' // indigo-600
     label = 'VF'
   } else if (u?.full_name) {
     const cleanName = u.full_name.replace(/\s*\(Bạn\)\s*$/gi, '').trim()
@@ -52,7 +61,7 @@ export function renderAvatar(u, sizeClass = 'w-10 h-10') {
   }
 
   return (
-    <div className={`${sizeClass} rounded-full ${bgClass} text-white font-semibold flex items-center justify-center flex-shrink-0 select-none shadow-sm text-xs`}>
+    <div className={`${sizeClass} rounded-full text-white font-semibold flex items-center justify-center flex-shrink-0 select-none shadow-sm text-xs`} style={{ backgroundColor: bgColor }}>
       {label}
     </div>
   )

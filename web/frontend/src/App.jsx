@@ -27,6 +27,15 @@ import './styles/components.css'
 import StudentSidebar from './components/StudentSidebar.jsx'
 import { InputGroup, InputGroupAddon, InputGroupInput } from './components/ui/input-group.jsx'
 import { Search } from 'lucide-react'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
+import { Separator } from "@/components/ui/separator"
 function Layout({ children }) {
   const { user, logout, api } = useAuth()
   const { showToast } = useToast()
@@ -131,64 +140,64 @@ function Layout({ children }) {
           {/* Phantom spacer for admin sidebar */}
           <div className="hidden lg:block flex-shrink-0 w-72" />
           <aside id="adminSidebar" className={`fixed left-0 top-0 h-screen w-72 bg-white border-r border-outline-variant/20 z-[60] pt-2 pb-8 px-6 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-transform duration-300 ${mobileAdminMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-          <div className="flex justify-center items-center pb-4 mb-2 border-b border-gray-200 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => { nav('/'); setMobileAdminMenuOpen(false); }}>
-            <img src={new URL('./logo_web.png', import.meta.url).href} alt="UGC Logo" className="w-auto object-contain" style={{ maxHeight: '20px' }} />
-          </div>
+            <div className="flex justify-center items-center pb-4 mb-2 border-b border-gray-200 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => { nav('/'); setMobileAdminMenuOpen(false); }}>
+              <img src={new URL('./logo_web.png', import.meta.url).href} alt="UGC Logo" className="w-auto object-contain" style={{ maxHeight: '20px' }} />
+            </div>
 
-          <nav className="flex-grow space-y-2">
-            <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/dashboard' ? 'active' : '')} to="/admin/dashboard" onClick={() => setMobileAdminMenuOpen(false)}>
-              <span className="material-symbols-outlined">dashboard</span> <span>Dashboard</span>
-            </Link>
-            <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/events' ? 'active' : '')} to="/admin/events" onClick={() => setMobileAdminMenuOpen(false)}>
-              <span className="material-symbols-outlined">event_note</span> <span>Quản lý Hoạt động</span>
-            </Link>
-            <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/claims' ? 'active' : '')} to="/admin/claims" onClick={() => setMobileAdminMenuOpen(false)}>
-              <span className="material-symbols-outlined">verified</span> <span>Phê duyệt Claims</span>
-            </Link>
-            <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/rewards' ? 'active' : '')} to="/admin/rewards" onClick={() => setMobileAdminMenuOpen(false)}>
-              <span className="material-symbols-outlined">redeem</span> <span>Ưu đãi &amp; Quà tặng</span>
-            </Link>
-            {isAdmin && (
-              <div className="pt-2 mt-4 border-t border-gray-200">
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 mt-2 px-3">Quản trị hệ thống</p>
-                <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/users' ? 'active' : '')} to="/admin/users" onClick={() => setMobileAdminMenuOpen(false)}>
-                  <span className="material-symbols-outlined">manage_accounts</span> <span>Quản trị Users &amp; Stats</span>
-                </Link>
-                <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/treasury' ? 'active' : '')} to="/admin/treasury" onClick={() => setMobileAdminMenuOpen(false)}>
-                  <span className="material-symbols-outlined">account_balance</span> <span>Quản lý Kho quỹ</span>
-                </Link>
-              </div>
-            )}
-            <div className="pt-2 mt-4 border-t border-gray-200">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 mt-2 px-3">Blockchain</p>
-              <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/provenance' ? 'active' : '')} to="/admin/provenance" onClick={() => setMobileAdminMenuOpen(false)}>
-                <span className="material-symbols-outlined">policy</span> <span>Nguồn gốc tín chỉ</span>
+            <nav className="flex-grow space-y-2">
+              <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/dashboard' ? 'active' : '')} to="/admin/dashboard" onClick={() => setMobileAdminMenuOpen(false)}>
+                <span className="material-symbols-outlined">dashboard</span> <span>Dashboard</span>
               </Link>
-            </div>
-          </nav>
-
-          {/* Admin/Verifier profile info at bottom of sidebar */}
-          <div className="pt-4 mt-auto border-t border-gray-200">
-            <div className="flex items-center gap-3 mb-3 px-3">
-              <Avatar className="w-9 h-9 border border-gray-200">
-                <AvatarFallback className="bg-gray-800 text-white text-[11px] font-bold">
-                  {user.full_name?.split(' ').pop()?.slice(0, 2).toUpperCase() || 'AD'}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[13px] font-bold text-gray-800 truncate">{user.full_name || 'Admin'}</span>
-                <span className="text-[11px] text-gray-500 truncate">{user.email || 'admin@ulsa.edu.vn'}</span>
+              <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/events' ? 'active' : '')} to="/admin/events" onClick={() => setMobileAdminMenuOpen(false)}>
+                <span className="material-symbols-outlined">event_note</span> <span>Quản lý Hoạt động</span>
+              </Link>
+              <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/claims' ? 'active' : '')} to="/admin/claims" onClick={() => setMobileAdminMenuOpen(false)}>
+                <span className="material-symbols-outlined">verified</span> <span>Phê duyệt Claims</span>
+              </Link>
+              <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/rewards' ? 'active' : '')} to="/admin/rewards" onClick={() => setMobileAdminMenuOpen(false)}>
+                <span className="material-symbols-outlined">redeem</span> <span>Ưu đãi &amp; Quà tặng</span>
+              </Link>
+              {isAdmin && (
+                <div className="pt-2 mt-4 border-t border-gray-200">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 mt-2 px-3">Quản trị hệ thống</p>
+                  <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/users' ? 'active' : '')} to="/admin/users" onClick={() => setMobileAdminMenuOpen(false)}>
+                    <span className="material-symbols-outlined">manage_accounts</span> <span>Quản trị Users &amp; Stats</span>
+                  </Link>
+                  <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/treasury' ? 'active' : '')} to="/admin/treasury" onClick={() => setMobileAdminMenuOpen(false)}>
+                    <span className="material-symbols-outlined">account_balance</span> <span>Quản lý Kho quỹ</span>
+                  </Link>
+                </div>
+              )}
+              <div className="pt-2 mt-4 border-t border-gray-200">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 mt-2 px-3">Blockchain</p>
+                <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/provenance' ? 'active' : '')} to="/admin/provenance" onClick={() => setMobileAdminMenuOpen(false)}>
+                  <span className="material-symbols-outlined">policy</span> <span>Nguồn gốc tín chỉ</span>
+                </Link>
               </div>
+            </nav>
+
+            {/* Admin/Verifier profile info at bottom of sidebar */}
+            <div className="pt-4 mt-auto border-t border-gray-200">
+              <div className="flex items-center gap-3 mb-3 px-3">
+                <Avatar className="w-9 h-9 border border-gray-200">
+                  <AvatarFallback className="bg-gray-800 text-white text-[11px] font-bold">
+                    {user.full_name?.split(' ').pop()?.slice(0, 2).toUpperCase() || 'AD'}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[13px] font-bold text-gray-800 truncate">{user.full_name || 'Admin'}</span>
+                  <span className="text-[11px] text-gray-500 truncate">{user.email || 'admin@ulsa.edu.vn'}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => { setMobileAdminMenuOpen(false); logout(); }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-red-50 text-xs text-red-600 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[18px]">logout</span>
+                <span className="font-bold">Đăng xuất</span>
+              </button>
             </div>
-            <button
-              onClick={() => { setMobileAdminMenuOpen(false); logout(); }}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-red-50 text-xs text-red-600 transition-colors"
-            >
-              <span className="material-symbols-outlined text-[18px]">logout</span>
-              <span className="font-bold">Đăng xuất</span>
-            </button>
-          </div>
-        </aside>
+          </aside>
         </>
       )}
 
@@ -220,15 +229,25 @@ function Layout({ children }) {
 
         {/* Student Top Header Area (Search, Notifications, Profile) */}
         {user.role === 'student' && (
-          <header className="sticky top-0 z-40 bg-white border-b border-gray-100 h-20 px-8 flex items-center justify-between">
-            {/* Left Spacer / Mobile Toggle */}
-            <div className="flex items-center">
-              <button
-                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className="lg:hidden w-10 h-10 rounded-full flex items-center justify-center text-gray-700 bg-gray-100 hover:bg-gray-200"
-              >
-                <span className="material-symbols-outlined">menu</span>
-              </button>
+          <header className={`sticky top-0 z-40 bg-white border-b border-gray-100 h-20 pr-8 transition-all duration-300 flex items-center justify-between ${isSidebarCollapsed ? 'pl-[52px]' : 'pl-3'}`}>
+            {/* Left: Breadcrumb */}
+            <div className="flex items-center gap-2">
+              <Breadcrumb className="hidden lg:block">
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>
+                      {{
+                        '/student/dashboard': 'Trang chủ',
+                        '/student/events': 'Hoạt động',
+                        '/student/claims': 'Ghi nhận',
+                        '/student/rewards': 'Ưu đãi',
+                        '/profile': 'Hồ sơ',
+                        '/training-points': 'Điểm rèn luyện'
+                      }[loc.pathname] || 'Trang chủ'}
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
             </div>
 
             {/* Right: Search, Notifications & Profile */}
@@ -310,8 +329,8 @@ function Layout({ children }) {
                   onClick={() => { setShowProfile(!showProfile); setShowNotif(false); }}
                 >
                   <Avatar className="w-10 h-10 shadow-sm border border-emerald-100">
-                    <AvatarImage src={user.student_card_image ? `/api${user.student_card_image}` : ''} alt={user.full_name || 'SV'} className="object-cover" />
-                    <AvatarFallback className="bg-slate-800 text-white font-black text-[12px]">
+                    <AvatarImage src={user.avatar_url ? (user.avatar_url.startsWith('http') ? user.avatar_url : user.avatar_url) : ''} alt={user.full_name || 'SV'} className="object-cover" />
+                    <AvatarFallback className="text-white font-black text-[12px]" style={{ backgroundColor: '#2a3d34' }}>
                       {user.full_name?.split(' ').pop()?.slice(0, 2).toUpperCase() || 'SV'}
                     </AvatarFallback>
                     <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white bg-green-500"></span>

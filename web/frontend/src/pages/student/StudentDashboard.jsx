@@ -120,27 +120,64 @@ export default function StudentDashboard() {
   const approvedClaims = studentClaims.filter(c => c.status === 'approved')
   const pendingClaims = studentClaims.filter(c => c.status === 'submitted')
   const totalEarned = approvedClaims.reduce((s, c) => s + (c.credit_amount || 0), 0)
-  const nextGoal = bal < 50 ? 50 : bal < 100 ? 100 : bal < 200 ? 200 : 300
-  const progressPct = Math.min((bal / nextGoal) * 100, 100)
+  // Tính toán lộ trình Huy hiệu dựa trên Bảng xếp hạng (Gamification)
+  let nextGoal = 50;
+  let targetName = 'Đồng';
+  let targetRank = 3;
+  let isTop1 = false;
+  let currentMedal = 'none';
+
+  if (leaderboard && leaderboard.all && leaderboard.all.length > 0) {
+    const meLb = leaderboard.all.find(u => u.id === user.id) || leaderboard.me;
+    const myRank = meLb ? meLb.rank : 999;
+
+    if (myRank === 1) currentMedal = 'gold';
+    else if (myRank === 2) currentMedal = 'silver';
+    else if (myRank === 3) currentMedal = 'bronze';
+
+    if (myRank === 1) {
+      isTop1 = true;
+      nextGoal = bal;
+      targetName = 'Vàng';
+    } else if (myRank === 2) {
+      const top1 = leaderboard.all[0];
+      nextGoal = top1 ? Math.max(top1.ugc_balance, bal + 1) : bal + 50;
+      targetName = 'Vàng';
+      targetRank = 1;
+    } else if (myRank === 3) {
+      const top2 = leaderboard.all[1];
+      nextGoal = top2 ? Math.max(top2.ugc_balance, bal + 1) : bal + 50;
+      targetName = 'Bạc';
+      targetRank = 2;
+    } else {
+      const top3 = leaderboard.all[2];
+      nextGoal = top3 ? Math.max(top3.ugc_balance, bal + 1) : bal + 50;
+      targetName = 'Đồng';
+      targetRank = 3;
+    }
+  }
+
+  const progressPct = isTop1 ? 100 : Math.min((bal / (nextGoal || 1)) * 100, 100);
   const upcomingEvents = studentEvents
     .filter(e => e.status === 'published' && new Date(e.end_at) > new Date())
     .slice(0, 4)
 
   // Tasks based on events
-  const tasksList = studentEvents.slice(0, 5).map(ev => {
+  let tasksList = studentEvents.map(ev => {
     const claim = studentClaims.find(c => c.event_id === ev.id)
-    const hasParticipated = claim && (claim.status === 'approved' || claim.status === 'submitted')
+    const isApproved = claim && claim.status === 'approved'
     return {
       label: ev.title,
-      progress: hasParticipated ? 1 : 0,
+      progress: isApproved ? 1 : 0,
       total: 1,
-      done: !!hasParticipated,
+      done: !!isApproved,
       status: claim ? claim.status : null
     }
   })
+
   const tasksCompleted = tasksList.filter(t => t.done).length
   const tasksTotal = tasksList.length || 1
-  const tasksProgressPct = (tasksCompleted / tasksTotal) * 100
+  const tasksProgressPct = tasksList.length ? (tasksCompleted / tasksTotal) * 100 : 0
 
   // Trend calculations
   const now = new Date()
@@ -203,7 +240,11 @@ export default function StudentDashboard() {
             </div>
             <div className="progress-card__content-area">
               <div className="progress-card__top-text">
-                Bạn đã đạt <strong>{bal} / {nextGoal} UGC</strong>
+                {isTop1 ? (
+                  <span>Bạn đang dẫn đầu Bảng xếp hạng với <strong>{bal} UGC</strong></span>
+                ) : (
+                  <span>Bạn đã đạt <strong>{bal} / {nextGoal} UGC</strong></span>
+                )}
               </div>
               <div className="progress-card__bottom-row">
                 <div className="progress-card__progress-track">
@@ -211,11 +252,24 @@ export default function StudentDashboard() {
                 </div>
                 <span className="progress-card__percentage">{Math.round(progressPct)}%</span>
                 <span className="progress-card__hint-text">
-                  Còn {nextGoal - bal} UGC để nhận huy hiệu {nextGoal === 50 ? 'Đồng' : nextGoal === 100 ? 'Bạc' : 'Vàng'}
+                  {isTop1
+                    ? "🎉 Chúc mừng bạn đã giành huy hiệu Vàng!"
+                    : `Còn ${nextGoal - bal} UGC để nhận huy hiệu ${targetName} (vượt Top ${targetRank})`}
                 </span>
               </div>
             </div>
-            <img src="https://cdn-icons-png.flaticon.com/512/3176/3176294.png" alt="badge" className="progress-card__medal-icon" style={{ filter: 'grayscale(1)', opacity: 0.5 }} />
+            <img
+              src="https://cdn-icons-png.flaticon.com/512/3176/3176294.png"
+              alt="badge"
+              className="progress-card__medal-icon"
+              style={{
+                filter: currentMedal === 'none' ? 'grayscale(1)'
+                  : currentMedal === 'silver' ? 'grayscale(1) brightness(1.2)'
+                    : currentMedal === 'bronze' ? 'sepia(1) hue-rotate(-30deg) saturate(2) brightness(0.9)'
+                      : 'none',
+                opacity: currentMedal === 'none' ? 0.5 : 1
+              }}
+            />
           </div>
         </div>
 
@@ -340,47 +394,76 @@ export default function StudentDashboard() {
                   <p className="dashboard-page__list-title m-0">Hoạt động gần đây</p>
                   <Link to="/student/claims" className="dashboard-page__link-text">Xem tất cả</Link>
                 </div>
-                <ul className="dashboard-page__activity-list flex-1" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                  {studentClaims.slice(0, 4).map((c, i) => {
-                    const imageMap = {
-                      'hiến máu': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCa5hqxGqi0xefKNJWNuFNGScvF7fvvyqTIOZ8D1qoLwE4-Z2JtDqiXj4Y4q-uTlv2U13UoAQIBW6rEAVkzXOChWH_jVZLnIVUaxTgLldXppdkEvndQofXNuVa634y5_HMxSE1dNQOKxGJiOBmLC59aZ-5VqOAX_SYAMXAEtWTUfMq7tiqsIfNSDzW0y8CQaFTAkSE8IqBrfzFjfNgYgyo_ez7BAGZIShCFnjPLDLqXXJgz7soAXOonZmWpPn56V9_Il7tfSQHKVaw',
-                      'dọn rác': 'https://lh3.googleusercontent.com/aida-public/AB6AXuC14SOlq3R0r-3nDYB6Ko1XoLKnyxNGVKOXJ2dA-_6ik43yNN5K2S1sfW7LsskwyM7tM7-4DY3U-fZMxoMb5TVd5PIPFe7wuMX87JW2uZlRFGH8I4591sojg0ia--U5JX_qf24qJU5peW3GFd4JzeF5WHKcCCtV4xbuwPc1T9oq0Cf0IileiEHzkZOjTiVxCfDmO5QyTmv8DibNeqzxFsItPJu7MTf0geKtk26NeyAo9ph1h6mOO2Cd0VjAWHupo0dG8PIe_fhnI7I',
-                      'nhựa': 'https://lh3.googleusercontent.com/aida-public/AB6AXuC14SOlq3R0r-3nDYB6Ko1XoLKnyxNGVKOXJ2dA-_6ik43yNN5K2S1sfW7LsskwyM7tM7-4DY3U-fZMxoMb5TVd5PIPFe7wuMX87JW2uZlRFGH8I4591sojg0ia--U5JX_qf24qJU5peW3GFd4JzeF5WHKcCCtV4xbuwPc1T9oq0Cf0IileiEHzkZOjTiVxCfDmO5QyTmv8DibNeqzxFsItPJu7MTf0geKtk26NeyAo9ph1h6mOO2Cd0VjAWHupo0dG8PIe_fhnI7I',
-                      'trồng cây': 'https://lh3.googleusercontent.com/aida-public/AB6AXuA4KG8-XPwNqm7KEzQjUhCOM8qd38W--uWHs9NB-S1U0KfHDpmyGVb2mf8bt9ikxVn-ebXwpRFg0MedawTWeib0fRq1OLf1Uju2Ku8lj2TfgE-gc45Tm-Uouu7_j54zYKIroqVz-trQdlczFElFqCgkxjQx_LLh9cTyEbmGLHzR1Jb4wXLUzkRHHslf9wQS62aLV-OdGyBimSpFY6QVvKWXs11rc6jdro8pDExiDXGreHmy7q5C9JJiKY54JKP_KIFBO2s4XwA8vTs',
-                      'xe': 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=150&auto=format&fit=crop&q=60',
-                      'buýt': 'https://images.unsplash.com/photo-1570125909232-eb263c188f7e?w=150&auto=format&fit=crop&q=60',
-                      'nước': 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=150&auto=format&fit=crop&q=60'
-                    }
-                    const defaultImg = 'https://lh3.googleusercontent.com/aida-public/AB6AXuDtIhg0ZWFRXbL0h7Ube3PNjJGRZUluIeMrOkrS8c5_TNs-4VIrnRpbn5aRh_6vrT3C1rusVFoSkVOjL-QhfD7gTO-391AWkUkdPxx4jN63csv3uyUv0Notw0GmGi3j7JGIz7N-xAk5CUxeFnaOht3B-ab987F7-GPw64Z4k_fQAeWKRYP0CC-Xwz12teASa0qKElDVHEbNODdqNcHKysdNyCdFTTK2ieEKjHi0iEOq6xi4g634UwSu2eaoI3mlLoy3OzgyjYcK2w8'
-                    const searchStr = ((c.event_title || '') + ' ' + (c.activity_name || '')).toLowerCase()
-                    const matchedKey = Object.keys(imageMap).find(k => searchStr.includes(k))
-                    let imgSrc = matchedKey ? imageMap[matchedKey] : defaultImg
-                    if (c.activity_description && c.activity_description.startsWith('/uploads')) {
-                      imgSrc = `/api${c.activity_description}`
-                    }
-                    const isPending = c.status === 'submitted'
-                    const isRejected = c.status === 'rejected'
-                    return (
-                      <li key={i} style={{ opacity: isRejected ? 0.5 : 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div className="dashboard-page__activity-icon" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                            <img src={imgSrc} alt={c.activity_name} className="w-full h-full object-cover" />
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontWeight: 600, color: '#333' }}>{c.activity_name}</span>
-                            <span style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
-                              {new Date(c.updated_at || c.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {new Date(c.updated_at || c.created_at).toLocaleDateString('vi-VN')}
-                            </span>
-                          </div>
-                        </div>
-                        <div className={`dashboard-page__font-semibold ${isPending ? 'text-orange-500' : isRejected ? 'text-red-500' : 'dashboard-page__text-green'}`}>
-                          {isPending ? 'Đang duyệt' : isRejected ? 'Từ chối' : `+${c.credit_amount} UGC`}
-                        </div>
-                      </li>
-                    )
-                  })}
-                  {studentClaims.length === 0 && <p className="text-sm text-gray-500 text-center py-4 m-0">Chưa có hoạt động nào</p>}
-                </ul>
+                <ScrollArea className="flex-1 pr-3 mr-[-15px] dashboard-page__activity-scroll">
+                  <ul className="dashboard-page__activity-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    {[...studentClaims]
+                      .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))
+                      .filter((c, index, self) => self.findIndex(x => x.event_id === c.event_id) === index)
+                      .filter(c => {
+                        const claimDate = new Date(c.updated_at || c.created_at);
+                        return (new Date() - claimDate) <= 24 * 60 * 60 * 1000;
+                      })
+                      .map((c, i) => {
+                        const imageMap = {
+                          'hiến máu': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCa5hqxGqi0xefKNJWNuFNGScvF7fvvyqTIOZ8D1qoLwE4-Z2JtDqiXj4Y4q-uTlv2U13UoAQIBW6rEAVkzXOChWH_jVZLnIVUaxTgLldXppdkEvndQofXNuVa634y5_HMxSE1dNQOKxGJiOBmLC59aZ-5VqOAX_SYAMXAEtWTUfMq7tiqsIfNSDzW0y8CQaFTAkSE8IqBrfzFjfNgYgyo_ez7BAGZIShCFnjPLDLqXXJgz7soAXOonZmWpPn56V9_Il7tfSQHKVaw',
+                          'dọn rác': 'https://lh3.googleusercontent.com/aida-public/AB6AXuC14SOlq3R0r-3nDYB6Ko1XoLKnyxNGVKOXJ2dA-_6ik43yNN5K2S1sfW7LsskwyM7tM7-4DY3U-fZMxoMb5TVd5PIPFe7wuMX87JW2uZlRFGH8I4591sojg0ia--U5JX_qf24qJU5peW3GFd4JzeF5WHKcCCtV4xbuwPc1T9oq0Cf0IileiEHzkZOjTiVxCfDmO5QyTmv8DibNeqzxFsItPJu7MTf0geKtk26NeyAo9ph1h6mOO2Cd0VjAWHupo0dG8PIe_fhnI7I',
+                          'nhựa': 'https://lh3.googleusercontent.com/aida-public/AB6AXuC14SOlq3R0r-3nDYB6Ko1XoLKnyxNGVKOXJ2dA-_6ik43yNN5K2S1sfW7LsskwyM7tM7-4DY3U-fZMxoMb5TVd5PIPFe7wuMX87JW2uZlRFGH8I4591sojg0ia--U5JX_qf24qJU5peW3GFd4JzeF5WHKcCCtV4xbuwPc1T9oq0Cf0IileiEHzkZOjTiVxCfDmO5QyTmv8DibNeqzxFsItPJu7MTf0geKtk26NeyAo9ph1h6mOO2Cd0VjAWHupo0dG8PIe_fhnI7I',
+                          'trồng cây': 'https://lh3.googleusercontent.com/aida-public/AB6AXuA4KG8-XPwNqm7KEzQjUhCOM8qd38W--uWHs9NB-S1U0KfHDpmyGVb2mf8bt9ikxVn-ebXwpRFg0MedawTWeib0fRq1OLf1Uju2Ku8lj2TfgE-gc45Tm-Uouu7_j54zYKIroqVz-trQdlczFElFqCgkxjQx_LLh9cTyEbmGLHzR1Jb4wXLUzkRHHslf9wQS62aLV-OdGyBimSpFY6QVvKWXs11rc6jdro8pDExiDXGreHmy7q5C9JJiKY54JKP_KIFBO2s4XwA8vTs',
+                          'xe': 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=150&auto=format&fit=crop&q=60',
+                          'buýt': 'https://images.unsplash.com/photo-1570125909232-eb263c188f7e?w=150&auto=format&fit=crop&q=60',
+                          'nước': 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=150&auto=format&fit=crop&q=60'
+                        }
+                        const defaultImg = 'https://lh3.googleusercontent.com/aida-public/AB6AXuDtIhg0ZWFRXbL0h7Ube3PNjJGRZUluIeMrOkrS8c5_TNs-4VIrnRpbn5aRh_6vrT3C1rusVFoSkVOjL-QhfD7gTO-391AWkUkdPxx4jN63csv3uyUv0Notw0GmGi3j7JGIz7N-xAk5CUxeFnaOht3B-ab987F7-GPw64Z4k_fQAeWKRYP0CC-Xwz12teASa0qKElDVHEbNODdqNcHKysdNyCdFTTK2ieEKjHi0iEOq6xi4g634UwSu2eaoI3mlLoy3OzgyjYcK2w8'
+                        const ev = studentEvents.find(e => e.id === c.event_id)
+
+                        let imgSrc = defaultImg
+                        if (ev && ev.activity_description && ev.activity_description.startsWith('/uploads')) {
+                          imgSrc = `/api${ev.activity_description}`
+                        } else if (c.activity_description && c.activity_description.startsWith('/uploads')) {
+                          imgSrc = `/api${c.activity_description}`
+                        } else {
+                          const searchStr = (((ev ? ev.title : '') || c.event_title || '') + ' ' + (c.activity_name || '')).toLowerCase()
+                          const matchedKey = Object.keys(imageMap).find(k => searchStr.includes(k))
+                          if (matchedKey) imgSrc = imageMap[matchedKey]
+                        }
+
+                        const isPending = c.status === 'submitted'
+                        const isRejected = c.status === 'rejected'
+
+                        let statusClass = 'dashboard-page__activity-status--approved'
+                        let statusText = `+${c.credit_amount} UGC`
+                        if (isPending) {
+                          statusClass = 'dashboard-page__activity-status--pending'
+                          statusText = 'Đang duyệt'
+                        } else if (isRejected) {
+                          statusClass = 'dashboard-page__activity-status--rejected'
+                          statusText = 'Từ chối'
+                        }
+
+                        const titleToShow = ev ? ev.title : c.activity_name
+
+                        return (
+                          <li key={i}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <div className="dashboard-page__activity-icon" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                <img src={imgSrc} alt={titleToShow} className="w-full h-full object-cover" />
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontWeight: 600, color: '#333' }} className="line-clamp-1">{titleToShow}</span>
+                                <span style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+                                  {new Date(c.updated_at || c.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {new Date(c.updated_at || c.created_at).toLocaleDateString('vi-VN')}
+                                </span>
+                              </div>
+                            </div>
+                            <div className={`dashboard-page__activity-status ${statusClass}`}>
+                              {statusText}
+                            </div>
+                          </li>
+                        )
+                      })}
+                    {studentClaims.length === 0 && <p className="text-sm text-gray-500 text-center py-4 m-0">Chưa có hoạt động nào</p>}
+                  </ul>
+                </ScrollArea>
               </div>
             </div>
 
@@ -419,13 +502,13 @@ export default function StudentDashboard() {
                 <p className="dashboard-page__list-title m-0">Nhiệm vụ tuần này</p>
                 <Link to="/student/events" className="dashboard-page__link-text">Xem thêm</Link>
               </div>
-              <div className="flex-1 flex flex-col justify-between">
+              <ScrollArea className="flex-1 dashboard-page__activity-scroll">
                 <ul className="dashboard-page__task-list">
                   {tasksList.map((task, i) => (
                     <li key={i} className={task.done ? 'completed' : ''}>
                       <div className="dashboard-page__task-info">
                         <div className="dashboard-page__task-check">
-                          {task.done && <i className="ph-bold ph-check"></i>}
+                          {task.done && <i className="ph-bold ph-check text-[14px]"></i>}
                         </div>
                         <span className="dashboard-page__task-label">{task.label}</span>
                       </div>
@@ -433,12 +516,17 @@ export default function StudentDashboard() {
                     </li>
                   ))}
                 </ul>
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <div className="w-full bg-gray-100 h-[6px] rounded-full mb-2 overflow-hidden">
-                    <div className="bg-green-500 h-[6px] rounded-full transition-all duration-500" style={{ width: `${tasksProgressPct}%` }}></div>
+              </ScrollArea>
+              <div className="dashboard-page__task-summary-footer">
+                <div className="dashboard-page__task-summary-info">
+                  <div className="dashboard-page__task-summary-track">
+                    <div className="dashboard-page__task-summary-fill" style={{ width: `${tasksProgressPct}%` }}></div>
                   </div>
-                  <p className="dashboard-page__task-footer-text">{tasksCompleted} / {tasksTotal} hoàn thành</p>
+                  <span className="dashboard-page__task-summary-text">{tasksCompleted} / {tasksTotal} hoàn thành</span>
                 </div>
+                <button className="dashboard-page__task-summary-btn">
+                  <i className="ph-fill ph-gift"></i>
+                </button>
               </div>
             </div>
 
@@ -452,14 +540,28 @@ export default function StudentDashboard() {
                 {(leaderboard.me && leaderboard.me.rank <= 3 ? leaderboard.all.slice(0, 4) : leaderboard.all.slice(0, 3)).map((u, i) => {
                   const isMe = u.id === user.id
                   const rankClass = u.rank === 1 ? 'dashboard-page__rank-circle--gold' : u.rank === 2 ? 'dashboard-page__rank-circle--silver' : u.rank === 3 ? 'dashboard-page__rank-circle--bronze' : 'dashboard-page__rank-circle--default'
+
+                  if (isMe) {
+                    return (
+                      <li key={i} className="dashboard-page__highlight-row">
+                        <div className="dashboard-page__leaderboard-info">
+                          <div className={`dashboard-page__rank-circle ${rankClass} flex-shrink-0`}>{u.rank}</div>
+                          <div className="dashboard-page__avatar-box">{renderAvatar(user, 'w-9 h-9')}</div>
+                          <span className="dashboard-page__leaderboard-name--highlight">{u.full_name} (Bạn)</span>
+                        </div>
+                        <span className="dashboard-page__leaderboard-score--highlight">{u.ugc_balance} UGC</span>
+                      </li>
+                    )
+                  }
+
                   return (
-                    <li key={i} className={isMe ? 'bg-[#F0FDF4] -mx-5 px-5 py-2' : ''}>
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <li key={i} className="dashboard-page__leaderboard-item">
+                      <div className="dashboard-page__leaderboard-info">
                         <div className={`dashboard-page__rank-circle ${rankClass} flex-shrink-0`}>{u.rank}</div>
-                        <div className="flex-shrink-0">{renderAvatar(u, 'w-9 h-9')}</div>
-                        <span className="font-semibold text-gray-800 truncate">{u.full_name} {isMe && '(Bạn)'}</span>
+                        <div className="dashboard-page__avatar-box">{renderAvatar(u, 'w-9 h-9')}</div>
+                        <span className="dashboard-page__leaderboard-name">{u.full_name}</span>
                       </div>
-                      <span className="dashboard-page__font-semibold dashboard-page__text-green whitespace-nowrap flex-shrink-0 ml-2">{u.ugc_balance} UGC</span>
+                      <span className="dashboard-page__leaderboard-score">{u.ugc_balance} UGC</span>
                     </li>
                   )
                 })}
@@ -468,13 +570,13 @@ export default function StudentDashboard() {
                 )}
               </ul>
               {leaderboard.me && leaderboard.me.rank > 3 && (
-                <div className="dashboard-page__highlight-row dashboard-page__flex dashboard-page__items-center dashboard-page__justify-between mt-3">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="dashboard-page__highlight-wrapper">
+                  <div className="dashboard-page__leaderboard-info">
                     <div className="dashboard-page__rank-circle dashboard-page__rank-circle--default flex-shrink-0">{leaderboard.me.rank}</div>
-                    <div className="flex-shrink-0">{renderAvatar(leaderboard.me, 'w-9 h-9')}</div>
-                    <span className="font-semibold text-gray-800 truncate">{leaderboard.me.full_name} (Bạn)</span>
+                    <div className="dashboard-page__avatar-box">{renderAvatar(user, 'w-9 h-9')}</div>
+                    <span className="dashboard-page__leaderboard-name--highlight">{leaderboard.me.full_name} (Bạn)</span>
                   </div>
-                  <span className="dashboard-page__font-semibold dashboard-page__text-green whitespace-nowrap flex-shrink-0 ml-2">{leaderboard.me.ugc_balance} UGC</span>
+                  <span className="dashboard-page__leaderboard-score--highlight">{leaderboard.me.ugc_balance} UGC</span>
                 </div>
               )}
             </div>

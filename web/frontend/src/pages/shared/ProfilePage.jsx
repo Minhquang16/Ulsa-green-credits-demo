@@ -94,7 +94,7 @@ export default function ProfilePage() {
                     <div className="profile-page__avatar-wrapper">
                         <div className="profile-page__avatar overflow-hidden">
                             {user?.avatar_url ? (
-                                <img src={user.avatar_url.startsWith('http') ? user.avatar_url : `http://localhost:8080${user.avatar_url}`} alt="Avatar" className="w-full h-full object-cover" />
+                                <img src={user.avatar_url.startsWith('http') ? user.avatar_url : user.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
                             ) : (
                                 getInitials(studentInfo.name)
                             )}

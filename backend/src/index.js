@@ -1418,17 +1418,17 @@ app.get("/wallets/all", authRequired, requireRole("admin"), async (req, res) => 
 app.get("/ugc/leaderboard", authRequired, async (req, res) => {
   try {
     const usersRes = await pool.query(
-      "SELECT id, username, full_name, role, wallet_address FROM users WHERE role = 'student'"
+      "SELECT id, username, full_name, role, wallet_address, avatar_url FROM users WHERE role = 'student'"
     );
     const users = usersRes.rows;
 
     const withBalances = await Promise.all(users.map(async (u) => {
       try {
-        if (!u.wallet_address) return { id: u.id, username: u.username, full_name: u.full_name, ugc_balance: 0 };
+        if (!u.wallet_address) return { id: u.id, username: u.username, full_name: u.full_name, avatar_url: u.avatar_url, ugc_balance: 0 };
         const bal = await ugcContract.balanceOf(u.wallet_address);
-        return { id: u.id, username: u.username, full_name: u.full_name, ugc_balance: Number(bal) };
+        return { id: u.id, username: u.username, full_name: u.full_name, avatar_url: u.avatar_url, ugc_balance: Number(bal) };
       } catch {
-        return { id: u.id, username: u.username, full_name: u.full_name, ugc_balance: 0 };
+        return { id: u.id, username: u.username, full_name: u.full_name, avatar_url: u.avatar_url, ugc_balance: 0 };
       }
     }));
 
@@ -1438,6 +1438,7 @@ app.get("/ugc/leaderboard", authRequired, async (req, res) => {
       id: u.id,
       username: u.username,
       full_name: u.full_name,
+      avatar_url: u.avatar_url,
       ugc_balance: u.ugc_balance,
       rank: idx + 1
     }));
@@ -1449,7 +1450,7 @@ app.get("/ugc/leaderboard", authRequired, async (req, res) => {
     res.json({
       success: true,
       top3,
-      me: myRank || { id: req.user.id, username: req.user.username, full_name: req.user.full_name, ugc_balance: 0, rank: Math.max(15, ranked.length + 1) },
+      me: myRank || { id: req.user.id, username: req.user.username, full_name: req.user.full_name, avatar_url: null, ugc_balance: 0, rank: Math.max(15, ranked.length + 1) },
       all: ranked
     });
   } catch (e) {

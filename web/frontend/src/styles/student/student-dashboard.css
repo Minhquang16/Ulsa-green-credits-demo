@@ -773,12 +773,14 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
+    padding: 12px 0;
     font-size: 13px;
+    border-bottom: 1px solid #f1f5f9;
 }
 
 .dashboard-page__activity-list li:last-child {
-    margin-bottom: 0;
+    border-bottom: none;
+    padding-bottom: 0;
 }
 
 .dashboard-page__activity-icon {
@@ -793,11 +795,46 @@
     overflow: hidden;
 }
 
-/* Tasks */
+/* Activity Status */
+.dashboard-page__activity-status {
+    font-weight: 600;
+    font-size: 12px;
+    min-width: 90px;
+    text-align: right;
+}
+
+/* --- CSS tùy chỉnh riêng cho thanh cuộn "Hoạt động gần đây" --- */
+.dashboard-page__activity-scroll [data-radix-scroll-area-scrollbar],
+.dashboard-page__activity-scroll [data-radix-scroll-area-thumb] {
+    display: none !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    visibility: hidden !important;
+}
+
+.dashboard-page__activity-status--pending {
+    color: #f97316;
+    /* Tailwind orange-500 */
+}
+
+.dashboard-page__activity-status--rejected {
+    color: #ef4444;
+    /* Tailwind red-500 */
+}
+
+.dashboard-page__activity-status--approved {
+    color: #16a34a;
+    /* Tailwind green-600 */
+}
+
+
+/* ========================================= */
+/* NHIỆM VỤ TUẦN NÀY */
+/* ========================================= */
+
 .dashboard-page__task-list {
-    height: 220px;
-    overflow-y: auto;
     padding-right: 5px;
+    margin-top: 0px;
 }
 
 .dashboard-page__task-list::-webkit-scrollbar {
@@ -817,7 +854,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     font-size: 13px;
 }
 
@@ -832,40 +869,44 @@
 }
 
 .dashboard-page__task-check {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid #cbd5e1;
+    border: 2px solid #e2e8f0;
     flex-shrink: 0;
     transition: all 0.3s ease;
+    margin-left: -20px;
 }
 
 .dashboard-page__task-list li.completed .dashboard-page__task-check {
-    background: #22c55e;
-    border-color: #22c55e;
+    background: #16a34a;
+    border-color: #16a34a;
     color: #ffffff;
+
 }
 
 .dashboard-page__task-check i {
-    font-size: 12px;
+    font-size: 10px;
 }
 
 .dashboard-page__task-label {
     font-weight: 500;
-    color: #666666;
+    color: #475569;
+    font-size: 13px;
     transition: color 0.3s ease;
 }
 
 .dashboard-page__task-list li.completed .dashboard-page__task-label {
-    color: #333333;
+    color: #111827;
 }
 
 .dashboard-page__task-progress {
     font-weight: 500;
     color: #666666;
+    font-size: 13px;
     transition: color 0.3s ease;
 }
 
@@ -873,19 +914,79 @@
     color: #16a34a;
 }
 
-.dashboard-page__task-footer-text {
-    font-size: 12px;
-    color: #888888;
-    font-weight: 500;
-    margin: 0;
+/* Progress Summary Footer */
+.dashboard-page__task-summary-footer {
+    margin-top: auto;
+    padding-top: 25px;
+    padding-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transform: translateY(20px);
 }
+
+.dashboard-page__task-summary-info {
+    flex: 1;
+    margin-right: 24px;
+}
+
+.dashboard-page__task-summary-track {
+    height: 6px;
+    width: 100%;
+    background-color: #f3f4f6;
+    border-radius: 9999px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.dashboard-page__task-summary-fill {
+    height: 100%;
+    background-color: #22c55e;
+    border-radius: 9999px;
+    transition: all 500ms ease;
+}
+
+.dashboard-page__task-summary-text {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.dashboard-page__task-summary-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background-color: #ebfef0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #1ebd59;
+    transition: background-color 200ms ease;
+    flex-shrink: 0;
+    border: none;
+    cursor: pointer;
+    transform: translateY(-14px);
+}
+
+.dashboard-page__task-summary-btn:hover {
+    background-color: #dcfce7;
+}
+
+.dashboard-page__task-summary-btn i {
+    font-size: 20px;
+}
+
+/* ========================================= */
+/* KẾT THÚC NHIỆM VỤ TUẦN NÀY */
+/* ========================================= */
+
 
 /* Leaderboard */
 .dashboard-page__leaderboard-list li {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
+    margin-bottom: 2px;
     font-size: 13px;
 }
 
@@ -992,15 +1093,94 @@
     flex-shrink: 0;
 }
 
+/* Leaderboard List - updated 2026-06-21 */
+.dashboard-page__leaderboard-list {
+    margin-top: -5px;
+    display: flex;
+    flex-direction: column;
+    gap: 0px;
+    list-style: none;
+    padding: 0;
+    margin-left: 12px;
+    margin-right: 12px;
+}
+
+.dashboard-page__leaderboard-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+}
+
+.dashboard-page__leaderboard-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex: 1;
+}
+
+.dashboard-page__rank-number {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: #16a34a;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.dashboard-page__avatar-box {
+    flex-shrink: 0;
+}
+
+.dashboard-page__leaderboard-name {
+    font-weight: 600;
+    font-size: 12.5px;
+    color: #1f2937;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dashboard-page__leaderboard-name--highlight {
+    font-weight: 600;
+    font-size: 12.5px;
+    color: #16a34a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dashboard-page__leaderboard-score {
+    font-weight: 600;
+    font-size: 12.5px;
+    color: #374151;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.dashboard-page__leaderboard-score--highlight {
+    font-weight: 600;
+    font-size: 12.5px;
+    color: #16a34a;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
 /* Ranks */
 .dashboard-page__rank-circle {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     color: white;
     flex-shrink: 0;
@@ -1023,15 +1203,26 @@
 }
 
 .dashboard-page__highlight-row {
-    background: #ecfdf5;
-    margin: 0 -20px;
-    padding: 12px 20px;
-    border-radius: 0 0 var(--radius) var(--radius);
+    background: #f0fdf4;
+    padding: 5px 12px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.dashboard-page__highlight-wrapper {
+    background: #f0fdf4;
+    padding: 5px 12px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .dashboard-page__checkbox-custom {
-    width: 18px;
-    height: 18px;
+    width: 15px;
+    height: 15px;
     border-radius: 50%;
     border: 2px solid #cbd5e1;
     display: flex;

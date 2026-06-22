@@ -25,6 +25,7 @@ import {
   IconChevronsLeft,
   IconChevronsRight,
   IconCircleCheckFilled,
+  IconCircleXFilled,
   IconDotsVertical,
   IconGripVertical,
   IconLayoutColumns,
@@ -101,6 +102,7 @@ import {
 export const schema = z.object({
   id: z.number().or(z.string()),
   header: z.string(),
+  eventName: z.string().optional(),
   type: z.string(),
   status: z.string(),
   target: z.string(),
@@ -165,21 +167,19 @@ const columns = [
   },
   {
     accessorKey: "header",
-    header: () => <div className="whitespace-nowrap">Hoạt động</div>,
+    header: () => <div className="whitespace-nowrap">Loại</div>,
     cell: ({ row }) => {
       return <TableCellViewer item={row.original} />
     },
     enableHiding: false,
   },
   {
-    accessorKey: "type",
-    header: () => <div className="whitespace-nowrap">Loại</div>,
+    accessorKey: "eventName",
+    header: () => <div className="whitespace-nowrap">Tên sự kiện</div>,
     cell: ({ row }) => (
-      <div className="w-32 whitespace-nowrap">
-        <Badge variant="outline" className="px-1.5 text-muted-foreground">
-          {row.original.type}
-        </Badge>
-      </div>
+      <span className="text-sm font-medium text-gray-700 whitespace-nowrap">
+        {row.original.eventName}
+      </span>
     ),
   },
   {
@@ -190,6 +190,8 @@ const columns = [
         <Badge variant="outline" className="px-1.5 text-muted-foreground whitespace-nowrap">
           {row.original.status === "Hoàn thành" ? (
             <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400 mr-1" size={14} />
+          ) : row.original.status === "Từ chối" ? (
+            <IconCircleXFilled className="fill-red-500 dark:fill-red-400 mr-1" size={14} />
           ) : (
             <IconLoader className="animate-spin mr-1" size={14} />
           )}
@@ -201,11 +203,14 @@ const columns = [
   {
     accessorKey: "target",
     header: () => <div className="w-full text-right whitespace-nowrap">Số tín chỉ (UGC)</div>,
-    cell: ({ row }) => (
-      <div className="w-full text-right font-extrabold text-emerald-600 pr-4 whitespace-nowrap">
-        {row.original.target}
-      </div>
-    ),
+    cell: ({ row }) => {
+      const isRejected = row.original.status === "Từ chối";
+      return (
+        <div className={`w-full text-right font-extrabold ${isRejected ? 'text-red-500' : 'text-emerald-600'} pr-4 whitespace-nowrap`}>
+          {row.original.target}
+        </div>
+      );
+    },
   },
   {
     accessorKey: "createdAt",
@@ -427,7 +432,12 @@ function DataTable({ data: initialData, nav }) {
                         column.toggleVisibility(!!value)
                       }
                     >
-                      {typeof column.columnDef.header === "string" ? column.columnDef.header : column.id}
+                      {column.id === "eventName" ? "Tên sự kiện" :
+                       column.id === "status" ? "Trạng thái" :
+                       column.id === "target" ? "Số tín chỉ (UGC)" :
+                       column.id === "createdAt" ? "Ngày gửi" :
+                       column.id === "reviewer" ? "Người duyệt" :
+                       typeof column.columnDef.header === "string" ? column.columnDef.header : column.id}
                     </DropdownMenuCheckboxItem>
                   )
                 })}
@@ -746,10 +756,11 @@ export default function ClaimsDataTable({ claims, loading, nav }) {
 
   const mappedData = claims.map(c => ({
     id: c.id,
-    header: c.activity_name || c.event_title || "Chưa rõ tên",
+    header: c.activity_name || "Hoạt động xanh",
+    eventName: c.event_title || "Sự kiện ngoại khóa",
     type: c.event_id ? "Sự kiện" : "Hoạt động",
     status: c.status === "approved" ? "Hoàn thành" : c.status === "rejected" ? "Từ chối" : "Chờ xử lý",
-    target: c.credit_amount ? `+${c.credit_amount}` : "0",
+    target: c.credit_amount ? (c.status === "rejected" ? `-${c.credit_amount}` : `+${c.credit_amount}`) : "0",
     limit: "0",
     reviewer: "Hệ thống",
     txHash: c.tx_hash || null,

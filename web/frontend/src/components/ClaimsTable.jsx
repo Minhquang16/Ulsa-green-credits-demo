@@ -52,7 +52,9 @@ export default function ClaimsTable({
                 <p className="font-bold text-slate-800 text-[13px] leading-snug">{c.activity_name}</p>
                 <span className="inline-block mt-0.5 px-2 py-0.5 bg-slate-100 rounded-md text-[9px] font-bold text-slate-500">{c.activity_name?.includes('Đạp xe') ? 'Thói quen' : 'Sự kiện'}</span>
               </td>
-              <td className="p-4 font-black text-[#16a34a] text-[13px]">+{c.credit_amount}</td>
+              <td className={`p-4 font-black text-[13px] ${c.status === 'rejected' ? 'text-red-600' : 'text-[#16a34a]'}`}>
+                {c.status === 'rejected' ? '-' : '+'}{c.credit_amount}
+              </td>
               <td className="p-4">
                 <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold
                   ${c.status === 'approved' ? 'bg-[#e2f3e9] text-[#16a34a]' : 
