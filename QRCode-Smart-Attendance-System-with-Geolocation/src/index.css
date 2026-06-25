@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    background-color: white;
+    min-height: 100vh;
+}
+
+.studentLogin {
+    background-image: url('/studentBG.jpg');
+    background-size: cover;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+    /* This makes the icon black */
+    filter: invert(1);
+}
+
+input[type="time"]::-webkit-calendar-picker-indicator {
+    /* This makes the icon black */
+    filter: invert(1);
+}
