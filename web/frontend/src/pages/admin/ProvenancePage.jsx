@@ -90,11 +90,11 @@ function ProvenanceDetailModal({ claimId, onClose, token, isAdmin }) {
             <p className="prov-timeline__step-desc">Không có file đính kèm</p>
           )}
           {data.claim?.note && <p className="prov-timeline__step-desc mt-1">📝 {data.claim.note}</p>}
-          
+
           {showTech && (
             <div className="prov-timeline__hash-box mt-2">
               <span className="prov-timeline__hash-label">SHA-256 Hash (off-chain):</span>
-              <code className="prov-timeline__hash">{data.claim?.evidence_hash ? '0x' + data.claim.evidence_hash.slice(0,32) + '...' : '—'}</code>
+              <code className="prov-timeline__hash">{data.claim?.evidence_hash ? '0x' + data.claim.evidence_hash.slice(0, 32) + '...' : '—'}</code>
             </div>
           )}
         </div>
@@ -128,10 +128,10 @@ function ProvenanceDetailModal({ claimId, onClose, token, isAdmin }) {
         <div>
           {data.onChainRecord ? (
             <>
-              <div className="prov-timeline__verify-badge prov-timeline__verify-badge--ok" style={{marginBottom: '12px'}}>
+              <div className="prov-timeline__verify-badge prov-timeline__verify-badge--ok" style={{ marginBottom: '12px' }}>
                 ✅ Tín chỉ xanh đã được lưu trữ vĩnh viễn và minh chứng không thể giả mạo
               </div>
-              
+
               <button className="prov-timeline__link mt-2" onClick={() => setShowTech(!showTech)}>
                 {showTech ? '▲ Ẩn chi tiết kỹ thuật' : '▼ Xem chi tiết kỹ thuật (dành cho chuyên gia)'}
               </button>
@@ -146,7 +146,7 @@ function ProvenanceDetailModal({ claimId, onClose, token, isAdmin }) {
                     <span className="prov-timeline__hash-label">TX Hash (Lưu Provenance):</span>
                     <code className="prov-timeline__hash">{data.claim.provenance_tx_hash || '—'}</code>
                   </div>
-                  
+
                   <div className="prov-timeline__meta-grid mt-3">
                     <div className="prov-timeline__meta-item">
                       <span className="prov-timeline__hash-label">Block Timestamp:</span>

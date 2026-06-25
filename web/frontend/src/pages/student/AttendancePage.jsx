@@ -1,20 +1,23 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
-import { useAuth } from '../auth.jsx';
-import { encryptData, decryptData } from '../utils/crypto';
-import { calculateDistance } from '../utils/distanceCalculation';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../auth.jsx';
+import { decryptData } from '../../utils/crypto';
+import { calculateDistance } from '../../utils/distanceCalculation';
 
 const MAX_VALID_DISTANCE = 500; // allow 500m for demo, normally 20-50m
 const QR_LIFESPAN_MS = 90000; // 90 seconds
 
-export default function QRScanner({ eventId, onClose, onSuccess }) {
+export default function AttendancePage() {
   const { api } = useAuth();
-  const [step, setStep] = useState(0); // 0: Scan QR, 1: Validating GPS, 2: Liveness, 3: Submitting
-  const [token, setToken] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const queryParams = new URLSearchParams(location.search);
+  
+  const [step, setStep] = useState(1); // 1: Validating GPS, 2: Liveness, 3: Submitting
   const [error, setError] = useState('');
   const [userDistance, setUserDistance] = useState(null);
   const [checkinLocation, setCheckinLocation] = useState({ lat: null, lng: null });
-  const [hasStarted, setHasStarted] = useState(false);
+  const [eventId, setEventId] = useState(null);
 
   // Liveness States
   const [livenessColor, setLivenessColor] = useState("transparent");
@@ -26,6 +29,8 @@ export default function QRScanner({ eventId, onClose, onSuccess }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [stream, setStream] = useState(null);
+
+  const token = queryParams.get("token");
 
   // Stop camera stream safely
   const stopStream = () => {
@@ -39,40 +44,14 @@ export default function QRScanner({ eventId, onClose, onSuccess }) {
     return () => stopStream();
   }, [stream]);
 
-  // Step 0: QR Scanner
-  useEffect(() => {
-    if (step !== 0) return;
-
-    const scanner = new Html5QrcodeScanner(
-      "qr-reader",
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      false
-    );
-
-    scanner.render((decodedText) => {
-      scanner.clear().catch(e => console.error(e));
-      
-      let finalToken = decodedText;
-      try {
-        const url = new URL(decodedText);
-        const tokenParam = url.searchParams.get("token");
-        if (tokenParam) finalToken = tokenParam;
-      } catch (e) {
-        // decodedText is not a URL, use it as raw token
-      }
-      
-      setToken(finalToken);
-      setStep(1);
-    }, (err) => { /* ignore */ });
-
-    return () => {
-      scanner.clear().catch(e => console.error("Failed to clear scanner", e));
-    };
-  }, [step]);
-
   // Step 1: Validate Token & GPS
   useEffect(() => {
     if (step !== 1) return;
+
+    if (!token) {
+      setError("Link điểm danh không hợp lệ (thiếu token).");
+      return;
+    }
 
     const validate = () => {
       try {
@@ -83,11 +62,7 @@ export default function QRScanner({ eventId, onClose, onSuccess }) {
         }
 
         const { eventId: qrEventId, lat, lng, t: qrTimestamp } = decrypted;
-
-        if (String(qrEventId) !== String(eventId)) {
-          setError("Mã QR này không dành cho sự kiện bạn đang chọn.");
-          return;
-        }
+        setEventId(qrEventId);
 
         const timeDiff = Date.now() - qrTimestamp;
         if (timeDiff > QR_LIFESPAN_MS) {
@@ -101,7 +76,7 @@ export default function QRScanner({ eventId, onClose, onSuccess }) {
           localStorage.setItem("green_credit_device_id", deviceId);
         }
 
-        const lastCheckIn = localStorage.getItem(`last_checkin_${eventId}`);
+        const lastCheckIn = localStorage.getItem(`last_checkin_${qrEventId}`);
         if (lastCheckIn && (Date.now() - parseInt(lastCheckIn) < 1000 * 60 * 60)) {
           setError(`Thiết bị này đã được sử dụng để điểm danh sự kiện này trong 1 giờ qua. KHÔNG ĐƯỢC ĐIỂM DANH HỘ!`);
           return;
@@ -145,7 +120,8 @@ export default function QRScanner({ eventId, onClose, onSuccess }) {
     };
 
     validate();
-  }, [step, token, eventId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, token]);
 
   const startCamera = async () => {
     try {
@@ -191,7 +167,7 @@ export default function QRScanner({ eventId, onClose, onSuccess }) {
     canvas.height = video.videoHeight;
     const context = canvas.getContext("2d");
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.7); // compress slightly
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
     setPhoto(dataUrl);
     
     stopStream();
@@ -219,8 +195,9 @@ export default function QRScanner({ eventId, onClose, onSuccess }) {
       } catch (e) {}
 
       setTimeout(() => {
-        onSuccess('Điểm danh & nộp minh chứng thành công! Chờ quản trị viên duyệt UGC.', false);
-      }, 1500);
+        // Redirect to dashboard or claims after success
+        navigate('/student/claims');
+      }, 3000);
 
     } catch (err) {
       setError(err.message || 'Lỗi khi gọi API Check-in');
@@ -228,36 +205,9 @@ export default function QRScanner({ eventId, onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-100 z-[200] flex flex-col items-center justify-center p-4 transition-colors duration-200" style={{ backgroundColor: step === 2 ? livenessColor : 'rgba(243, 244, 246, 0.95)' }}>
+    <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center p-4 transition-colors duration-200" style={{ backgroundColor: step === 2 ? livenessColor : 'transparent' }}>
       <div className="bg-white p-8 rounded-xl shadow-lg max-w-md w-full text-center z-10 relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-700">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
-
-        <h2 
-          className="text-2xl font-bold text-gray-800 mb-6 cursor-pointer"
-          onDoubleClick={() => {
-            if (navigator.geolocation) {
-              navigator.geolocation.getCurrentPosition(
-                (position) => {
-                  const testToken = encryptData({
-                    eventId: eventId,
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude,
-                    t: Date.now()
-                  });
-                  setToken(testToken);
-                  setStep(1);
-                },
-                (err) => alert("Lỗi GPS khi tạo mã test: " + err.message),
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-              );
-            } else {
-              alert("Trình duyệt không hỗ trợ Geolocation.");
-            }
-          }}
-          title="Click đúp để test nhanh không cần quét mã"
-        >
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">
           Xác Thực Nâng Cao
         </h2>
         
@@ -266,23 +216,10 @@ export default function QRScanner({ eventId, onClose, onSuccess }) {
             <svg className="w-12 h-12 mx-auto mb-2 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             <p className="font-bold text-lg">Từ chối điểm danh!</p>
             <p className="text-sm mt-2">{error}</p>
-            <button onClick={onClose} className="mt-4 px-4 py-2 bg-white text-red-600 rounded-md text-sm border border-red-300 hover:bg-red-50">Đóng</button>
+            <button onClick={() => navigate('/student/events')} className="mt-4 px-4 py-2 bg-white text-red-600 rounded-md text-sm border border-red-300 hover:bg-red-50 w-full font-bold">Về trang sự kiện</button>
           </div>
         ) : (
           <div>
-            {step === 0 && (
-              <div className="text-gray-600">
-                <p className="text-sm mb-4">Đưa camera vào mã QR của sự kiện để quét.</p>
-                <div className="w-full bg-black rounded-lg overflow-hidden relative">
-                  <div id="qr-reader" className="w-full"></div>
-                </div>
-                <style>{`
-                  #qr-reader { border: none !important; }
-                  #qr-reader__dashboard_section_swaplink { display: none !important; }
-                `}</style>
-              </div>
-            )}
-
             {step === 1 && (
               <div className="text-gray-600">
                 <p className="animate-pulse mb-4">Đang kiểm tra: Giải mã Token, Chống Fake GPS, Quét Fingerprint...</p>

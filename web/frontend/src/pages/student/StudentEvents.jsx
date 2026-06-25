@@ -1,6 +1,33 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth.jsx'
+import laImage from '../../assets/logo/lá.png'
+
+const DEFAULT_NEWS = [
+  {
+    id: 1,
+    title: "ULSA phát động Chiến dịch 'Chủ Nhật Xanh' thu gom rác thải công nghệ",
+    summary: 'Nhận ngay tới 50 UGC khi quyên góp pin cũ, điện thoại hỏng tại sảnh A1 vào Chủ nhật này.',
+    content: "Nhằm nâng cao nhận thức bảo vệ môi trường, Ban Giám hiệu ULSA kết hợp với CLB Môi Trường phát động chiến dịch 'Chủ Nhật Xanh'. Sinh viên mang các thiết bị điện tử hỏng, pin cũ đến quyên góp tại sảnh A1 sẽ được quy đổi điểm rèn luyện và cộng trực tiếp Green Credits (UGC) vào tài khoản ví cá nhân.",
+    date: '20/06/2026',
+    author: 'Ban Giám hiệu & CLB Môi Trường',
+    category: 'Sự kiện',
+    icon: 'campaign',
+    badgeColor: 'bg-emerald-100 text-emerald-800'
+  },
+  {
+    id: 2,
+    title: 'ULSA đạt cột mốc 10.000 tín chỉ xanh UGC được lưu hành trên Blockchain',
+    summary: 'Cộng đồng sinh viên ULSA tích cực giảm thiểu hơn 500kg khí thải CO2 thông qua hoạt động đạp xe.',
+    content: 'Tính đến tháng 6/2026, hệ thống UGC đã ghi nhận hơn 1.200 lượt đăng ký hoạt động xanh từ sinh viên. Trong đó hoạt động đi bộ/đạp xe chiếm tỷ lệ cao nhất. Ban Quản trị dự án gửi lời cảm ơn và tuyên dương các tập thể lớp có đóng góp tích cực nhất trong tháng.',
+    date: '18/06/2026',
+    author: 'Ban Quản trị UGC',
+    category: 'Tin tức',
+    icon: 'newspaper',
+    badgeColor: 'bg-blue-100 text-blue-800'
+  }
+]
 import { useToast } from '../../context/ToastContext.jsx'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -57,6 +84,20 @@ export default function StudentEvents() {
   const [serverTimeOffset, setServerTimeOffset] = useState(0)
   const [topNotification, setTopNotification] = useState(null)
   const notificationShown = React.useRef(false)
+
+  const [newsList, setNewsList] = useState([])
+  const [selectedNews, setSelectedNews] = useState(null)
+
+  useEffect(() => {
+    const stored = localStorage.getItem('ulsa_green_news')
+    if (stored) {
+      try { setNewsList(JSON.parse(stored)) }
+      catch { setNewsList(DEFAULT_NEWS) }
+    } else {
+      localStorage.setItem('ulsa_green_news', JSON.stringify(DEFAULT_NEWS))
+      setNewsList(DEFAULT_NEWS)
+    }
+  }, [])
 
   async function loadAll(currentStatus) {
     setError('')
@@ -142,16 +183,27 @@ export default function StudentEvents() {
     return result
   }, [events, statusFilter, searchQuery, serverTimeOffset, claims])
 
+  const topEvent = useMemo(() => {
+    if (events.length === 0) return null;
+    let max = events[0];
+    for (let i = 1; i < events.length; i++) {
+      if (Number(events[i].credit_amount) > Number(max.credit_amount)) {
+        max = events[i];
+      }
+    }
+    return max;
+  }, [events]);
+
   const widgetTasks = useMemo(() => {
     const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    
+
     const tasks = events.map(ev => {
       const claim = claims.find(c => c.event_id === ev.id);
       const eventStatus = getEventStatus(ev.start_at, ev.end_at, serverTimeOffset);
-      
+
       let state = 'pending';
       let finishedDate = null;
-      
+
       if (claim) {
         if (claim.status === 'approved') {
           state = 'done';
@@ -168,12 +220,12 @@ export default function StudentEvents() {
           finishedDate = new Date(ev.end_at).getTime();
         }
       }
-      
-      return { 
+
+      return {
         id: ev.id,
-        label: ev.title, 
-        state, 
-        finishedDate 
+        label: ev.title,
+        state,
+        finishedDate
       };
     });
 
@@ -217,7 +269,7 @@ export default function StudentEvents() {
     const today = new Date(Date.now() + serverTimeOffset);
     const todayStr = getLocalDateStr(today);
     const currentDayIndex = (today.getDay() + 6) % 7;
-    
+
     let todayHasUnfinishedEvent = false;
     let isLastEventOfWeekDone = false;
 
@@ -225,7 +277,7 @@ export default function StudentEvents() {
       const d = new Date(today);
       d.setDate(today.getDate() - currentDayIndex + idx);
       const dateStr = getLocalDateStr(d);
-      
+
       const dayEvents = eventsByDate[dateStr] || [];
       const hasEvent = dayEvents.length > 0;
       const isDone = hasEvent && dayEvents.some(ev => claimsByEventId[ev.id]);
@@ -244,7 +296,7 @@ export default function StudentEvents() {
       if (dateStr === todayStr && hasEvent && !isDone) {
         todayHasUnfinishedEvent = true;
       }
-      
+
       return { label, hasEvent, isDone, dateStr, status, events: dayEvents };
     });
 
@@ -301,7 +353,7 @@ export default function StudentEvents() {
           notificationShown.current = true;
           localStorage.setItem('lastStreakNotificationDate', today);
           setTimeout(() => setTopNotification(null), 5000);
-          
+
           // Fireworks
           const duration = 4 * 1000;
           const animationEnd = Date.now() + duration;
@@ -332,7 +384,7 @@ export default function StudentEvents() {
         notificationShown.current = true;
         localStorage.setItem('lastEventNotificationDate', today);
         setTimeout(() => setTopNotification(null), 5000);
-        
+
         // Shoot fireworks for 4s
         const duration = 4 * 1000;
         const animationEnd = Date.now() + duration;
@@ -476,29 +528,27 @@ export default function StudentEvents() {
                   {widgetTasks.length > 0 ? widgetTasks.map((t) => (
                     <div key={t.id} className={`sidebar-task-item ${t.state === 'pending' ? 'sidebar-task-item--pending' : ''}`}>
                       <div className="sidebar-task-info">
-                        <span className={`material-symbols-outlined text-lg ${
-                          t.state === 'done' ? 'sidebar-task-icon--done' : 
-                          t.state === 'in_progress' ? 'sidebar-task-icon--inprogress' : 
-                          t.state === 'expired' ? 'sidebar-task-icon--expired' : 
-                          'sidebar-task-icon--pending'
-                        }`}>
-                          {t.state === 'done' ? 'check_circle' : 
-                           t.state === 'in_progress' ? 'cached' : 
-                           t.state === 'expired' ? 'cancel' : 
-                           'radio_button_unchecked'}
+                        <span className={`material-symbols-outlined text-lg ${t.state === 'done' ? 'sidebar-task-icon--done' :
+                          t.state === 'in_progress' ? 'sidebar-task-icon--inprogress' :
+                            t.state === 'expired' ? 'sidebar-task-icon--expired' :
+                              'sidebar-task-icon--pending'
+                          }`}>
+                          {t.state === 'done' ? 'check_circle' :
+                            t.state === 'in_progress' ? 'cached' :
+                              t.state === 'expired' ? 'cancel' :
+                                'radio_button_unchecked'}
                         </span>
-                        <span className={`sidebar-task-name ${
-                          t.state === 'in_progress' ? 'sidebar-task-name--inprogress' : 
+                        <span className={`sidebar-task-name ${t.state === 'in_progress' ? 'sidebar-task-name--inprogress' :
                           t.state === 'expired' ? 'sidebar-task-name--expired' : ''
-                        }`}>
+                          }`}>
                           {t.label}
                         </span>
                       </div>
                       <span className={
-                        t.state === 'done' ? 'sidebar-task-progress--done' : 
-                        t.state === 'in_progress' ? 'sidebar-task-progress--inprogress' :
-                        t.state === 'expired' ? 'sidebar-task-progress--expired' :
-                        'sidebar-task-progress--pending'
+                        t.state === 'done' ? 'sidebar-task-progress--done' :
+                          t.state === 'in_progress' ? 'sidebar-task-progress--inprogress' :
+                            t.state === 'expired' ? 'sidebar-task-progress--expired' :
+                              'sidebar-task-progress--pending'
                       }>
                         {t.state === 'done' ? '1/1' : '0/1'}
                       </span>
@@ -523,16 +573,15 @@ export default function StudentEvents() {
                 <span className={`text-3xl sidebar-streak-fire ${streakData.streakCount >= 5 ? 'fire-huge' : streakData.streakCount >= 3 ? 'fire-big' : ''}`}>🔥</span>
                 <div>
                   <h4 className="sidebar-streak-days">{streakData.streakCount} ngày</h4>
-                  <p className={`sidebar-streak-text ${
-                    streakData.streakCount === 0 ? 'streak-text-zero' :
+                  <p className={`sidebar-streak-text ${streakData.streakCount === 0 ? 'streak-text-zero' :
                     streakData.todayHasUnfinishedEvent ? 'streak-text-danger' :
-                    streakData.streakCount < 3 ? 'streak-text-normal' :
-                    streakData.streakCount < 5 ? 'streak-text-fire' : 'streak-text-huge'
-                  }`}>
+                      streakData.streakCount < 3 ? 'streak-text-normal' :
+                        streakData.streakCount < 5 ? 'streak-text-fire' : 'streak-text-huge'
+                    }`}>
                     {streakData.streakCount === 0 ? "Bắt đầu ngay!" :
-                     streakData.todayHasUnfinishedEvent ? "Sắp đứt chuỗi!" :
-                     streakData.streakCount < 3 ? "Đang khởi động" :
-                     streakData.streakCount < 5 ? "Đang bốc cháy!" : "Không thể cản bước!"}
+                      streakData.todayHasUnfinishedEvent ? "Sắp đứt chuỗi!" :
+                        streakData.streakCount < 3 ? "Đang khởi động" :
+                          streakData.streakCount < 5 ? "Đang bốc cháy!" : "Không thể cản bước!"}
                   </p>
                 </div>
               </div>
@@ -580,45 +629,44 @@ export default function StudentEvents() {
               </div>
             </div>
 
-            <div className="sidebar-widget">
-              <div className="sidebar-widget-header">
-                <h3 className="sidebar-widget-title">Hoạt động nổi bật</h3>
-                <span className="sidebar-widget-link">Xem tất cả</span>
-              </div>
-              <div className="sidebar-highlight">
-                <div className="sidebar-highlight-bg">🌍</div>
-                <span className="sidebar-highlight-badge">Sự kiện lớn</span>
-                <h4 className="sidebar-highlight-title">Ngày Môi trường Thế giới 2026</h4>
-                <p className="sidebar-highlight-desc">Tham gia các hoạt động xanh nhận ngay</p>
-                <div className="sidebar-highlight-reward">
-                  +50 UGC
-                </div>
-                <div className="sidebar-highlight-time">
-                  <span className="material-symbols-outlined text-[12px]">schedule</span>
-                  Còn 02 ngày 14 giờ
-                </div>
-              </div>
-            </div>
+            {topEvent && (
+              <TopEventWidget
+                ev={topEvent}
+                serverTimeOffset={serverTimeOffset}
+                onSubmitClaim={submitClaim}
+                busy={busy}
+                claim={claims.find(c => c.event_id === topEvent.id)}
+              />
+            )}
 
             <div className="sidebar-widget">
               <div className="sidebar-widget-header">
-                <h3 className="sidebar-widget-title">Gợi ý cho bạn</h3>
-                <span className="sidebar-widget-link">Xem tất cả</span>
+                <h3 className="sidebar-widget-title flex items-center gap-2">
+                  <span className="material-symbols-outlined text-green-600 text-lg">newspaper</span>
+                  Tin tức & Thông báo
+                </h3>
+                <Link to="/student/news" className="sidebar-widget-link">Xem tất cả</Link>
               </div>
-              <div className="sidebar-suggestion">
-                <div className="sidebar-suggestion-icon">
-                  <span className="text-2xl text-[#16a34a]">🚴</span>
-                </div>
-                <div className="sidebar-suggestion-info">
-                  <h4 className="sidebar-suggestion-title">Marathon Xanh ULSA 2026</h4>
-                  <p className="sidebar-suggestion-desc">Thử thách đạp xe 30km trong 7 ngày</p>
-                  <div className="sidebar-suggestion-action">
-                    <span className="sidebar-suggestion-reward">+30 UGC</span>
-                    <button className="sidebar-suggestion-btn">
-                      KHÁM PHÁ
-                    </button>
+              <div className="flex flex-col gap-3">
+                {newsList.slice(0, 2).map((item) => (
+                  <div key={item.id} onClick={() => setSelectedNews(item)} className="sidebar-suggestion items-start cursor-pointer hover:bg-gray-50 p-2 -mx-2 rounded-xl transition-colors">
+                    <div className={`w-10 h-10 rounded-xl ${item.badgeColor.split(' ')[0]} flex items-center justify-center shrink-0`}>
+                      <span className={`material-symbols-outlined ${item.badgeColor.split(' ')[1]} text-[20px]`}>{item.icon}</span>
+                    </div>
+                    <div className="sidebar-suggestion-info pt-0.5">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${item.badgeColor}`}>{item.category}</span>
+                      </div>
+                      <h4 className="sidebar-suggestion-title line-clamp-2 leading-tight mb-1">{item.title}</h4>
+                      <div className="flex items-center gap-1 text-[10px] text-[#16a34a] font-bold mt-1">
+                        Đọc chi tiết <span className="material-symbols-outlined text-[10px]">arrow_forward</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ))}
+                {newsList.length === 0 && (
+                  <p className="text-xs text-slate-500 font-medium">Chưa có tin tức nào</p>
+                )}
               </div>
             </div>
 
@@ -626,7 +674,163 @@ export default function StudentEvents() {
         </div>
       </main>
 
+      {/* News Detail Modal */}
+      {selectedNews && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setSelectedNews(null)}>
+          <div className="bg-white rounded-3xl shadow-2xl p-6 max-w-lg w-full mx-4 flex flex-col max-h-[85vh] animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between pb-3 border-b border-gray-100">
+              <div className="space-y-1">
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${selectedNews.badgeColor || 'bg-emerald-100 text-emerald-800'}`}>
+                  {selectedNews.category || 'Tin tức'}
+                </span>
+                <p className="text-[11px] text-gray-400 font-semibold mt-1">Đăng bởi: {selectedNews.author || 'Admin'} · {selectedNews.date}</p>
+              </div>
+              <button onClick={() => setSelectedNews(null)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors">
+                <span className="material-symbols-outlined text-gray-500">close</span>
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 py-4 pr-1 custom-scrollbar">
+              <h3 className="text-base font-extrabold text-gray-900 leading-snug mb-3">{selectedNews.title}</h3>
+              <p className="text-xs text-gray-800 leading-relaxed font-semibold bg-gray-50 p-3.5 rounded-2xl border border-gray-100/50 mb-4">{selectedNews.summary}</p>
+              <p className="text-xs text-gray-650 leading-relaxed whitespace-pre-wrap">{selectedNews.content}</p>
+            </div>
+            <div className="pt-3 border-t border-gray-100 flex justify-end">
+              <button onClick={() => setSelectedNews(null)} className="py-2 px-5 bg-gray-100 hover:bg-gray-250 text-gray-700 font-bold text-xs rounded-xl transition-all">Đóng</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
+  )
+}
+
+function TopEventWidget({ ev, serverTimeOffset, onSubmitClaim, busy, claim }) {
+  const { user } = useAuth()
+  const userRole = user?.role
+  const { showToast } = useToast()
+  const [showDetails, setShowDetails] = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
+  const [showQR, setShowQR] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [file, setFile] = useState(null)
+  const [note, setNote] = useState('')
+
+  const status = getEventStatus(ev.start_at, ev.end_at, serverTimeOffset)
+
+  const imageMap = {
+    'hiến máu': 'https://images.unsplash.com/photo-1615461066841-6116e61058f4?w=800&q=80',
+    'dọn rác': 'https://images.unsplash.com/photo-1611284446314-60a58ac0deb9?w=800&q=80',
+    'trồng cây': 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=800&q=80'
+  }
+  const defaultImg = 'https://images.unsplash.com/photo-1531206715517-5c0ba140b2b8?w=800&q=80'
+  const activityLower = ev.activity_name?.toLowerCase() || ''
+
+  let imgSrc = defaultImg
+  if (ev.image_url) {
+    imgSrc = `${import.meta.env.VITE_BACKEND_URL}${ev.image_url}`
+  } else if (ev.activity_description && ev.activity_description.startsWith('/uploads')) {
+    imgSrc = `/api${ev.activity_description}`
+  } else {
+    imgSrc = imageMap[Object.keys(imageMap).find(k => activityLower.includes(k))] || defaultImg
+  }
+
+  const start = new Date(ev.start_at);
+  const now = new Date(Date.now() + serverTimeOffset);
+  const diffTime = start - now;
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  const diffHours = Math.floor((diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  let timeStr = 'Đang diễn ra';
+  if (status === 'upcoming') {
+    timeStr = `Bắt đầu sau ${diffDays} ngày`;
+    if (diffDays === 0) timeStr = `Bắt đầu sau ${diffHours} giờ`;
+  } else if (status === 'completed') {
+    timeStr = 'Đã kết thúc';
+  } else {
+    const end = new Date(ev.end_at);
+    const diffE = Math.floor((end - now) / (1000 * 60 * 60 * 24));
+    const diffEH = Math.floor(((end - now) % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    timeStr = `Còn ${diffE} ngày ${diffEH} giờ`;
+  }
+
+  return (
+    <>
+      {/* Hoạt động nổi bật*/}
+      <div className="sidebar-widget">
+        <div className="sidebar-widget-header">
+          <h3 className="sidebar-widget-title">Hoạt động nổi bật</h3>
+          <span className="sidebar-widget-link" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Xem tất cả</span>
+        </div>
+        <div className="sidebar-highlight cursor-pointer transition-transform hover:scale-[1.02]" onClick={() => setShowDetails(true)}>
+          <img src={laImage} alt="lá" className="sidebar-highlight-img" />
+          <span className="sidebar-highlight-badge">{ev.activity_name || 'Sự kiện lớn'}</span>
+          <h4 className="sidebar-highlight-title">{ev.title}</h4>
+          <p className="sidebar-highlight-desc clamp-2" style={{ WebkitLineClamp: 2, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{ev.description || 'Tham gia các hoạt động xanh nhận ngay'}</p>
+          <div className="sidebar-highlight-reward">
+            +{ev.credit_amount} UGC
+          </div>
+          <div className="sidebar-highlight-time">
+            <span className="material-symbols-outlined text-[12px]">schedule</span>
+            {timeStr}
+          </div>
+        </div>
+      </div>
+
+      {showDetails && (
+        <EventDetailsModal
+          ev={ev}
+          imgSrc={imgSrc}
+          open={showDetails}
+          onClose={() => setShowDetails(false)}
+          onCheckIn={() => setShowScanner(true)}
+          userRole={userRole}
+          showQRScanner={() => setShowScanner(true)}
+          serverTimeOffset={serverTimeOffset}
+          onOpenSubmitClaim={() => setOpen(true)}
+          claim={claim}
+        />
+      )}
+
+      {showQR && createPortal(<QRGenerator eventId={ev.id} onClose={() => setShowQR(false)} />, document.body)}
+      {showScanner && createPortal(
+        <QRScanner eventId={ev.id} onClose={() => setShowScanner(false)}
+          onSuccess={(msg, isOffline) => {
+            setShowScanner(false);
+            showToast(isOffline ? '⚠️ ' + msg : '✅ ' + msg);
+            if (!isOffline) setOpen(true);
+          }} />,
+        document.body
+      )}
+      {open && createPortal(
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in" onClick={() => setOpen(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h2 className="text-xl font-headline font-black text-on-surface mb-2">Xác minh tham gia</h2>
+            <p className="text-on-surface-variant text-sm mb-6">Tải lên hình ảnh minh chứng để hoàn tất quá trình Check-in và nhận {ev.credit_amount} UGC.</p>
+            <div className="space-y-4 mb-6">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">Hình ảnh minh chứng</label>
+                <input type="file" accept="image/*" onChange={e => setFile(e.target.files[0])}
+                  className="w-full text-sm text-on-surface-variant file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all cursor-pointer" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">Ghi chú (Tùy chọn)</label>
+                <textarea placeholder="Nhập ghi chú thêm nếu có..." value={note} onChange={e => setNote(e.target.value)}
+                  className="w-full bg-surface-container-high rounded-xl p-3 text-sm outline-none border-none text-on-surface" rows={3}></textarea>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setOpen(false)} className="flex-1 py-3 rounded-xl bg-surface-container-highest font-bold text-sm text-on-surface hover:bg-surface-variant transition-colors">Để sau</button>
+              <button onClick={async () => {
+                if (await onSubmitClaim(ev.id, file, note)) setOpen(false);
+              }} disabled={busy} className="flex-1 py-3 rounded-xl bg-primary text-on-primary font-bold text-sm hover:scale-[1.02] shadow-lg shadow-primary/20 transition-all disabled:opacity-50">
+                {busy ? 'Đang nộp...' : 'Gửi xác minh'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   )
 }
 
@@ -769,22 +973,14 @@ function EventDetailsModal({ ev, imgSrc, onClose, onCheckIn, userRole, showQRSca
             )}
 
             {userRole === 'student' && isOngoing && (!claim || claim.status === 'rejected') && (
-              <div style={{ display: 'flex', gap: '12px', width: '100%', marginTop: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', width: '100%', marginTop: '16px' }}>
                 <button
                   onClick={() => { onClose(); showQRScanner(); }}
                   className="event-modal-btn-primary"
-                  style={{ flex: 1, padding: '12px 0' }}
+                  style={{ width: '100%', padding: '12px 0' }}
                 >
                   <span className="material-symbols-outlined">qr_code_scanner</span>
                   Quét QR
-                </button>
-                <button
-                  onClick={() => { onClose(); onOpenSubmitClaim(); }}
-                  className="event-modal-btn-primary"
-                  style={{ flex: 1, backgroundColor: '#0284c7', padding: '12px 0' }}
-                >
-                  <span className="material-symbols-outlined">upload_file</span>
-                  Nộp ảnh
                 </button>
               </div>
             )}
@@ -955,7 +1151,6 @@ function EventCard({ ev, serverTimeOffset, onSubmitClaim, busy, claim }) {
           onSuccess={(msg, isOffline) => {
             setShowScanner(false);
             showToast(isOffline ? '⚠️ ' + msg : '✅ ' + msg);
-            setCheckedInStatus(isOffline ? 'offline' : 'online');
             if (!isOffline) setOpen(true);
           }} />,
         document.body

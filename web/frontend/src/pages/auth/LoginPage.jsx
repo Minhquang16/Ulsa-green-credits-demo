@@ -252,6 +252,16 @@ export default function LoginPage() {
             </button>
           </p>
 
+          {/* Public Verify Link */}
+          <div className="mt-6 p-4 rounded-xl border border-emerald-100 bg-emerald-50/50 flex flex-col items-center text-center">
+            <span className="material-symbols-outlined text-emerald-600 mb-2" style={{ fontSize: 28 }}>verified_user</span>
+            <p className="text-[13px] text-gray-600 font-medium mb-3">Bạn muốn kiểm tra tính hợp lệ của một Tín chỉ xanh?</p>
+            <button onClick={() => nav('/verify')} className="w-full h-10 rounded-lg bg-white border border-emerald-200 text-emerald-700 text-[13px] font-bold hover:bg-emerald-50 hover:border-emerald-300 transition-colors shadow-sm flex items-center justify-center gap-2">
+              <span className="material-symbols-outlined text-[16px]">search</span>
+              Cổng tra cứu công khai
+            </button>
+          </div>
+
           {/* Quick access */}
           <div className="mt-8">
             <div className="flex items-center gap-3 mb-4">

@@ -36,7 +36,7 @@ function toDatetimeLocal(s) {
   } catch { return '' }
 }
 
-const EMPTY_FORM = { activity_type_id: '', title: '', description: '', location: '', start_at: '', end_at: '' }
+const EMPTY_FORM = { activity_type_id: '', title: '', description: '', location: '', latitude: '', longitude: '', start_at: '', end_at: '' }
 const EMPTY_AT = { name: '', credit_amount: '', description: '' }
 
 export default function AdminEvents() {
@@ -79,6 +79,8 @@ export default function AdminEvents() {
       title: ev.title || '',
       description: ev.description || '',
       location: ev.location || '',
+      latitude: ev.latitude || '',
+      longitude: ev.longitude || '',
       start_at: toDatetimeLocal(ev.start_at),
       end_at: toDatetimeLocal(ev.end_at)
     })
@@ -145,6 +147,8 @@ export default function AdminEvents() {
       const payload = { ...form }
       payload.start_at = payload.start_at ? (() => { const d = new Date(payload.start_at); return isNaN(d.getTime()) ? null : d.toISOString() })() : null
       payload.end_at = payload.end_at ? (() => { const d = new Date(payload.end_at); return isNaN(d.getTime()) ? null : d.toISOString() })() : null
+      payload.latitude = payload.latitude ? parseFloat(payload.latitude) : null
+      payload.longitude = payload.longitude ? parseFloat(payload.longitude) : null
       if (editId) {
         await api(`/events/${editId}`, { method: 'PUT', body: JSON.stringify(payload) })
         showToast('✅ Đã cập nhật sự kiện!')
@@ -286,6 +290,7 @@ export default function AdminEvents() {
                     <input className="w-full bg-surface-container-high border-none rounded-xl py-2.5 px-3 text-xs text-on-surface outline-none"
                       placeholder="Khu A — Hội trường" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
                   </div>
+
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">

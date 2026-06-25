@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
@@ -255,8 +256,13 @@ async function seedIfNeeded() {
   // Provenance: add column to claims table
   await pool.query("ALTER TABLE claims ADD COLUMN IF NOT EXISTS provenance_tx_hash TEXT;");
 
-  // Events: add image_url
+  // Events: add image_url, latitude, longitude
   await pool.query("ALTER TABLE events ADD COLUMN IF NOT EXISTS image_url TEXT;");
+  await pool.query("ALTER TABLE events ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;");
+  await pool.query("ALTER TABLE events ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;");
+  
+  // Checkins: add device_id
+  await pool.query("ALTER TABLE checkins ADD COLUMN IF NOT EXISTS device_id TEXT;");
 
   // Make sure users table has status column & other registration fields
   await pool.query("ALTER TABLE users ALTER COLUMN wallet_index DROP NOT NULL;");
@@ -952,7 +958,7 @@ app.get("/events", authRequired, async (req, res) => {
 
 app.post("/events", authRequired, requireRole("admin", "verifier"), upload.single("image"), async (req, res) => {
   try {
-    let { activity_type_id, activity_name, credit_amount, title, description, start_at, end_at, location } = req.body || {};
+    let { activity_type_id, activity_name, credit_amount, title, description, start_at, end_at, location, latitude, longitude } = req.body || {};
     let image_url = null;
     if (req.file) {
       image_url = `/uploads/${req.file.filename}`;
@@ -974,10 +980,10 @@ app.post("/events", authRequired, requireRole("admin", "verifier"), upload.singl
 
     const qr_token = crypto.randomBytes(16).toString("hex");
     const rs = await pool.query(
-      `INSERT INTO events(activity_type_id, title, description, organizer_id, start_at, end_at, location, qr_token, status, image_url)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      `INSERT INTO events(activity_type_id, title, description, organizer_id, start_at, end_at, location, latitude, longitude, qr_token, status, image_url)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *`,
-      [activity_type_id, title, description || "", req.user.id, start_at || null, end_at || null, location || "", qr_token, "published", image_url]
+      [activity_type_id, title, description || "", req.user.id, start_at || null, end_at || null, location || "", latitude || null, longitude || null, qr_token, "published", image_url]
     );
     res.json(rs.rows[0]);
   } catch (e) {
@@ -988,7 +994,7 @@ app.post("/events", authRequired, requireRole("admin", "verifier"), upload.singl
 
 app.put("/events/:id", authRequired, requireRole("admin", "verifier"), upload.single("image"), async (req, res) => {
   try {
-    let { activity_name, credit_amount, title, description, start_at, end_at, location } = req.body || {};
+    let { activity_name, credit_amount, title, description, start_at, end_at, location, latitude, longitude } = req.body || {};
     if (!title) return res.status(400).json({ error: "title required" });
 
     const evRs = await pool.query("SELECT activity_type_id, image_url FROM events WHERE id=$1", [req.params.id]);
@@ -1009,9 +1015,9 @@ app.put("/events/:id", authRequired, requireRole("admin", "verifier"), upload.si
     }
 
     const rs = await pool.query(
-      `UPDATE events SET activity_type_id=$1, title=$2, description=$3, start_at=$4, end_at=$5, location=$6, image_url=$7
-       WHERE id=$8 RETURNING *`,
-      [activity_type_id, title, description || "", start_at || null, end_at || null, location || "", image_url, req.params.id]
+      `UPDATE events SET activity_type_id=$1, title=$2, description=$3, start_at=$4, end_at=$5, location=$6, latitude=$7, longitude=$8, image_url=$9
+       WHERE id=$10 RETURNING *`,
+      [activity_type_id, title, description || "", start_at || null, end_at || null, location || "", latitude || null, longitude || null, image_url, req.params.id]
     );
     res.json(rs.rows[0]);
   } catch (e) {
@@ -1089,6 +1095,104 @@ app.post("/checkin", authRequired, requireRole("student"), async (req, res) => {
       return res.status(400).json({ error: "Already checked in for this event" });
     }
     throw e;
+  }
+});
+
+app.post("/api/smart-checkin", authRequired, requireRole("student"), async (req, res) => {
+  const { event_id, token, proof_image, checkin_lat, checkin_lng, device_id } = req.body || {};
+  if (!event_id) return res.status(400).json({ error: "event_id is required" });
+
+  const eventRs = await pool.query("SELECT * FROM events WHERE id=$1", [event_id]);
+  const event = eventRs.rows[0];
+  if (!event) return res.status(404).json({ error: "Event not found" });
+
+  // 1. Insert into checkins (to record GPS location and device)
+  try {
+    await pool.query(
+      "INSERT INTO checkins(event_id, student_id, latitude, longitude, device_id) VALUES($1,$2,$3,$4,$5)",
+      [event_id, req.user.id, checkin_lat || null, checkin_lng || null, device_id || null]
+    );
+  } catch (e) {
+    if (e.code === '23505') { // unique_violation
+      return res.status(400).json({ error: "Bạn đã điểm danh ở sự kiện này rồi!" });
+    }
+    return res.status(500).json({ error: "Lỗi ghi nhận check-in: " + e.message });
+  }
+
+  // 2. Process base64 proof image and insert into claims
+  let evidence_path = null;
+  let evidence_hash = null;
+
+  if (proof_image) {
+    try {
+      const matches = proof_image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        const imageBuffer = Buffer.from(matches[2], 'base64');
+        const ext = matches[1].split('/')[1] || 'jpeg';
+        const filename = `proof_${event_id}_${req.user.id}_${Date.now()}.${ext}`;
+        const filePath = path.join(UPLOAD_DIR, filename);
+        fs.writeFileSync(filePath, imageBuffer);
+
+        // Upload to Pinata IPFS
+        if (process.env.PINATA_JWT) {
+          try {
+            console.log("Uploading to Pinata IPFS...");
+            const FormData = global.FormData || require('form-data');
+            const formData = new FormData();
+            
+            // For Node 18+ native FormData
+            if (typeof Blob !== 'undefined') {
+              const blob = new Blob([imageBuffer], { type: 'image/' + ext });
+              formData.append('file', blob, filename);
+            } else {
+              // Fallback for older Node with form-data module
+              formData.append('file', imageBuffer, { filename, contentType: 'image/' + ext });
+            }
+
+            const pinataRes = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.PINATA_JWT}`
+              },
+              body: formData
+            });
+            const pinataData = await pinataRes.json();
+            if (pinataData.IpfsHash) {
+              evidence_hash = pinataData.IpfsHash;
+              // We'll use the IPFS gateway URL instead of local path
+              evidence_path = `https://gateway.pinata.cloud/ipfs/${pinataData.IpfsHash}`;
+              console.log("✅ Successfully pinned to Pinata:", evidence_hash);
+            }
+          } catch (pinataErr) {
+            console.error("⚠️ Pinata upload failed, falling back to local:", pinataErr.message);
+          }
+        }
+
+        // Fallback to local storage if Pinata failed or not configured
+        if (!evidence_hash) {
+          evidence_path = "/uploads/" + filename;
+          evidence_hash = sha256File(filePath);
+        }
+      }
+    } catch (err) {
+      console.error("Error saving proof_image:", err);
+    }
+  }
+
+  if (!evidence_hash) {
+    evidence_hash = crypto.createHash("sha256").update(event_id + req.user.id + Date.now()).digest("hex");
+  }
+
+  try {
+    const rs = await pool.query(
+      `INSERT INTO claims(event_id, student_id, evidence_path, evidence_hash, note, status)
+       VALUES($1,$2,$3,$4,$5,'submitted')
+       RETURNING *`,
+      [event_id, req.user.id, evidence_path, evidence_hash, "Smart QR Check-in with Liveness"]
+    );
+    res.json({ ok: true, message: "Điểm danh và nộp minh chứng thành công! Đang chờ duyệt.", claim: rs.rows[0] });
+  } catch (e) {
+    res.status(500).json({ error: "Lỗi tạo claim: " + e.message });
   }
 });
 
@@ -1888,6 +1992,73 @@ app.get("/provenance/claim/:claimId", authRequired, async (req, res) => {
     });
   } catch (e) {
     console.error("GET /provenance/claim error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * GET /public/verify/:query
+ * Tra cứu CÔNG KHAI 1 giao dịch blockchain hoặc Claim ID
+ */
+app.get("/public/verify/:query", async (req, res) => {
+  try {
+    const { query } = req.params;
+
+    const issueRs = await pool.query(
+      `SELECT c.id, c.approved_tx_hash, c.provenance_tx_hash, c.evidence_hash, c.decided_at, c.created_at, c.evidence_path,
+              ch.latitude, ch.longitude,
+              e.title AS event_title, a.name AS activity_name, a.credit_amount,
+              u1.full_name AS student_name, u1.student_id, u1.wallet_address AS student_wallet, 
+              u2.full_name AS approver_name
+       FROM claims c
+       JOIN events e ON e.id = c.event_id
+       JOIN activity_types a ON a.id = e.activity_type_id
+       JOIN users u1 ON u1.id = c.student_id
+       LEFT JOIN users u2 ON u2.id = c.approver_id
+       LEFT JOIN checkins ch ON ch.event_id = c.event_id AND ch.student_id = c.student_id
+       WHERE c.approved_tx_hash = $1 OR c.provenance_tx_hash = $1 OR c.id::text = $1 OR u1.wallet_address ILIKE $1
+       ORDER BY c.id DESC
+       LIMIT 1`,
+      [query]
+    );
+
+    if (issueRs.rows.length === 0) {
+      return res.json({ found: false });
+    }
+
+    const claim = issueRs.rows[0];
+
+    // On-chain receipt
+    let receipt = null;
+    let block = null;
+    try {
+      if (claim.provenance_tx_hash || claim.approved_tx_hash) {
+        const hashToFind = claim.provenance_tx_hash || claim.approved_tx_hash;
+        receipt = await provider.getTransactionReceipt(hashToFind);
+        if (receipt) {
+          block = await provider.getBlock(receipt.blockNumber);
+        }
+      }
+    } catch (e) {
+      console.warn("TX receipt fetch error:", e.message);
+    }
+
+    res.json({
+      query,
+      found: true,
+      claim: claim,
+      receipt: receipt ? {
+        blockNumber: receipt.blockNumber,
+        status: receipt.status,
+        contractAddress: receipt.to,
+        gasUsed: receipt.gasUsed?.toString()
+      } : null,
+      blockTimestamp: block ? Number(block.timestamp) : null,
+      network: "ULSA Green Chain (Local)",
+      contracts: { ugcAddress, provenanceAddress }
+    });
+  } catch (e) {
+    console.error("GET /api/public/verify error:", e);
     res.status(500).json({ error: e.message });
   }
 });

@@ -11,3 +11,6 @@ web/frontend/dist/
 shared/*.json
 .DS_Store
 **/.DS_Store
+.env
+backend/.env
+web/frontend/.env

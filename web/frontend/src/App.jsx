@@ -24,11 +24,13 @@ import AdminClaims from './pages/admin/AdminClaims.jsx'
 import StudentClaims from './pages/student/StudentClaims.jsx'
 import AdminRewards from './pages/admin/AdminRewards.jsx'
 import StudentRewards from './pages/student/StudentRewards.jsx'
+import VerifyPage from './pages/public/VerifyPage.jsx'
 import AdminPage from './pages/admin/AdminPage.jsx'
 import TreasuryPage from './pages/admin/TreasuryPage.jsx'
 import ProvenancePage from './pages/admin/ProvenancePage.jsx'
 import TrainingPointsPage from './pages/shared/TrainingPointsPage.jsx'
 import ProfilePage from './pages/shared/ProfilePage.jsx'
+import AttendancePage from './pages/student/AttendancePage.jsx'
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import ChatBot from './components/ChatBot.jsx'
 // Prototype Styles
@@ -1186,6 +1188,8 @@ export default function App() {
             <Route path="/dashboard" element={<IndexRedirect />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/verify" element={<VerifyPage />} />
+            <Route path="/verify/:query" element={<VerifyPage />} />
 
             {/* Admin Routes */}
             <Route path="/admin/dashboard" element={<RequireAuth><AdminDashboard /></RequireAuth>} />
@@ -1201,6 +1205,7 @@ export default function App() {
             <Route path="/student/events" element={<RequireAuth><StudentEvents /></RequireAuth>} />
             <Route path="/student/claims" element={<RequireAuth><StudentClaims /></RequireAuth>} />
             <Route path="/student/rewards" element={<RequireAuth><StudentRewards /></RequireAuth>} />
+            <Route path="/attendance" element={<RequireAuth><AttendancePage /></RequireAuth>} />
 
             {/* Shared */}
             <Route path="/training-points" element={<RequireAuth><TrainingPointsPage /></RequireAuth>} />
