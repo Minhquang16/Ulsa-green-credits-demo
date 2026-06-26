@@ -229,7 +229,7 @@ function HelpModal({ onClose }) {
 }
 
 // ─── Sidebar ───────────────────────────────────────────────────────────────────
-export default function StudentSidebar({ isCollapsed, setIsCollapsed }) {
+export default function AdminSidebar({ isCollapsed, setIsCollapsed, isAdmin }) {
   const loc = useLocation()
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
@@ -242,19 +242,26 @@ export default function StudentSidebar({ isCollapsed, setIsCollapsed }) {
     return () => clearInterval(interval)
   }, [isCollapsed])
 
-  const navItems = [
-    { path: '/student/dashboard', label: 'Trang chủ', icon: 'dashboard' },
-    { path: '/student/events', label: 'Hoạt động', icon: 'event_note' },
-    { path: '/student/claims', label: 'Ghi nhận', icon: 'verified' },
-    { path: '/training-points', label: 'Điểm rèn luyện', icon: 'school' },
-    { path: '/student/rewards', label: 'Ưu đãi', icon: 'redeem' }
+  const navItems = isAdmin ? [
+    { path: '/admin/dashboard', label: 'Dashboard', icon: 'dashboard' },
+    { path: '/admin/events', label: 'Hoạt động', icon: 'event_note' },
+    { path: '/admin/claims', label: 'Phê duyệt', icon: 'verified_user' },
+    { path: '/admin/rewards', label: 'Ưu đãi', icon: 'redeem' },
+    { type: 'section', label: 'Quản trị', adminOnly: true },
+    { path: '/admin/users', label: 'Người dùng', icon: 'manage_accounts', adminOnly: true },
+    { path: '/admin/treasury', label: 'Kho quỹ', icon: 'account_balance', adminOnly: true },
+    { type: 'section', label: 'Blockchain' },
+    { path: '/admin/provenance', label: 'Truy xuất', icon: 'policy' }
+  ] : [
+    { path: '/verifier/dashboard', label: 'Dashboard', icon: 'dashboard' },
+    { path: '/verifier/events', label: 'Hoạt động', icon: 'event_note' },
+    { path: '/verifier/claims', label: 'Phê duyệt', icon: 'verified_user' },
+    { path: '/verifier/rewards', label: 'Ưu đãi', icon: 'redeem' },
+    { type: 'section', label: 'Blockchain' },
+    { path: '/verifier/provenance', label: 'Truy xuất', icon: 'policy' }
   ]
 
-  const bottomItems = [
-    { path: '/profile', label: 'Hồ sơ', icon: 'person' },
-    { path: '#', label: 'Cài đặt', icon: 'settings', action: () => window.dispatchEvent(new Event('open-settings')) },
-    { path: '/help', label: 'Trợ giúp', icon: 'help' }
-  ]
+
 
   return (
     <>
@@ -263,7 +270,7 @@ export default function StudentSidebar({ isCollapsed, setIsCollapsed }) {
         {/* Sidebar Header / Logo */}
         <div className="sidebar-header">
           <Link
-            to="/student/dashboard"
+            to={isAdmin ? "/admin/dashboard" : "/verifier/dashboard"}
             className={cn("sidebar-logo-link", isCollapsed ? "sidebar-logo-link--collapsed" : "sidebar-logo-link--expanded")}
           >
             <div className="sidebar-logo-container">
@@ -272,7 +279,7 @@ export default function StudentSidebar({ isCollapsed, setIsCollapsed }) {
           </Link>
 
           {isCollapsed && (
-            <Link to="/student/dashboard" className="sidebar-logo-collapsed-link">
+            <Link to={isAdmin ? "/admin/dashboard" : "/verifier/dashboard"} className="sidebar-logo-collapsed-link">
               <img src={logoWeb} alt="UGC Logo" className="sidebar-logo-img--collapsed" />
             </Link>
           )}
@@ -288,7 +295,17 @@ export default function StudentSidebar({ isCollapsed, setIsCollapsed }) {
         {/* Main Navigation */}
         <ScrollArea className="flex-1 w-full">
           <div className="sidebar-nav-container flex flex-col min-h-full">
-            {navItems.map(item => {
+            {navItems.map((item, idx) => {
+              if (item.adminOnly && !isAdmin) return null;
+
+              if (item.type === 'section') {
+                return (
+                  <div key={`section-${idx}`} className={cn("mt-4 mb-2 px-5 transition-all duration-300", isCollapsed ? "opacity-0 h-0 overflow-hidden m-0 pt-0 pb-0" : "opacity-100")}>
+                    <p className="text-[10px] font-bold text-slate-400/80 uppercase tracking-widest truncate">{item.label}</p>
+                  </div>
+                )
+              }
+
               const isActive = loc.pathname === item.path
               return (
                 <div key={item.path} className="sidebar-nav-item">
@@ -309,30 +326,7 @@ export default function StudentSidebar({ isCollapsed, setIsCollapsed }) {
               )
             })}
 
-            <Separator className="my-4" />
 
-            {/* Secondary Navigation */}
-            {bottomItems.map((item, idx) => {
-              const isActive = loc.pathname === item.path
-              return (
-                <div key={idx} className="sidebar-nav-item">
-                  <TooltipPortal content={item.label} disabled={!isCollapsed}>
-                    <Link
-                      to={item.path}
-                      onClick={item.action ? (e) => { e.preventDefault(); item.action(); } : undefined}
-                      className={cn("sidebar-nav-link", isActive ? "sidebar-nav-link--active" : "sidebar-nav-link--inactive")}
-                    >
-                      <span className={cn("material-symbols-outlined sidebar-nav-icon", isActive ? "sidebar-nav-icon--active" : "sidebar-nav-icon--inactive")}>
-                        {item.icon}
-                      </span>
-                      <span className={cn("sidebar-nav-label", isCollapsed ? "sidebar-nav-label--collapsed" : "sidebar-nav-label--expanded")}>
-                        {item.label}
-                      </span>
-                    </Link>
-                  </TooltipPortal>
-                </div>
-              )
-            })}
 
             <div className="mt-auto"></div>
 

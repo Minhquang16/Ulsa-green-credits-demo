@@ -2,7 +2,8 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '../../auth.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
 import '../../styles/admin/admin.css'
-
+import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import AdminUsersTab from './AdminUsersTab.jsx'
 
 export default function AdminPage() {
   const { api, user } = useAuth()
@@ -12,21 +13,13 @@ export default function AdminPage() {
 
   // ── Stats ──────────────────────────────────────────────
   const [stats, setStats] = useState({ users: 0, events: 0, claims: 0, approvedClaims: 0 })
-  const [tokenStats, setTokenStats] = useState({ issued: 0, burned: 0, supply: 0, contract: 'Loading...' })
   const [weeklyData, setWeeklyData] = useState([])
 
   // ── Users ──────────────────────────────────────────────
   const [users, setUsers] = useState([])
   const [busy, setBusy] = useState(false)
   const [processingIds, setProcessingIds] = useState(new Set())
-  const [showUserModal, setShowUserModal] = useState(false)
-  const [editingUser, setEditingUser] = useState(null)
-  const [userForm, setUserForm] = useState({ username: '', password: '', full_name: '', role: 'student', status: 'active' })
   const [selectedCardImage, setSelectedCardImage] = useState(null)
-
-  // ── Search & Filter ────────────────────────────────────
-  const [searchQuery, setSearchQuery] = useState('')
-  const [roleFilter, setRoleFilter] = useState('all')
 
   // Per-row loading state helper
   const setProcessing = (id, on) => {
@@ -43,22 +36,6 @@ export default function AdminPage() {
   const pendingCount = useMemo(() =>
     users.filter(u => u.status === 'pending').length, [users])
 
-  // Filtered users for Users tab
-  const filteredUsers = useMemo(() => {
-    return users
-      .filter(u => u.status === 'active' || u.status === 'disabled')
-      .filter(u => {
-        if (roleFilter !== 'all' && u.role !== roleFilter) return false
-        const q = searchQuery.toLowerCase().trim()
-        if (!q) return true
-        return (
-          u.full_name?.toLowerCase().includes(q) ||
-          u.username?.toLowerCase().includes(q) ||
-          u.student_id?.toLowerCase().includes(q)
-        )
-      })
-  }, [users, searchQuery, roleFilter])
-
   // ── Load functions ─────────────────────────────────────
   async function loadStats() {
     try {
@@ -68,12 +45,6 @@ export default function AdminPage() {
         api('/analytics/weekly-claims').catch(() => [])
       ])
       setStats(s)
-      setTokenStats({
-        contract: s.token?.contract || 'N/A',
-        supply: s.token?.totalSupply ?? 0,
-        issued: s.token?.totalIssued ?? 0,
-        burned: s.token?.totalBurned ?? 0
-      })
       setWeeklyData(Array.isArray(weekly) ? weekly : [])
     } catch (e) {
       showToast('⚠️ Lỗi tải dữ liệu quản trị')
@@ -99,54 +70,6 @@ export default function AdminPage() {
     if (activeTab === 'stats') loadStats()
     else loadUsers()
   }, [activeTab])
-
-  // ── User Modal ─────────────────────────────────────────
-  const openNewUserModal = () => {
-    setEditingUser(null)
-    setUserForm({ username: '', password: '', full_name: '', role: 'student', status: 'active' })
-    setShowUserModal(true)
-  }
-  const openEditUserModal = (u) => {
-    setEditingUser(u)
-    setUserForm({ username: u.username, password: '', full_name: u.full_name, role: u.role, status: u.status })
-    setShowUserModal(true)
-  }
-  const handleSaveUser = async (e) => {
-    e.preventDefault()
-    try {
-      setBusy(true)
-      if (editingUser) {
-        await api(`/admin/users/${editingUser.id}`, { method: 'PUT', body: JSON.stringify(userForm) })
-        showToast('✅ Cập nhật tài khoản thành công')
-      } else {
-        await api('/admin/users', { method: 'POST', body: JSON.stringify(userForm) })
-        showToast('✅ Tạo tài khoản mới thành công')
-      }
-      setShowUserModal(false)
-      loadUsers()
-    } catch (err) {
-      showToast(`⚠️ Lỗi: ${err.message}`)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  // ── Toggle lock/unlock ─────────────────────────────────
-  const handleToggleStatus = async (u) => {
-    if (u.id === user.id) { showToast('⚠️ Không thể khóa chính mình'); return }
-    const newStatus = u.status === 'active' ? 'disabled' : 'active'
-    if (!window.confirm(`Bạn có chắc muốn ${newStatus === 'active' ? 'MỞ KHÓA' : 'KHÓA'} tài khoản ${u.username}?`)) return
-    try {
-      setBusy(true)
-      await api(`/admin/users/${u.id}`, { method: 'PUT', body: JSON.stringify({ status: newStatus }) })
-      showToast(`✅ Đã ${newStatus === 'active' ? 'mở khóa' : 'khóa'} tài khoản`)
-      loadUsers()
-    } catch (err) {
-      showToast(`⚠️ Lỗi: ${err.message}`)
-    } finally {
-      setBusy(false)
-    }
-  }
 
   // ── Approve / Reject ───────────────────────────────────
   const handleApprove = async (userId) => {
@@ -179,20 +102,60 @@ export default function AdminPage() {
     }
   }
 
+  // ── Export Report ────────────────────────────────────────
+  const handleExportReport = () => {
+    try {
+      showToast('Đang tạo báo cáo...', 'info')
+      
+      const headers = ['ID', 'Họ và tên', 'Tên đăng nhập', 'Email', 'Vai trò', 'Trạng thái', 'Số dư UGC', 'Ngày tham gia']
+      const rows = users.map(u => [
+        u.id,
+        `"${u.full_name || ''}"`,
+        `"${u.username || ''}"`,
+        `"${u.email || ''}"`,
+        u.role,
+        u.status,
+        u.ugc_balance || 0,
+        `"${new Date(u.created_at || Date.now()).toLocaleDateString('vi-VN')}"`
+      ])
+      
+      const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.setAttribute('href', url)
+      link.setAttribute('download', `bao-cao-ugc-${new Date().toISOString().split('T')[0]}.csv`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      showToast('✅ Đã tải xuống báo cáo thành công!')
+    } catch (error) {
+      console.error(error)
+      showToast('⚠️ Lỗi khi tải báo cáo!')
+    }
+  }
+
   // ── Render ─────────────────────────────────────────────
   return (
-    <main className="max-w-[1200px] mx-auto px-6 lg:px-8 py-8 animate-in relative">
+    <main className="max-w-[1200px] mx-auto px-6 lg:px-8 pt-4 pb-8 animate-in relative">
 
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-6 gap-4">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end mb-2 gap-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Governance Hub</p>
-          <h1 className="font-headline text-3xl font-extrabold tracking-tight text-on-surface">Trung tâm Quản trị</h1>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="material-symbols-outlined text-[#16a34a] text-[16px]">shield_person</span>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#16a34a]">GOVERNANCE HUB</p>
+          </div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 mb-1">Trung tâm Quản trị</h1>
+          <p className="text-xs font-medium text-slate-500 max-w-xl">Quản lý người dùng, duyệt yêu cầu xác thực và theo dõi toàn bộ hoạt động trên hệ thống UGC.</p>
         </div>
-        <div className="flex flex-wrap gap-1 bg-surface-container-low p-1 rounded-xl shadow-sm border border-outline-variant/10">
-          <TabBtn active={activeTab === 'stats'} onClick={() => setActiveTab('stats')}>Tổng quan Stats</TabBtn>
-          <TabBtn active={activeTab === 'users'} onClick={() => setActiveTab('users')}>Quản lý Người dùng</TabBtn>
-          <TabBtn active={activeTab === 'pending'} onClick={() => setActiveTab('pending')} badge={pendingCount}>Duyệt Sinh Viên</TabBtn>
+        
+        <div className="flex items-center gap-1 bg-white/80 backdrop-blur-md rounded-xl p-1 shadow-sm border border-slate-200/80">
+          <TabBtn active={activeTab === 'stats'} onClick={() => setActiveTab('stats')} icon="pie_chart">Tổng quan Stats</TabBtn>
+          <TabBtn active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon="manage_accounts">Quản lý Người dùng</TabBtn>
+          <TabBtn active={activeTab === 'pending'} onClick={() => setActiveTab('pending')} icon="fact_check" badge={pendingCount}>Duyệt Sinh Viên</TabBtn>
         </div>
       </div>
 
@@ -201,108 +164,159 @@ export default function AdminPage() {
       {/* ══════════════════════════════════════════ */}
       {activeTab === 'stats' && (
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-          <div className="flex justify-end mb-4 gap-2">
-            <button onClick={() => showToast('Đang xuất báo cáo...')} className="btn btn--secondary px-4 py-2 text-xs">Xuất báo cáo</button>
-            <button onClick={loadStats} disabled={busy} className="btn btn--primary px-4 py-2 text-xs flex items-center gap-1">
-              <span className="material-symbols-outlined text-sm">refresh</span> Làm mới
+          <div className="flex justify-end mb-3">
+            <button onClick={handleExportReport} className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors flex items-center gap-1.5 shadow-sm">
+              <span className="material-symbols-outlined text-[16px]">download</span> Xuất báo cáo
             </button>
           </div>
 
           {/* 4 Enhanced Stats Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <StatCard
-              label="Tổng người dùng"
+              label="TỔNG NGƯỜI DÙNG"
               value={stats.users}
               sub="Tất cả tài khoản"
               icon="group"
-              accent="#3b82f6"
+              color="blue"
             />
             <StatCard
-              label="Sinh viên xác minh"
+              label="SINH VIÊN XÁC MINH"
               value={verifiedStudents}
               sub="Tài khoản Active"
               icon="verified_user"
-              accent="#16a34a"
+              color="green"
             />
             <StatCard
-              label="Tín chỉ xanh đã cấp"
-              value={tokenStats.issued}
-              sub="UGC Credits on-chain"
-              icon="eco"
-              accent="#059669"
+              label="TỔNG SỐ HOẠT ĐỘNG"
+              value={stats.events}
+              sub="Dự án xanh hiện có"
+              icon="event_note"
+              color="lightgreen"
             />
             <StatCard
-              label="Chờ phê duyệt"
+              label="CHỜ PHÊ DUYỆT"
               value={pendingCount}
               sub="Sinh viên đang chờ"
-              icon="pending_actions"
-              accent={pendingCount > 0 ? '#f59e0b' : '#94a3b8'}
-              urgent={pendingCount > 0}
+              icon="assignment_ind"
+              color="purple"
             />
           </div>
 
           {/* Weekly Claims Chart */}
-          <div className="bg-white rounded-3xl p-6 mb-6 border border-outline-variant/10 shadow-sm">
-            <div className="flex justify-between items-center mb-5">
+          <div className="bg-white rounded-[24px] p-6 lg:p-8 mb-8 border border-slate-100 shadow-sm relative">
+            <div className="flex justify-between items-start mb-6 relative z-10">
               <div>
-                <h2 className="font-headline text-base font-black text-on-surface">Claims được phê duyệt (28 ngày gần nhất)</h2>
-                <p className="text-[11px] text-on-surface-variant/50 mt-0.5">Số lượng claims được duyệt theo ngày</p>
+                <h2 className="text-base font-extrabold text-slate-900 mb-1">Claims được phê duyệt ({weeklyData.length || 0} ngày gần nhất)</h2>
+                <p className="text-[12px] font-medium text-slate-500">Số lượng claims được duyệt theo ngày</p>
               </div>
-              <span className="px-2 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest">Live Data</span>
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 text-[#16a34a] text-[9px] font-bold uppercase tracking-widest border border-green-100">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#16a34a]"></span>
+                LIVE DATA
+              </span>
             </div>
             <WeeklyChart data={weeklyData} />
           </div>
 
-          {/* Token Panel */}
-          <div className="bg-surface-container-low rounded-3xl p-8 mb-10 border border-outline-variant/10 shadow-xl shadow-black/5 relative overflow-hidden group">
-            <div className="flex flex-col lg:flex-row gap-8 relative z-10">
-              <div className="lg:flex-grow">
-                <div className="flex justify-between items-start mb-8">
-                  <div>
-                    <h2 className="font-headline text-xl font-black text-on-surface mb-1">Token stats (on-chain)</h2>
-                    <p className="text-[10px] font-mono text-primary opacity-60">Contract: <code>{tokenStats.contract}</code></p>
-                  </div>
-                  <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest">Hardhat local</span>
+          {/* New Features: Top Students & Account Stats */}
+          <div className="admin-stats-bottom-grid">
+            {/* Top Students */}
+            <div className="admin-top-students-card">
+              <div className="admin-top-students-header">
+                <div>
+                  <h2 className="admin-top-students-title">Top Sinh Viên Năng Nổ Nhất</h2>
+                  <p className="admin-top-students-subtitle">Xếp hạng theo số dư UGC hiện có</p>
                 </div>
-                <div className="flex items-end gap-3 h-48 mb-10 px-4">
-                  <Bar h="75%" /><Bar h="50%" /><Bar h="65%" /><Bar h="83%" highlight /><Bar h="33%" /><Bar h="100%" current />
-                </div>
-                <div className="grid grid-cols-3 gap-8">
-                  <Metric label="Total Issued" value={`${tokenStats.issued} UGC`} />
-                  <Metric label="Total Burned" value={`${tokenStats.burned} UGC`} />
-                  <Metric label="Supply (balance)" value={`${tokenStats.supply} UGC`} primary />
+                <div className="admin-top-students-icon">
+                  <span className="material-symbols-outlined">military_tech</span>
                 </div>
               </div>
+              <div className="admin-top-students-list">
+                {users.filter(u => u.role === 'student' && u.status === 'active')
+                  .sort((a, b) => (b.ugc_balance || 0) - (a.ugc_balance || 0))
+                  .slice(0, 5)
+                  .map((u, i) => (
+                    <div key={u.id} className="admin-top-student-item">
+                      <div className={`admin-top-student-rank rank-${i + 1}`}>
+                        #{i + 1}
+                      </div>
+                      <div className="admin-top-student-avatar">
+                        <img src={u.avatar_url || u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.full_name)}&background=random&color=fff&size=150`} alt={u.full_name} />
+                      </div>
+                      <div className="admin-top-student-info">
+                        <p className="admin-top-student-name">{u.full_name}</p>
+                        <p className="admin-top-student-username">@{u.username}</p>
+                      </div>
+                      <div className="admin-top-student-score">
+                        <p className="score-value">{u.ugc_balance || 0}</p>
+                        <p className="score-label">UGC</p>
+                      </div>
+                    </div>
+                  ))}
+                  {users.filter(u => u.role === 'student' && u.status === 'active').length === 0 && (
+                    <div className="admin-top-students-empty">
+                      <p>Chưa có sinh viên nào.</p>
+                    </div>
+                  )}
+              </div>
+            </div>
 
-              <div className="lg:w-80 flex flex-col justify-between">
-                <div className="mb-8">
-                  <h3 className="font-headline text-sm font-black text-on-surface uppercase tracking-widest mb-4 opacity-40">Global Impact</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-[10px] font-bold text-on-surface-variant/60 uppercase">CO₂ Offset tổng</p>
-                      <p className="text-xl font-headline font-black text-on-surface">42,810 Tấn</p>
+            {/* Account Status Stats */}
+            <div className="admin-account-stats-card">
+              <div className="admin-account-stats-header">
+                <h2 className="admin-account-stats-title">Cơ cấu Tài khoản</h2>
+                <p className="admin-account-stats-subtitle">Phân bố tình trạng các tài khoản trong hệ thống</p>
+              </div>
+              <div className="admin-account-stats-grid">
+                {/* Active */}
+                <div className="account-stat-box stat-active">
+                  <div className="account-stat-label">
+                    <div className="account-stat-icon">
+                      <span className="material-symbols-outlined">cancel</span>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-on-surface-variant/60 uppercase">Dự án đang hoạt động</p>
-                      <p className="text-xl font-headline font-black text-on-surface">214 Global</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-on-surface-variant/60 uppercase">Tổng Claims đã duyệt</p>
-                      <p className="text-xl font-headline font-black text-on-surface">{stats.approvedClaims ?? 0}</p>
-                    </div>
+                    <span>ĐANG HOẠT ĐỘNG</span>
+                  </div>
+                  <div className="account-stat-value">
+                    <p>{users.filter(u => u.status === 'active').length}</p>
                   </div>
                 </div>
-                <div className="rounded-2xl overflow-hidden shadow-lg border border-white/20">
-                  <img
-                    className="w-full h-32 object-cover group-hover:scale-110 transition-transform duration-700"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuAUV-j2VHKybDkVguFFQ7jOKsKRRgT_-PwPfiQlnsW2moWzJFPIxLZ_6XuF3_sp30Cafs9VdZY3uS7BxGm02mfgxo89VAAxCr8kH9jsB7CwL9SuXXi1VTipzDUWsG23553M4o8fLirOMxP9jVHgY35UiIAiWqR8P2YwijHt_8LSwwCdK9hSL_O4vf-Ba3JnPaz09Lgg1aqNLWhEhEOo-VmNMjKJXfjsUFJUYd7LcrgBtIkme7TKGeoERzesG6PTNOE1sVteTQYJgH0"
-                    alt="Amazon"
-                  />
-                  <p className="p-3 bg-surface-container-high text-[10px] font-bold text-on-surface-variant italic">Amazon Basin Reforestation</p>
+                {/* Pending */}
+                <div className="account-stat-box stat-pending">
+                  <div className="account-stat-label">
+                    <div className="account-stat-icon">
+                      <span className="material-symbols-outlined">cancel</span>
+                    </div>
+                    <span>CHỜ DUYỆT</span>
+                  </div>
+                  <div className="account-stat-value">
+                    <p>{users.filter(u => u.status === 'pending').length}</p>
+                  </div>
+                </div>
+                {/* Rejected */}
+                <div className="account-stat-box stat-rejected">
+                  <div className="account-stat-label">
+                    <div className="account-stat-icon">
+                      <span className="material-symbols-outlined">cancel</span>
+                    </div>
+                    <span>ĐÃ TỪ CHỐI</span>
+                  </div>
+                  <div className="account-stat-value">
+                    <p>{users.filter(u => u.status === 'rejected').length}</p>
+                  </div>
+                </div>
+                {/* Disabled */}
+                <div className="account-stat-box stat-disabled">
+                  <div className="account-stat-label">
+                    <div className="account-stat-icon">
+                      <span className="material-symbols-outlined">lock</span>
+                    </div>
+                    <span>ĐÃ KHÓA</span>
+                  </div>
+                  <div className="account-stat-value">
+                    <p>{users.filter(u => u.status === 'disabled').length}</p>
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="absolute top-0 right-0 w-full h-full editorial-gradient opacity-[0.02] pointer-events-none"></div>
           </div>
         </div>
       )}
@@ -311,172 +325,15 @@ export default function AdminPage() {
       {/* TAB: QUẢN LÝ NGƯỜI DÙNG                   */}
       {/* ══════════════════════════════════════════ */}
       {activeTab === 'users' && (
-        <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-3">
-            <h2 className="text-xl font-headline font-black">Danh sách Tài khoản</h2>
-            <div className="flex gap-2 flex-wrap">
-              <button onClick={loadUsers} disabled={busy} className="btn btn--secondary px-3 py-2 text-xs flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">refresh</span>
-              </button>
-              <button onClick={openNewUserModal} className="btn btn--primary px-4 py-2 text-xs flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">add</span> Tạo tài khoản mới
-              </button>
-            </div>
-          </div>
-
-          {/* Search + Filter Bar */}
-          <div className="flex gap-3 mb-4 flex-wrap">
-            <div className="relative flex-1 min-w-[220px]">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant/40">search</span>
-              <input
-                id="user-search"
-                type="text"
-                placeholder="Tìm theo tên, tài khoản, mã SV..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-outline-variant/20 rounded-xl focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-sm"
-              />
-            </div>
-            <select
-              id="role-filter"
-              value={roleFilter}
-              onChange={e => setRoleFilter(e.target.value)}
-              className="px-4 py-2.5 text-sm bg-white border border-outline-variant/20 rounded-xl focus:outline-none focus:border-primary shadow-sm font-medium text-on-surface-variant"
-            >
-              <option value="all">Tất cả vai trò</option>
-              <option value="student">Sinh viên</option>
-              <option value="verifier">Verifier</option>
-              <option value="admin">Admin</option>
-            </select>
-            {(searchQuery || roleFilter !== 'all') && (
-              <button
-                onClick={() => { setSearchQuery(''); setRoleFilter('all') }}
-                className="px-3 py-2 text-xs text-on-surface-variant hover:text-error border border-outline-variant/20 rounded-xl bg-white transition-colors flex items-center gap-1"
-              >
-                <span className="material-symbols-outlined text-sm">close</span> Xóa lọc
-              </button>
-            )}
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-outline-variant/20 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-surface-container-low text-xs uppercase tracking-wider text-on-surface-variant/60 font-bold">
-                    <th className="p-4 border-b border-outline-variant/10">Người dùng</th>
-                    <th className="p-4 border-b border-outline-variant/10">Mã SV / Username</th>
-                    <th className="p-4 border-b border-outline-variant/10">Ví Blockchain</th>
-                    <th className="p-4 border-b border-outline-variant/10 text-right">Số dư UGC</th>
-                    <th className="p-4 border-b border-outline-variant/10 text-center">Trạng thái</th>
-                    <th className="p-4 border-b border-outline-variant/10 text-right">Hành động</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant/10">
-                  {filteredUsers.map(u => (
-                    <tr key={u.id} className="hover:bg-surface-container-lowest transition-colors group">
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          {u.student_card_image ? (
-                            <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border border-slate-200">
-                              <img src={`/api${u.student_card_image}`} alt="Avatar" className="w-full h-full object-cover" />
-                            </div>
-                          ) : (
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0
-                              ${u.role === 'admin' ? 'bg-error' : u.role === 'verifier' ? 'bg-primary' : 'bg-tertiary'}`}>
-                              {u.full_name?.charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                          <div>
-                            <p className="font-bold text-on-surface text-sm">{u.full_name}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <p className="text-xs text-on-surface-variant">@{u.username}</p>
-                              <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded
-                                ${u.role === 'admin' ? 'bg-error/10 text-error' : u.role === 'verifier' ? 'bg-primary/10 text-primary' : 'bg-tertiary/10 text-tertiary'}`}>
-                                {u.role}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <span className="font-mono text-xs text-on-surface-variant bg-surface-container-low px-2 py-1 rounded">
-                          {u.student_id || `@${u.username}`}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        {u.wallet_address ? (
-                          <div className="flex items-center gap-2">
-                            <code className="text-xs bg-surface-container-low px-2 py-1 rounded text-on-surface-variant">
-                              {u.wallet_address.substring(0, 6)}...{u.wallet_address.substring(38)}
-                            </code>
-                            <button
-                              onClick={() => { navigator.clipboard.writeText(u.wallet_address); showToast('Đã copy địa chỉ ví!') }}
-                              className="text-on-surface-variant/40 hover:text-primary transition-colors"
-                              title="Copy địa chỉ ví"
-                            >
-                              <span className="material-symbols-outlined text-sm">content_copy</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-on-surface-variant/40 italic">Chưa có ví</span>
-                        )}
-                      </td>
-                      <td className="p-4 text-right font-headline font-black text-primary">
-                        {u.ugc_balance ?? 0}
-                      </td>
-                      <td className="p-4 text-center">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full
-                          ${u.status === 'active' ? 'bg-[#e8f5e9] text-[#2e7d32]' : 'bg-[#ffebee] text-[#c62828]'}`}>
-                          <span className="material-symbols-outlined text-[12px]">
-                            {u.status === 'active' ? 'check_circle' : 'block'}
-                          </span>
-                          {u.status}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => openEditUserModal(u)}
-                            className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                            title="Chỉnh sửa vai trò"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">edit</span>
-                          </button>
-                          <button
-                            onClick={() => handleToggleStatus(u)}
-                            className={`p-1.5 rounded-lg transition-colors ${u.status === 'active'
-                              ? 'text-on-surface-variant hover:text-error hover:bg-error/10'
-                              : 'text-error hover:text-[#2e7d32] hover:bg-[#2e7d32]/10'}`}
-                            title={u.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
-                          >
-                            <span className="material-symbols-outlined text-[18px]">
-                              {u.status === 'active' ? 'lock' : 'lock_open'}
-                            </span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredUsers.length === 0 && !busy && (
-                    <tr>
-                      <td colSpan="6" className="p-10 text-center">
-                        <span className="material-symbols-outlined text-4xl text-on-surface-variant/20 block mb-2">person_search</span>
-                        <p className="text-on-surface-variant/60 text-sm">
-                          {searchQuery || roleFilter !== 'all' ? 'Không tìm thấy người dùng phù hợp.' : 'Chưa có người dùng nào.'}
-                        </p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {filteredUsers.length > 0 && (
-              <div className="px-4 py-3 bg-surface-container-lowest border-t border-outline-variant/10 text-xs text-on-surface-variant/60">
-                Hiển thị <strong>{filteredUsers.length}</strong> / {users.filter(u => u.status === 'active' || u.status === 'disabled').length} người dùng
-              </div>
-            )}
-          </div>
-        </div>
+        <AdminUsersTab 
+          users={users} 
+          loadUsers={loadUsers} 
+          busy={busy} 
+          setBusy={setBusy} 
+          api={api} 
+          showToast={showToast} 
+          currentUser={user} 
+        />
       )}
 
       {/* ══════════════════════════════════════════ */}
@@ -605,96 +462,6 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════ */}
-      {/* MODAL: TẠO / SỬA USER                     */}
-      {/* ══════════════════════════════════════════ */}
-      {showUserModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-surface rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-headline text-xl font-black">
-                {editingUser ? 'Sửa thông tin tài khoản' : 'Tạo tài khoản mới'}
-              </h3>
-              <button onClick={() => setShowUserModal(false)} className="text-on-surface-variant hover:text-error">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveUser} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Tên đăng nhập</label>
-                <input
-                  type="text"
-                  required
-                  disabled={!!editingUser}
-                  className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-50"
-                  value={userForm.username}
-                  onChange={e => setUserForm({ ...userForm, username: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">
-                  Mật khẩu {editingUser && '(Bỏ trống nếu không đổi)'}
-                </label>
-                <input
-                  type="password"
-                  required={!editingUser}
-                  className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                  value={userForm.password}
-                  onChange={e => setUserForm({ ...userForm, password: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Họ và Tên</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                  value={userForm.full_name}
-                  onChange={e => setUserForm({ ...userForm, full_name: e.target.value })}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Vai trò</label>
-                  <select
-                    className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary"
-                    value={userForm.role}
-                    onChange={e => setUserForm({ ...userForm, role: e.target.value })}
-                  >
-                    <option value="student">Student (Sinh viên)</option>
-                    <option value="verifier">Verifier (Người duyệt)</option>
-                    <option value="admin">Admin (Quản trị viên)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Trạng thái</label>
-                  <select
-                    className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary"
-                    value={userForm.status}
-                    onChange={e => setUserForm({ ...userForm, status: e.target.value })}
-                    disabled={editingUser && editingUser.id === user.id}
-                  >
-                    <option value="active">Active (Hoạt động)</option>
-                    <option value="disabled">Disabled (Khóa)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="pt-4 mt-6 border-t border-outline-variant/10 flex justify-end gap-3">
-                <button type="button" onClick={() => setShowUserModal(false)} className="btn btn--secondary px-5 py-2.5">Hủy</button>
-                <button type="submit" disabled={busy} className="btn btn--primary px-5 py-2.5 flex items-center gap-2">
-                  {busy && <span className="material-symbols-outlined animate-spin text-sm">refresh</span>}
-                  {editingUser ? 'Cập nhật' : 'Tạo mới'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* ══════════════════════════════════════════ */}
       {/* MODAL: XEM ẢNH THẺ SV                     */}
@@ -728,16 +495,17 @@ export default function AdminPage() {
 // SUB-COMPONENTS
 // ═══════════════════════════════════════════════════
 
-function TabBtn({ children, active, onClick, badge }) {
+function TabBtn({ children, active, onClick, icon, badge }) {
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap
-        ${active ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
+      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 whitespace-nowrap relative
+        ${active ? 'bg-white text-slate-900 shadow-sm border border-slate-100' : 'text-slate-500 border border-transparent hover:text-slate-800 hover:bg-white/50'}`}
     >
+      {icon && <span className={`material-symbols-outlined text-[16px] ${active ? 'text-[#16a34a]' : 'text-slate-400'}`}>{icon}</span>}
       {children}
       {badge > 0 && (
-        <span className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none">
+        <span className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black leading-none shadow-sm">
           {badge}
         </span>
       )}
@@ -745,78 +513,99 @@ function TabBtn({ children, active, onClick, badge }) {
   )
 }
 
-function StatCard({ label, value, sub, icon, accent, urgent }) {
+function StatCard({ label, value, sub, icon, color }) {
+  const colors = {
+    blue: { iconBg: 'bg-blue-50', iconColor: 'text-blue-500', svgFill: '#3b82f6', bgVal: 'text-blue-500' },
+    green: { iconBg: 'bg-green-50', iconColor: 'text-green-600', svgFill: '#16a34a', bgVal: 'text-green-700' },
+    lightgreen: { iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500', svgFill: '#10b981', bgVal: 'text-emerald-600' },
+    purple: { iconBg: 'bg-purple-50', iconColor: 'text-purple-500', svgFill: '#8b5cf6', bgVal: 'text-purple-500' }
+  }
+  const c = colors[color] || colors.blue;
+
   return (
-    <div className={`rounded-2xl p-5 border shadow-sm hover:shadow-md transition-all relative overflow-hidden
-      ${urgent ? 'border-amber-200 bg-amber-50' : 'border-outline-variant/10 bg-white'}`}>
-      <div className="flex justify-between items-start mb-3">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface/40 leading-tight pr-2">{label}</p>
-        <span className="material-symbols-outlined text-xl flex-shrink-0 opacity-50" style={{ color: accent }}>{icon}</span>
+    <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all relative overflow-hidden flex h-full group">
+      
+      {/* Content wrapper */}
+      <div className="flex gap-4 relative z-10 w-full">
+        {/* Icon Circle */}
+        <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${c.iconBg}`}>
+          <span className={`material-symbols-outlined text-[22px] ${c.iconColor}`}>{icon}</span>
+        </div>
+        
+        {/* Text Area */}
+        <div className="flex-1 flex flex-col items-start pt-1">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-800 mb-1.5">{label}</p>
+          <div className="flex items-end gap-2 mb-1.5">
+            <p className={`text-[32px] font-bold leading-none ${c.bgVal}`}>{value ?? 0}</p>
+          </div>
+          <p className="text-[11px] font-medium text-slate-500">{sub}</p>
+        </div>
       </div>
-      <p className="text-3xl font-headline font-black mb-1" style={{ color: accent }}>{value ?? 0}</p>
-      <p className="text-[11px] text-on-surface-variant/50">{sub}</p>
+      
+      {/* Decorative Sparkline at bottom right */}
+      <div className="absolute bottom-1 right-2 w-28 h-12 pointer-events-none opacity-40">
+        <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="w-full h-full">
+          <path d="M0,30 L0,20 Q10,15 20,22 T40,15 T60,25 T80,10 T100,5 L100,30 Z" fill={`url(#gradient-${color})`} />
+          <path d="M0,20 Q10,15 20,22 T40,15 T60,25 T80,10 T100,5" fill="none" stroke={c.svgFill} strokeWidth="1.5" />
+          <defs>
+            <linearGradient id={`gradient-${color}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={c.svgFill} stopOpacity={0.2}/>
+              <stop offset="95%" stopColor={c.svgFill} stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
     </div>
   )
 }
 
 function WeeklyChart({ data }) {
-  const hasData = data && data.length > 0
-  const chartData = hasData ? data : Array(7).fill(null).map((_, i) => ({
-    day: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'][i] || '--',
-    count: 0
-  }))
-  const max = Math.max(...chartData.map(d => Number(d.count || 0)), 1)
+  // Chỉ sử dụng dữ liệu thật từ database
+  const chartData = Array.isArray(data) ? data : []
 
   return (
-    <div className="relative">
-      <div className="flex items-end gap-1.5 h-36 px-2">
-        {chartData.map((d, i) => {
-          const count = Number(d.count || 0)
-          const pct = (count / max) * 100
-          return (
-            <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group/bar">
-              <div className="relative w-full flex flex-col items-center justify-end" style={{ height: '100%' }}>
-                {count > 0 && (
-                  <span className="absolute -top-5 text-[9px] font-bold text-primary opacity-0 group-hover/bar:opacity-100 transition-opacity whitespace-nowrap">
-                    {count}
-                  </span>
-                )}
-                <div
-                  className={`w-full rounded-t-md transition-all duration-500
-                    ${count > 0 ? 'bg-primary/80 hover:bg-primary cursor-pointer' : 'bg-surface-container-high'}`}
-                  style={{ height: `${Math.max(pct, count > 0 ? 4 : 1)}%`, minHeight: '2px' }}
-                  title={`${d.day}: ${count} claims duyệt`}
-                />
-              </div>
-              <span className="text-[9px] text-on-surface-variant/50 font-medium truncate w-full text-center">{d.day}</span>
-            </div>
-          )
-        })}
-      </div>
-      {!hasData && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <p className="text-sm text-on-surface-variant/40 italic">Chưa có dữ liệu claims được duyệt</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function Bar({ h, highlight, current }) {
-  return (
-    <div
-      className={`flex-grow rounded-t-lg transition-all duration-500
-        ${current ? 'bg-primary' : highlight ? 'bg-primary/40' : 'bg-surface-container-highest'}`}
-      style={{ height: h }}
-    />
-  )
-}
-
-function Metric({ label, value, primary }) {
-  return (
-    <div>
-      <p className="text-[10px] font-bold text-on-surface-variant/60 uppercase mb-1">{label}</p>
-      <p className={`text-xl font-headline font-black ${primary ? 'text-primary' : 'text-on-surface'}`}>{value}</p>
+    <div className="h-64 mt-4 relative">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+          <defs>
+            <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#16a34a" stopOpacity={0.3}/>
+              <stop offset="95%" stopColor="#16a34a" stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+          <XAxis 
+            dataKey="day" 
+            axisLine={{ stroke: '#16a34a', strokeWidth: 1.5 }} 
+            tickLine={false} 
+            tick={{ fontSize: 10, fill: '#64748b' }} 
+            dy={10} 
+            interval="preserveStartEnd"
+          />
+          <YAxis 
+            axisLine={false} 
+            tickLine={false} 
+            tick={{ fontSize: 10, fill: '#64748b' }} 
+          />
+          <Tooltip 
+            formatter={(value) => [`${value} claims`, 'Đã phê duyệt']}
+            labelFormatter={(label) => `Ngày: ${label}`}
+            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', padding: '8px 12px' }}
+            labelStyle={{ color: '#64748b', fontSize: '11px', marginBottom: '4px', fontWeight: '500' }}
+            itemStyle={{ color: '#16a34a', fontSize: '13px', fontWeight: 'bold', padding: 0 }}
+          />
+          <Area 
+            type="monotone" 
+            dataKey="count" 
+            stroke="#16a34a" 
+            strokeWidth={1.5}
+            fillOpacity={1} 
+            fill="url(#colorCount)" 
+            dot={{ r: 3, fill: '#ffffff', stroke: '#16a34a', strokeWidth: 1.5 }}
+            activeDot={{ r: 6, fill: '#16a34a', stroke: '#fff', strokeWidth: 2 }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
   )
 }

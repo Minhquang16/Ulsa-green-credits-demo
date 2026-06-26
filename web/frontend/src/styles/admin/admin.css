@@ -7,7 +7,11 @@
   gap: 2.5rem;
 }
 
-@media (min-width: 1024px) { .admin-page { padding-inline: 3rem; } }
+@media (min-width: 1024px) {
+  .admin-page {
+    padding-inline: 3rem;
+  }
+}
 
 .admin-stats {
   display: grid;
@@ -15,7 +19,11 @@
   gap: 1.25rem;
 }
 
-@media (min-width: 1024px) { .admin-stats { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 1024px) {
+  .admin-stats {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
 
 .stat-card {
   background: var(--color-surface-container-low);
@@ -53,9 +61,17 @@
   font-weight: 700;
 }
 
-.stat-card__trend--up   { color: var(--color-primary); }
-.stat-card__trend--down { color: var(--color-error); }
-.stat-card__trend--neutral { color: var(--color-primary); }
+.stat-card__trend--up {
+  color: var(--color-primary);
+}
+
+.stat-card__trend--down {
+  color: var(--color-error);
+}
+
+.stat-card__trend--neutral {
+  color: var(--color-primary);
+}
 
 .stat-card__icon {
   position: absolute;
@@ -66,7 +82,9 @@
   transition: color var(--transition-fast);
 }
 
-.stat-card:hover .stat-card__icon { color: rgba(0, 110, 47, 0.2); }
+.stat-card:hover .stat-card__icon {
+  color: rgba(0, 110, 47, 0.2);
+}
 
 .token-panel {
   background: var(--color-surface-container-low);
@@ -80,9 +98,15 @@
   grid-template-columns: 1fr;
 }
 
-@media (min-width: 1024px) { .token-panel__inner { grid-template-columns: 2fr 1fr; } }
+@media (min-width: 1024px) {
+  .token-panel__inner {
+    grid-template-columns: 2fr 1fr;
+  }
+}
 
-.token-panel__main { padding: 2.25rem; }
+.token-panel__main {
+  padding: 2.25rem;
+}
 
 .token-panel__header {
   display: flex;
@@ -138,19 +162,25 @@
   cursor: default;
 }
 
-.token-chart__bar:hover { background: rgba(0, 110, 47, 0.2); }
+.token-chart__bar:hover {
+  background: rgba(0, 110, 47, 0.2);
+}
 
 .token-chart__bar--highlight {
   background: rgba(34, 197, 94, 0.4);
 }
 
-.token-chart__bar--highlight:hover { background: rgba(0, 110, 47, 0.3); }
+.token-chart__bar--highlight:hover {
+  background: rgba(0, 110, 47, 0.3);
+}
 
 .token-chart__bar--current {
   background: var(--color-primary);
 }
 
-.token-chart__bar--current:hover { background: var(--color-primary); }
+.token-chart__bar--current:hover {
+  background: var(--color-primary);
+}
 
 .token-metrics {
   display: grid;
@@ -177,7 +207,9 @@
   color: var(--color-on-surface);
 }
 
-.token-metric__value--primary { color: var(--color-primary); }
+.token-metric__value--primary {
+  color: var(--color-primary);
+}
 
 .token-panel__aside {
   background: var(--color-primary);
@@ -236,7 +268,11 @@
   gap: 2rem;
 }
 
-@media (min-width: 768px) { .admin-forms { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 768px) {
+  .admin-forms {
+    grid-template-columns: 1fr 1fr;
+  }
+}
 
 .form-card {
   background: var(--color-surface-container-low);
@@ -313,7 +349,10 @@
   color: var(--color-on-surface-variant);
 }
 
-.admin-footer__stats { display: flex; gap: 1.5rem; }
+.admin-footer__stats {
+  display: flex;
+  gap: 1.5rem;
+}
 
 .admin-footer__status {
   display: flex;
@@ -329,4 +368,355 @@
   background: var(--color-primary);
 }
 
-.admin-footer__copyright { opacity: 0.5; font-weight: 400; }
+.admin-footer__copyright {
+  opacity: 0.5;
+  font-weight: 400;
+}
+
+/* =========================================================
+   BOTTOM GRID: TOP STUDENTS & ACCOUNT STATS
+   ========================================================= */
+.admin-stats-bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+  align-items: flex-start;
+}
+
+@media (min-width: 1024px) {
+  .admin-stats-bottom-grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: flex-start;
+  }
+}
+
+/* ── Top Students ── */
+.admin-top-students-card,
+.admin-account-stats-card {
+  background-color: #fff;
+  border-radius: 24px;
+  padding: 1.5rem;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+
+  .admin-top-students-card,
+  .admin-account-stats-card {
+    padding: 2rem;
+  }
+}
+
+.admin-top-students-header,
+.admin-account-stats-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+  position: relative;
+  z-index: 10;
+}
+
+.admin-top-students-title,
+.admin-account-stats-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 0.25rem 0;
+}
+
+.admin-top-students-subtitle,
+.admin-account-stats-subtitle {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+  margin: 0;
+}
+
+.admin-top-students-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background-color: #fffbeb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f59e0b;
+  border: 1px solid #fef3c7;
+}
+
+.admin-top-students-icon .material-symbols-outlined {
+  font-size: 1rem;
+}
+
+.admin-top-students-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  margin-top: 0rem;
+}
+
+.admin-top-student-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0;
+}
+
+.admin-top-student-rank {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.admin-top-student-rank.rank-1 {
+  background-color: #fff8e1;
+  color: #f59e0b;
+}
+
+.admin-top-student-rank.rank-2 {
+  background-color: #f1f5f9;
+  color: #64748b;
+}
+
+.admin-top-student-rank.rank-3 {
+  background-color: #ffedd5;
+  color: #ea580c;
+}
+
+.admin-top-student-rank.rank-4,
+.admin-top-student-rank.rank-5 {
+  background-color: #f8fafc;
+  color: #94a3b8;
+}
+
+.admin-top-student-avatar {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  overflow: hidden;
+  background-color: #f1f5f9;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-top-student-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-top-student-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  /* Khoảng cách giữa tên và @username */
+}
+
+.admin-top-student-name {
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: #1e293b;
+  margin: 0;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-top-student-username {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+  line-height: 1;
+  margin: 0;
+}
+
+.admin-top-student-score {
+  text-align: center;
+  flex-shrink: 0;
+  min-width: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  /* Căn phải hoặc center tùy ý */
+  gap: 0px;
+  /* Khoảng cách giữa số 58 và chữ UGC */
+}
+
+.score-value {
+  font-weight: 800;
+  color: #16a34a;
+  font-size: 1.125rem;
+  line-height: 1;
+  margin: 0;
+}
+
+.score-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.admin-top-students-empty {
+  padding: 2rem 0;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* ── Account Stats ── */
+.admin-account-stats-header {
+  margin-bottom: 2rem;
+  flex-direction: column;
+}
+
+.admin-account-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  flex: 1;
+}
+
+.account-stat-box {
+  padding: 1rem;
+  border-radius: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.stat-active {
+  background-color: #f0fdf4;
+  border: 1px solid #dcfce7;
+}
+
+.stat-pending {
+  background-color: #fffbeb;
+  border: 1px solid #fef3c7;
+}
+
+.stat-rejected {
+  background-color: #fff1f2;
+  border: 1px solid #ffe4e6;
+}
+
+.stat-disabled {
+  background-color: #f8fafc;
+  border: 1px solid #f1f5f9;
+}
+
+.account-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.account-stat-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.account-stat-icon .material-symbols-outlined {
+  font-size: 0.75rem;
+}
+
+.stat-active .account-stat-icon {
+  background-color: #dcfce7;
+  color: #16a34a;
+}
+
+.stat-pending .account-stat-icon {
+  background-color: #fef3c7;
+  color: #f59e0b;
+}
+
+.stat-rejected .account-stat-icon {
+  background-color: #ffe4e6;
+  color: #f43f5e;
+}
+
+.stat-disabled .account-stat-icon {
+  background-color: #e2e8f0;
+  color: #64748b;
+}
+
+.account-stat-label span:not(.account-stat-icon) {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-active .account-stat-label span:not(.account-stat-icon) {
+  color: #16a34a;
+}
+
+.stat-pending .account-stat-label span:not(.account-stat-icon) {
+  color: #f59e0b;
+}
+
+.stat-rejected .account-stat-label span:not(.account-stat-icon) {
+  color: #f43f5e;
+}
+
+.stat-disabled .account-stat-label span:not(.account-stat-icon) {
+  color: #64748b;
+}
+
+.account-stat-value {
+  margin-left: 1.75rem;
+}
+
+.account-stat-value p {
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1;
+  margin: 0;
+}
+
+.stat-active .account-stat-value p {
+  color: #16a34a;
+}
+
+.stat-pending .account-stat-value p {
+  color: #f59e0b;
+}
+
+.stat-rejected .account-stat-value p {
+  color: #f43f5e;
+}
+
+.stat-disabled .account-stat-value p {
+  color: #64748b;
+}

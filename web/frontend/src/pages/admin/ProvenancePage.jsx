@@ -46,180 +46,260 @@ function ProvenanceDetailModal({ claimId, onClose, token, isAdmin }) {
 
   const steps = data ? [
     {
-      icon: '🌿',
-      label: 'Hoạt động xanh',
-      color: '#22c55e',
-      content: (
-        <div>
-          <p className="prov-timeline__step-title">{data.claim?.activity_name || '—'}</p>
-          <p className="prov-timeline__step-desc">{data.claim?.activity_description || ''}</p>
-          <span className="prov-timeline__badge prov-timeline__badge--credit">{data.claim?.credit_amount || 0} tín chỉ xanh</span>
-        </div>
-      )
+      icon: 'eco',
+      color: 'emerald',
+      title: data.claim?.activity_name || 'Hoạt động xanh',
+      desc: data.claim?.activity_description || 'Tham gia hoạt động xanh',
+      leftAddon: (
+        <span className="inline-block mt-2 bg-emerald-50 text-emerald-600 font-bold text-[11px] px-3 py-1 rounded-full">
+          {data.claim?.credit_amount || 0} tín chỉ xanh
+        </span>
+      ),
+      rightCol1: { label: 'THỜI GIAN', value: formatDate(data.claim?.start_at) },
+      rightCol2: { label: 'NGƯỜI GHI NHẬN', value: <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">person</span> {data.claim?.student_name || '—'}</span> }
     },
     {
-      icon: '📅',
-      label: 'Sự kiện',
-      color: '#3b82f6',
-      content: (
-        <div>
-          <p className="prov-timeline__step-title">{data.claim?.event_title || '—'}</p>
-          <p className="prov-timeline__step-desc">{data.claim?.event_description || ''}</p>
-          <div className="prov-timeline__meta-row">
-            <span>📍 {data.claim?.location || 'Không có địa điểm'}</span>
-            <span>🕒 {formatDate(data.claim?.start_at)}</span>
-          </div>
+      icon: 'event',
+      color: 'blue',
+      title: 'Sự kiện',
+      desc: data.claim?.event_title || '—',
+      leftAddon: (
+        <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium mt-2">
+          <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">location_on</span> {data.claim?.location || 'Không có địa điểm'}</span>
+          <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">schedule</span> {formatDate(data.claim?.start_at)}</span>
         </div>
-      )
+      ),
+      rightCol1: { label: 'GHI CHÚ', value: data.claim?.event_description || 'Không có ghi chú' },
+      rightCol2: null
     },
     {
-      icon: '📄',
-      label: 'Minh chứng',
-      color: '#f59e0b',
-      content: (
-        <div>
-          {data.claim?.evidence_path ? (
-            <a
-              href={`${API}/uploads/${data.claim.evidence_path}`}
-              target="_blank" rel="noopener noreferrer"
-              className="prov-timeline__link"
-            >
-              🔗 Xem file minh chứng
-            </a>
-          ) : (
-            <p className="prov-timeline__step-desc">Không có file đính kèm</p>
-          )}
-          {data.claim?.note && <p className="prov-timeline__step-desc mt-1">📝 {data.claim.note}</p>}
-
-          {showTech && (
-            <div className="prov-timeline__hash-box mt-2">
-              <span className="prov-timeline__hash-label">SHA-256 Hash (off-chain):</span>
-              <code className="prov-timeline__hash">{data.claim?.evidence_hash ? '0x' + data.claim.evidence_hash.slice(0, 32) + '...' : '—'}</code>
-            </div>
-          )}
+      icon: 'description',
+      color: 'amber',
+      title: 'Minh chứng',
+      desc: data.claim?.evidence_path ? (
+        <a href={`${API}/uploads/${data.claim.evidence_path}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+          Xem file đính kèm
+        </a>
+      ) : 'Không có file đính kèm',
+      leftAddon: data.claim?.note ? (
+        <div className="flex items-center gap-1.5 text-[12px] text-slate-600 font-medium mt-2">
+          <span className="material-symbols-outlined text-[16px] text-slate-400">edit_document</span> {data.claim.note}
         </div>
-      )
+      ) : null,
+      rightCol1: { 
+        label: 'TRẠNG THÁI', 
+        value: <span className="flex items-center gap-1.5 font-semibold text-slate-700"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Đã xác nhận</span> 
+      },
+      rightCol2: null
     },
     {
-      icon: '✅',
-      label: 'Phê duyệt',
-      color: '#10b981',
-      content: (
-        <div>
-          <p className="prov-timeline__step-title">{data.claim?.approver_name || '—'}</p>
-          <div className="prov-timeline__meta-row">
-            <span>👤 Vai trò: {data.claim?.approver_role === 'verifier' ? 'Verifier (Đoàn/Hội)' : 'Admin'}</span>
-            <span>🕒 {formatDate(data.claim?.decided_at)}</span>
-          </div>
-          {showTech && data.claim?.approver_wallet && (
-            <div className="prov-timeline__hash-box mt-2">
-              <span className="prov-timeline__hash-label">Địa chỉ ví (Approver):</span>
-              <code className="prov-timeline__hash">{data.claim.approver_wallet}</code>
-            </div>
-          )}
+      icon: 'verified_user',
+      color: 'emerald',
+      title: 'Phê duyệt',
+      desc: data.claim?.approver_name || '—',
+      leftAddon: (
+        <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium mt-2">
+          <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">person_outline</span> Vai trò: {data.claim?.approver_role === 'verifier' ? 'Verifier' : 'Admin'}</span>
+          <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">schedule</span> {formatDate(data.claim?.decided_at)}</span>
         </div>
-      )
+      ),
+      rightCol1: { 
+        label: 'TRẠNG THÁI', 
+        value: <span className="flex items-center gap-1.5 font-semibold text-emerald-600"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Đã phê duyệt</span> 
+      },
+      rightCol2: null
     },
     {
-      icon: '🛡️',
-      label: 'Lưu trữ Blockchain',
-      color: '#6366f1',
-      content: (
-        <div>
-          {data.onChainRecord ? (
-            <>
-              <div className="prov-timeline__verify-badge prov-timeline__verify-badge--ok" style={{ marginBottom: '12px' }}>
-                ✅ Tín chỉ xanh đã được lưu trữ vĩnh viễn và minh chứng không thể giả mạo
-              </div>
-
-              <button className="prov-timeline__link mt-2" onClick={() => setShowTech(!showTech)}>
-                {showTech ? '▲ Ẩn chi tiết kỹ thuật' : '▼ Xem chi tiết kỹ thuật (dành cho chuyên gia)'}
-              </button>
-
-              {showTech && (
-                <div className="mt-4 pt-4 border-t border-gray-700/50">
-                  <div className="prov-timeline__hash-box">
-                    <span className="prov-timeline__hash-label">TX Hash (Cấp tín chỉ - MINT):</span>
-                    <code className="prov-timeline__hash">{data.claim.approved_tx_hash || '—'}</code>
-                  </div>
-                  <div className="prov-timeline__hash-box mt-2">
-                    <span className="prov-timeline__hash-label">TX Hash (Lưu Provenance):</span>
-                    <code className="prov-timeline__hash">{data.claim.provenance_tx_hash || '—'}</code>
-                  </div>
-
-                  <div className="prov-timeline__meta-grid mt-3">
-                    <div className="prov-timeline__meta-item">
-                      <span className="prov-timeline__hash-label">Block Timestamp:</span>
-                      <code className="prov-timeline__hash">{unixToDate(data.onChainRecord.timestamp)}</code>
-                    </div>
-                  </div>
-
-                  {data.evidenceVerified !== null && (
-                    <div className={`prov-timeline__verify-badge mt-3 ${data.evidenceVerified ? 'prov-timeline__verify-badge--ok' : 'prov-timeline__verify-badge--fail'}`}>
-                      {data.evidenceVerified
-                        ? '✅ Hash minh chứng on-chain KHỚP với dữ liệu hệ thống'
-                        : '⚠️ Hash minh chứng KHÔNG KHỚP'}
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          ) : data.onChainError ? (
-            <div className="prov-timeline__verify-badge prov-timeline__verify-badge--fail">
-              ⚠️ Lỗi kết nối Blockchain
-            </div>
-          ) : (
-            <p className="prov-timeline__step-desc text-yellow-400">Đang chờ đồng bộ lên blockchain...</p>
-          )}
-        </div>
-      )
+      icon: 'security',
+      color: 'purple',
+      title: 'Lưu trữ Blockchain',
+      desc: data.onChainRecord ? 'Đã đồng bộ lên blockchain thành công.' : data.onChainError ? 'Lỗi khi đồng bộ blockchain.' : 'Đang chờ đồng bộ lên blockchain...',
+      leftAddon: data.onChainRecord && (
+        <button onClick={() => setShowTech(!showTech)} className="mt-2 text-[11px] font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1">
+          <span className="material-symbols-outlined text-[14px]">{showTech ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}</span>
+          {showTech ? 'Ẩn chi tiết' : 'Xem chi tiết (Hash)'}
+        </button>
+      ),
+      rightCol1: { 
+        label: 'TRẠNG THÁI', 
+        value: data.onChainRecord ? (
+          <span className="flex items-center gap-1.5 font-semibold text-purple-600"><span className="w-2 h-2 rounded-full bg-purple-500"></span> Đã lưu trữ</span> 
+        ) : data.onChainError ? (
+          <span className="flex items-center gap-1.5 font-semibold text-red-600"><span className="w-2 h-2 rounded-full bg-red-500"></span> Lỗi</span>
+        ) : (
+          <span className="flex items-center gap-1.5 font-semibold text-purple-600"><span className="w-2 h-2 rounded-full bg-purple-500"></span> Đang xử lý</span>
+        )
+      },
+      rightCol2: null
     }
   ] : []
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="prov-modal" onClick={e => e.stopPropagation()}>
-        <div className="prov-modal__header">
-          <div>
-            <h2 className="prov-modal__title">🔍 Truy xuất nguồn gốc tín chỉ xanh</h2>
-            {data?.claim && (
-              <p className="prov-modal__subtitle">
-                {data.claim.activity_name} · {data.claim.event_title}
-                {isAdmin && data.claim.student_name && ` · SV: ${data.claim.student_name}`}
-              </p>
-            )}
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex justify-center p-4 sm:p-8 py-10 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white w-full max-w-4xl rounded-[32px] shadow-2xl relative my-auto" onClick={e => e.stopPropagation()}>
+        
+        {/* Header */}
+        <div className="px-8 py-6 flex justify-between items-start sticky top-0 z-10 bg-white/80 backdrop-blur-md rounded-t-[32px]">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[24px]">eco</span>
+            </div>
+            <div>
+              <h2 className="text-[20px] font-bold text-slate-900 leading-tight mb-1">
+                Truy xuất nguồn gốc tín chỉ xanh
+              </h2>
+              {data?.claim && (
+                <p className="text-[12px] text-slate-500 font-medium">
+                  {data.claim.activity_name} • {data.claim.event_title}
+                  {isAdmin && data.claim.student_name && ` • SV: ${data.claim.student_name}`}
+                </p>
+              )}
+            </div>
           </div>
-          <button className="prov-modal__close" onClick={onClose}>✕</button>
+          <button className="w-10 h-10 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800 flex items-center justify-center transition-colors" onClick={onClose}>
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
         </div>
 
-        <div className="prov-modal__body">
+        {/* Body */}
+        <div className="px-8 pb-8">
           {loading && (
-            <div className="flex items-center justify-center py-16">
-              <div className="prov-page__spinner" />
-              <span className="ml-3 text-gray-400">Đang tải dữ liệu provenance...</span>
+            <div className="flex items-center justify-center py-20 text-slate-400">
+              <span className="material-symbols-outlined animate-spin text-[32px] mr-3">refresh</span>
+              <span className="text-sm font-medium">Đang tải dữ liệu provenance...</span>
             </div>
           )}
-          {err && <div className="prov-timeline__verify-badge prov-timeline__verify-badge--fail">❌ {err}</div>}
+          {err && <div className="bg-red-50 text-red-600 p-4 rounded-xl text-center text-sm font-bold border border-red-100 shadow-sm mb-4">{err}</div>}
 
           {!loading && !err && data && (
-            <div className="prov-timeline">
-              {steps.map((step, i) => (
-                <div key={i} className="prov-timeline__step">
-                  <div className="prov-timeline__step-left">
-                    <div className="prov-timeline__step-icon" style={{ background: step.color + '22', border: `2px solid ${step.color}55` }}>
-                      <span style={{ fontSize: '1.2rem' }}>{step.icon}</span>
-                    </div>
-                    {i < steps.length - 1 && <div className="prov-timeline__step-line" />}
+            <>
+              {/* Hero Card */}
+              <div className="bg-gradient-to-r from-emerald-50/80 to-emerald-50/20 rounded-[28px] p-6 mb-10 border border-emerald-100/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div className="flex items-center gap-5">
+                  <div className="w-16 h-16 rounded-2xl bg-white shadow-sm flex items-center justify-center text-emerald-500 border border-emerald-50">
+                    <span className="material-symbols-outlined text-[32px]">energy_savings_leaf</span>
                   </div>
-                  <div className="prov-timeline__step-right">
-                    <p className="prov-timeline__step-label" style={{ color: step.color }}>{step.label}</p>
-                    <div className="prov-timeline__step-card">
-                      {step.content}
+                  <div>
+                    <h3 className="text-[18px] font-extrabold text-slate-900 mb-1">{data.claim?.activity_name}</h3>
+                    <p className="text-[13px] text-slate-600 mb-2">{data.claim?.activity_description}</p>
+                    <span className="inline-block bg-emerald-100 text-emerald-700 font-bold text-[11px] px-3 py-1.5 rounded-full">
+                      {data.claim?.credit_amount} TÍN CHỈ XANH
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex gap-8 md:gap-12 md:pl-8 md:border-l border-emerald-100/50">
+                  <div>
+                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">ID GIAO DỊCH</p>
+                    <div className="flex items-center gap-1.5 font-bold text-[13px] text-slate-900">
+                      {data.claim?.approved_tx_hash ? shortHash(data.claim.approved_tx_hash) : '—'}
+                      {data.claim?.approved_tx_hash && (
+                        <button className="text-slate-400 hover:text-slate-600" onClick={() => navigator.clipboard.writeText(data.claim.approved_tx_hash)}>
+                          <span className="material-symbols-outlined text-[14px]">content_copy</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">THỜI GIAN TẠO</p>
+                    <div className="flex items-center gap-1.5 font-bold text-[13px] text-slate-900">
+                      <span className="material-symbols-outlined text-[16px] text-slate-400">calendar_today</span>
+                      {formatDate(data.claim?.created_at || data.claim?.decided_at)}
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+
+              {/* Timeline */}
+              <div className="relative pl-6 sm:pl-[42px] mb-8">
+                {/* Vertical line */}
+                <div className="absolute left-[34px] sm:left-[62px] top-6 bottom-6 w-0.5 bg-slate-100" />
+                
+                <div className="space-y-0">
+                  {steps.map((step, i) => {
+                    const colorMap = {
+                      emerald: 'text-emerald-500 bg-emerald-50',
+                      blue: 'text-blue-500 bg-blue-50',
+                      amber: 'text-amber-500 bg-amber-50',
+                      purple: 'text-purple-500 bg-purple-50'
+                    }
+                    
+                    return (
+                      <div key={i} className={`relative flex items-start gap-5 sm:gap-8 p-6 ${i !== steps.length - 1 ? 'border-b border-slate-100' : ''}`}>
+                        {/* Circle Icon */}
+                        <div className={`relative z-10 w-[40px] h-[40px] rounded-2xl flex items-center justify-center flex-shrink-0 bg-white ${colorMap[step.color]}`}>
+                          <span className="material-symbols-outlined text-[20px]">{step.icon}</span>
+                        </div>
+                        
+                        {/* Content Row */}
+                        <div className="flex-1 flex flex-col md:flex-row gap-6 md:gap-12">
+                          <div className="flex-1">
+                            <h4 className="text-[15px] font-bold text-slate-900 mb-1">{step.title}</h4>
+                            <p className="text-[13px] text-slate-500 font-medium leading-relaxed">{step.desc}</p>
+                            {step.leftAddon}
+                          </div>
+
+                          <div className="flex gap-8 min-w-[280px]">
+                            {step.rightCol1 && (
+                              <div className="flex-1">
+                                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">{step.rightCol1.label}</p>
+                                <div className="text-[13px] font-bold text-slate-700">{step.rightCol1.value}</div>
+                              </div>
+                            )}
+                            {step.rightCol2 && (
+                              <div className="flex-1">
+                                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">{step.rightCol2.label}</p>
+                                <div className="text-[13px] font-bold text-slate-700">{step.rightCol2.value}</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                      </div>
+                    )
+                  })}
+                  
+                  {/* Tech Details Box for Blockchain Step */}
+                  {showTech && data?.onChainRecord && (
+                    <div className="ml-16 mr-6 mb-6 mt-[-10px] bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                       <div className="grid grid-cols-2 gap-4">
+                         <div>
+                           <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">MINT TX HASH</p>
+                           <code className="text-[11px] text-slate-600 break-all">{data.claim.approved_tx_hash || '—'}</code>
+                         </div>
+                         <div>
+                           <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">PROVENANCE TX HASH</p>
+                           <code className="text-[11px] text-slate-600 break-all">{data.claim.provenance_tx_hash || '—'}</code>
+                         </div>
+                         <div>
+                           <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">EVIDENCE HASH (OFF-CHAIN)</p>
+                           <code className="text-[11px] text-slate-600 break-all">{data.claim.evidence_hash || '—'}</code>
+                         </div>
+                         <div>
+                           <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">TRẠNG THÁI TOÀN VẸN (ON-CHAIN VERIFY)</p>
+                           {data.evidenceVerified ? (
+                             <span className="text-[11px] font-bold text-emerald-600">✅ Khớp với dữ liệu hệ thống</span>
+                           ) : (
+                             <span className="text-[11px] font-bold text-red-600">❌ Không khớp</span>
+                           )}
+                         </div>
+                       </div>
+                    </div>
+                  )}
+
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex justify-center pt-4 pb-2">
+                <button 
+                  onClick={onClose}
+                  className="px-8 py-2.5 rounded-2xl border border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 hover:shadow-sm transition-all"
+                >
+                  Đóng
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -231,37 +311,55 @@ function ProvenanceDetailModal({ claimId, onClose, token, isAdmin }) {
 function CertCard({ item, onClick, isAdmin }) {
   const hasProvenance = !!item.provenance_tx_hash
   return (
-    <div className="prov-cert-card" onClick={onClick}>
-      <div className="prov-cert-card__glow" />
-      <div className="prov-cert-card__header">
-        <div className="prov-cert-card__icon">🌿</div>
-        <div className="prov-cert-card__status-badges">
-          <span className={`prov-cert-card__badge ${hasProvenance ? 'prov-cert-card__badge--verified' : 'prov-cert-card__badge--pending'}`}>
-            {hasProvenance ? '🛡️ Bảo vệ bởi Blockchain' : '⏳ Bản ghi cũ'}
-          </span>
+    <div onClick={onClick} className="bg-white border border-slate-100 rounded-[24px] p-6 shadow-sm hover:shadow-md hover:-translate-y-1 hover:border-emerald-300 transition-all cursor-pointer relative overflow-hidden group">
+      {/* Top Header */}
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+            <span className="material-symbols-outlined">eco</span>
+          </div>
+          <div>
+            <h3 className="font-extrabold text-slate-900 text-[15px] mb-0.5">{item.activity_name}</h3>
+            <p className="text-[11px] text-slate-500 font-medium">{item.event_title}</p>
+          </div>
+        </div>
+        <div className={`px-3 py-1.5 rounded-full text-[10px] font-bold flex items-center gap-1.5 ${hasProvenance ? 'bg-purple-50 text-purple-600' : 'bg-orange-50 text-orange-600'}`}>
+           <span className="material-symbols-outlined text-[13px]">{hasProvenance ? 'security' : 'hourglass_empty'}</span>
+           {hasProvenance ? 'Bảo vệ bởi Blockchain' : 'Đang chờ on-chain'}
         </div>
       </div>
 
-      <h3 className="prov-cert-card__title">{item.activity_name}</h3>
-      <p className="prov-cert-card__event">{item.event_title}</p>
-
+      {/* User */}
       {isAdmin && item.student_name && (
-        <p className="prov-cert-card__student">👤 {item.student_name}</p>
+        <div className="flex items-center gap-2 mb-4 text-blue-600 text-sm font-semibold">
+          <span className="material-symbols-outlined text-[16px]">person</span> {item.student_name}
+        </div>
       )}
 
-      <div className="prov-cert-card__credits">
-        <span className="prov-cert-card__credits-num">{item.credit_amount}</span>
-        <span className="prov-cert-card__credits-label">Tín chỉ xanh</span>
+      {/* Amount */}
+      <div className="mb-4 flex items-baseline gap-2">
+        <span className="text-[2.75rem] font-black text-emerald-500 leading-none tracking-tight">{item.credit_amount}</span>
+        <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest">Tín chỉ xanh</span>
       </div>
 
-      <div className="prov-cert-card__meta">
-        <span>📅 {formatDate(item.decided_at)}</span>
-        {item.approver_name && <span>✅ {item.approver_name}</span>}
+      {/* Meta Date & Approver */}
+      <div className="flex justify-between items-center text-[11px] text-slate-500 font-medium mb-5">
+        <div className="flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+          {formatDate(item.decided_at)}
+        </div>
+        {item.approver_name && (
+          <div className="flex items-center gap-1.5 text-emerald-600">
+            <span className="material-symbols-outlined text-[14px]">check_box</span>
+            {item.approver_name}
+          </div>
+        )}
       </div>
 
-      <div className="prov-cert-card__action">
+      {/* Footer action */}
+      <div className="border-t border-slate-100 pt-4 flex justify-between items-center text-[13px] font-bold text-emerald-600">
         <span>Xem chuỗi nguồn gốc</span>
-        <span>→</span>
+        <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
       </div>
     </div>
   )
@@ -365,49 +463,81 @@ export default function ProvenancePage() {
 
   return (
     <>
-      <div className="prov-page">
+      <div className="max-w-[1400px] mx-auto px-6 py-8">
 
-        {/* Header */}
-        <div className="prov-page__header">
-          <div className="prov-page__header-left">
-            <h1 className="prov-page__title">
-              <span className="prov-page__title-icon">🔍</span>
-              Truy xuất nguồn gốc tín chỉ xanh
-            </h1>
-            <p className="prov-page__subtitle">
-              {isAdmin
-                ? 'Toàn bộ chuỗi minh chứng và quy trình tạo ra mỗi tín chỉ xanh trong hệ thống'
-                : 'Chuỗi minh chứng và quy trình tạo ra các tín chỉ xanh của bạn'}
-            </p>
+        {/* Header & Stats Container */}
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 mb-8">
+          
+          {/* Header Left */}
+          <div className="flex items-center gap-5">
+            <div className="w-16 h-16 rounded-3xl bg-emerald-50 text-emerald-500 flex items-center justify-center shadow-sm border border-emerald-100 flex-shrink-0">
+              <span className="material-symbols-outlined text-[32px]">energy_savings_leaf</span>
+            </div>
+            <div>
+              <h1 className="text-[22px] font-extrabold text-slate-900 tracking-tight mb-1">Truy xuất nguồn gốc tín chỉ xanh</h1>
+              <p className="text-sm text-slate-500 font-medium">
+                {isAdmin
+                  ? 'Toàn bộ chuỗi minh chứng và quy trình tạo ra mỗi tín chỉ xanh trong hệ thống'
+                  : 'Chuỗi minh chứng và quy trình tạo ra các tín chỉ xanh của bạn'}
+              </p>
+            </div>
           </div>
-          <div className="prov-page__stats">
-            <div className="prov-page__stat-item">
-              <span className="prov-page__stat-num">{records.length}</span>
-              <span className="prov-page__stat-label">Tín chỉ đã cấp</span>
+
+          {/* Stats Right */}
+          <div className="flex gap-4 w-full xl:w-auto overflow-x-auto pb-2 xl:pb-0">
+            {/* Stat 1 */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-4 flex items-center gap-4 min-w-[200px] shadow-sm">
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[24px]">workspace_premium</span>
+              </div>
+              <div>
+                <p className="text-2xl font-black text-emerald-600 leading-none mb-1">{records.length}</p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tín chỉ đã cấp</p>
+              </div>
             </div>
-            <div className="prov-page__stat-item">
-              <span className="prov-page__stat-num">{totalCredits}</span>
-              <span className="prov-page__stat-label">Tổng UGC</span>
+            
+            {/* Stat 2 */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-4 flex items-center gap-4 min-w-[200px] shadow-sm">
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[24px]">database</span>
+              </div>
+              <div>
+                <p className="text-2xl font-black text-emerald-600 leading-none mb-1">{totalCredits}</p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tổng UGC</p>
+              </div>
             </div>
-            <div className="prov-page__stat-item">
-              <span className="prov-page__stat-num prov-page__stat-num--green">{onChainCount}</span>
-              <span className="prov-page__stat-label">On-chain</span>
+
+            {/* Stat 3 */}
+            <div className="bg-white border border-slate-100 rounded-2xl p-4 flex items-center gap-4 min-w-[200px] shadow-sm">
+              <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[24px]">link</span>
+              </div>
+              <div>
+                <p className="text-2xl font-black text-blue-600 leading-none mb-1">{onChainCount}</p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">On-Chain</p>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Content */}
-
-        {/* Filter */}
-        <div className="prov-filter">
-          <input
-            id="prov-filter-input"
-            className="prov-filter__input"
-            placeholder="🔍  Lọc theo hoạt động, sự kiện, người duyệt, TX hash..."
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
-          />
-          <span className="prov-filter__count">{filtered.length} kết quả</span>
+        {/* Filter Bar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 mb-8">
+          <div className="relative flex-1">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+            <input
+              className="w-full bg-white border border-slate-200 rounded-2xl py-3 pl-12 pr-4 text-sm font-medium text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all shadow-sm"
+              placeholder="Lọc theo hoạt động, sự kiện, người duyệt, TX hash..."
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+            />
+          </div>
+          <button className="bg-white border border-slate-200 rounded-2xl px-6 py-3 text-sm font-bold text-slate-700 flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm whitespace-nowrap">
+            <span className="material-symbols-outlined text-[18px]">filter_list</span>
+            Bộ lọc
+          </button>
+          <span className="text-sm font-bold text-slate-500 whitespace-nowrap hidden sm:block px-2">
+            {filtered.length} kết quả
+          </span>
         </div>
 
         {/* Content */}
@@ -429,7 +559,7 @@ export default function ProvenancePage() {
             )}
           </div>
         ) : (
-          <div className="prov-page__grid">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {filtered.map(item => (
               <CertCard
                 key={item.id}

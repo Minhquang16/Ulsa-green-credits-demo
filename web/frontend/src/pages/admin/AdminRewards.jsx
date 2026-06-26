@@ -147,444 +147,520 @@ export default function AdminRewards() {
 
   const filtered = rewards.filter(r => {
     const matchSearch = r.title?.toLowerCase().includes(search.toLowerCase())
-    const matchStatus = filterStatus === 'all' || (filterStatus === 'low' ? r.stock <= 5 : r.status === filterStatus)
-    const matchCategory = filterCategory === 'all' || r.category === filterCategory
+    const matchCategory = filterCategory === 'all' || String(r.category_id) === String(filterCategory)
     const matchPrice = filterPrice === 'all' ||
-      (filterPrice === 'lt100' ? Number(r.cost_credits) < 100 :
-        filterPrice === '100-500' ? Number(r.cost_credits) >= 100 && Number(r.cost_credits) <= 500 :
-          Number(r.cost_credits) > 500)
-    return matchSearch && matchStatus && matchCategory && matchPrice
+      (filterPrice === 'lt10' ? Number(r.cost_credits) < 10 :
+        filterPrice === '10-50' ? Number(r.cost_credits) >= 10 && Number(r.cost_credits) <= 50 :
+          Number(r.cost_credits) > 50)
+    return matchSearch && matchCategory && matchPrice
   })
+
+  const [page, setPage] = useState(1)
+  const itemsPerPage = 3
+  const totalPages = Math.ceil(filtered.length / itemsPerPage)
+  
+  useEffect(() => {
+    setPage(1)
+  }, [search, filterCategory, filterPrice])
+
+  const paginatedRewards = filtered.slice((page - 1) * itemsPerPage, page * itemsPerPage)
 
   const popularName = stats.most_popular?.title || '—'
 
   // Route sinh viên sang trang riêng
-  
+
   return (
-    <main className="max-w-[1200px] mx-auto px-6 lg:px-8 py-8 animate-in">
+    <main className="w-full bg-white min-h-screen pb-20">
+      <div className="max-w-[1200px] mx-auto px-6 lg:px-8 py-8 animate-in">
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        <div>
-          <h1 className="font-headline text-3xl font-extrabold tracking-tight text-on-surface">Quản lý Ưu đãi <span className="text-primary">Xanh</span></h1>
-          <p className="text-on-surface-variant text-sm mt-1">Quản lý kho quà tặng, voucher và các phần thưởng dành cho sinh viên tham gia các hoạt động bảo vệ môi trường.</p>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Quản lý Ưu đãi <span className="text-[#16a34a]">Xanh</span></h1>
+            <p className="text-slate-500 text-sm mt-1">Quản lý kho quà tặng, voucher và các phần thưởng dành cho sinh viên tham gia các hoạt động bảo vệ môi trường.</p>
+          </div>
+          <button onClick={() => document.getElementById('create-form').scrollIntoView({ behavior: 'smooth' })}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border-2 border-[#16a34a] text-[#16a34a] font-bold text-sm bg-white hover:bg-green-50 transition-colors shadow-sm whitespace-nowrap">
+            <span className="material-symbols-outlined text-lg">add</span> Thêm Ưu Đãi Mới
+          </button>
         </div>
-        <button onClick={() => document.getElementById('create-form').scrollIntoView({ behavior: 'smooth' })}
-          className="flex items-center gap-2 px-5 py-3 rounded-2xl editorial-gradient text-on-primary font-bold text-sm shadow-lg whitespace-nowrap">
-          <span className="material-symbols-outlined text-base">add</span> Thêm Ưu Đãi Mới
-        </button>
-      </div>
 
-      {/* Stats — real-time from backend */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {[
-          { label: 'Tổng Ưu Đãi', value: stats.total, sub: `${rewards.length} hiển thị`, color: 'text-primary' },
-          { label: 'Tổng UGC Đã Dùng', value: `${Number(stats.total_ugc_redeemed).toLocaleString()} UGC`, sub: 'Từ lịch sử đổi', color: 'text-on-surface' },
-          { label: 'Phổ Biến Nhất', value: popularName, sub: stats.most_popular ? `${stats.most_popular.redeem_count} lượt đổi` : 'Chưa có', color: 'text-on-surface' },
-          { label: 'Sắp Hết Kho', value: stats.low_stock, sub: 'vật phẩm (≤5)', color: 'text-tertiary' },
-        ].map((s, i) => (
-          <div key={i} className="bg-surface-container-low rounded-2xl p-5 border border-outline-variant/5 shadow-md flex flex-col justify-center min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant/70 mb-2">{s.label}</p>
-            <p className={`text-2xl font-headline font-black ${s.color} mb-1 truncate`} title={typeof s.value === 'string' ? s.value : undefined}>{s.value}</p>
-            <p className="text-xs text-on-surface-variant font-medium">{s.sub}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Search + Filter */}
-      <div className="flex flex-wrap gap-3 mb-6 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">search</span>
-          <input className="w-full h-11 bg-surface-container-high border-none rounded-xl pl-10 pr-4 text-sm text-on-surface placeholder-on-surface-variant/50 focus:ring-2 focus:ring-primary/40 outline-none"
-            placeholder="Tìm tên phần thưởng..." value={search} onChange={e => setSearch(e.target.value)} />
+        {/* Stats — real-time from backend */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {[
+            { label: 'TỔNG ƯU ĐÃI', value: stats.total, sub: `${rewards.length} hiển thị`, icon: 'redeem', iconColor: 'text-green-400' },
+            { label: 'TỔNG UGC ĐÃ DÙNG', value: `${Number(stats.total_ugc_redeemed).toLocaleString()} UGC`, sub: 'Từ lịch sử đổi', icon: 'eco', iconColor: 'text-gray-300' },
+            { label: 'PHỔ BIẾN NHẤT', value: popularName, sub: stats.most_popular ? `${stats.most_popular.redeem_count} lượt đổi` : '0 lượt đổi', icon: 'star', iconColor: 'text-yellow-300' },
+            { label: 'SẮP HẾT KHO', value: stats.low_stock, sub: 'vật phẩm (≤5)', icon: 'inventory_2', iconColor: 'text-gray-200' },
+          ].map((s, i) => (
+            <div key={i} className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">{s.label}</p>
+                <p className="text-lg font-black text-gray-900 truncate leading-tight" title={typeof s.value === 'string' ? s.value : undefined}>{s.value}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{s.sub}</p>
+              </div>
+              <span className={`material-symbols-outlined text-[36px] ${s.iconColor} shrink-0 group-hover:scale-110 transition-transform select-none`}>{s.icon}</span>
+            </div>
+          ))}
         </div>
-        <select className="h-11 bg-surface-container-high border-none rounded-xl pl-4 pr-10 text-sm font-semibold text-on-surface outline-none focus:ring-2 focus:ring-primary/40"
-          value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
-          <option value="all">Tất cả danh mục</option>
-          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select className="h-11 bg-surface-container-high border-none rounded-xl pl-4 pr-10 text-sm font-semibold text-on-surface outline-none focus:ring-2 focus:ring-primary/40"
-          value={filterPrice} onChange={e => setFilterPrice(e.target.value)}>
-          <option value="all">Mức giá UGC</option>
-          <option value="lt100">Dưới 100</option>
-          <option value="100-500">100 – 500</option>
-          <option value="gt500">Trên 500</option>
-        </select>
-        <button onClick={() => setShowCatMgmt(!showCatMgmt)}
-          className={`h-11 px-4 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${showCatMgmt ? 'bg-primary text-white' : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'}`}>
-          <span className="material-symbols-outlined text-base">category</span>
-          Quản lý danh mục
-        </button>
-      </div>
 
-      {/* Category Management UI - Slide down */}
-      {showCatMgmt && (
-        <div className="mb-8 bg-surface-container-low rounded-3xl p-6 border border-primary/10 animate-in fade-in slide-in-from-top-4 duration-500">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-on-surface flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">settings_suggest</span>
-              Thiết lập Danh mục Phần thưởng
-            </h2>
-            <button onClick={() => setShowCatMgmt(false)} className="p-2 rounded-full hover:bg-surface-container-high transition-colors">
-              <span className="material-symbols-outlined">close</span>
-            </button>
+        {/* ── Search + Filters ─────────────────────────── */}
+        <div className="flex flex-wrap items-center gap-4 border-b border-gray-100 pb-5">
+          <div className="relative flex-1 min-w-[280px]">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">search</span>
+            <input
+              className="w-full h-11 bg-white border border-gray-200 rounded-xl pl-11 pr-4 text-[13px] text-gray-800 placeholder-gray-400 focus:border-green-500 outline-none transition-all shadow-sm"
+              placeholder="Tìm tên phần thưởng..."
+              value={search} onChange={e => setSearch(e.target.value)}
+            />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Create Cat */}
-            <div className="bg-white/50 p-5 rounded-2xl border border-outline-variant/10">
-              <p className="text-xs font-black uppercase tracking-widest text-primary mb-4">Thêm danh mục mới</p>
-              <div className="space-y-4">
-                <input className="w-full h-11 bg-white border border-outline-variant/30 rounded-xl px-4 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="Tên danh mục (VD: Quà lưu niệm)" value={newCat.name} onChange={e => setNewCat(f => ({ ...f, name: e.target.value }))} />
-                <textarea className="w-full h-20 bg-white border border-outline-variant/30 rounded-xl p-4 text-sm outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-                  placeholder="Mô tả ngắn..." value={newCat.description} onChange={e => setNewCat(f => ({ ...f, description: e.target.value }))} />
-                <button
-                  onClick={async () => {
-                    if (!newCat.name) return showToast('⚠️ Nhập tên danh mục')
-                    setBusy('cat')
-                    try {
-                      await api('/reward-categories', { method: 'POST', body: JSON.stringify(newCat) })
-                      showToast('✅ Đã thêm danh mục')
-                      setNewCat({ name: '', description: '' })
-                      load()
-                    } catch (e) { showToast('❌ Lỗi khi thêm') } finally { setBusy(null) }
-                  }}
-                  disabled={busy === 'cat'}
-                  className="w-full py-3 rounded-xl editorial-gradient text-white font-bold text-sm shadow-md active:scale-95 transition-all">
-                  {busy === 'cat' ? 'Đang lưu...' : 'Lưu danh mục'}
-                </button>
-              </div>
-            </div>
-
-            {/* Cat List */}
-            <div className="lg:col-span-2">
-              <p className="text-xs font-black uppercase tracking-widest text-on-surface-variant/40 mb-4 px-2">Danh sách hiện có</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {categories.map(c => (
-                  <div key={c.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-outline-variant/5 shadow-sm group hover:border-primary/20 transition-all">
-                    <div>
-                      <p className="text-sm font-bold text-on-surface">{c.name}</p>
-                      <p className="text-[10px] text-on-surface-variant opacity-60 truncate max-w-[150px]">{c.description || 'Chưa có mô tả'}</p>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        if (!window.confirm(`Xoá danh mục "${c.name}"?`)) return
-                        try {
-                          await api(`/reward-categories/${c.id}`, { method: 'DELETE' })
-                          showToast('🗑️ Đã xoá danh mục')
-                          load()
-                        } catch (e) { showToast('❌ Không thể xoá danh mục đang có sản phẩm') }
-                      }}
-                      className="p-2 rounded-lg opacity-0 group-hover:opacity-100 bg-rose-50 text-rose-500 hover:bg-rose-100 transition-all">
-                      <span className="material-symbols-outlined text-base">delete</span>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Reward Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-10">
-        {filtered.length === 0 && (
-          <div className="col-span-3 flex flex-col items-center justify-center py-16 text-on-surface-variant/50">
-            <span className="material-symbols-outlined text-5xl mb-3 block">inventory_2</span>
-            <p className="font-bold mb-4 text-base text-on-surface">Chưa có phần thưởng nào</p>
-            <button onClick={() => document.getElementById('create-form').scrollIntoView({ behavior: 'smooth' })} className="px-5 py-2.5 rounded-xl editorial-gradient text-on-primary font-bold text-sm shadow-md hover:-translate-y-0.5 transition-transform">
-              Tạo ngay
-            </button>
-          </div>
-        )}
-        {filtered.map(r => (
-          <article key={r.id} className="group bg-white rounded-[24px] overflow-hidden border border-slate-100 shadow-[0_4px_12px_rgb(0,0,0,0.03)] hover:shadow-[0_15px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1.5 transition-all duration-500 flex flex-col w-[258px] h-[365px] mx-auto">
-            {/* Media Area - 2/3 Height (243px) */}
-            <div className="relative h-[243px] overflow-hidden shrink-0">
-              <img alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" src={r.image_url || DEFAULT_IMG} />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-60" />
-
-              <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                <div className="px-3 py-1 rounded-full bg-primary/90 backdrop-blur-md text-white text-[10px] font-bold tracking-tight shadow-lg">
-                  {r.cost_credits} UGC
-                </div>
-                {r.status === 'inactive' && (
-                  <div className="px-2.5 py-1 rounded-full bg-slate-800/80 backdrop-blur-md text-white text-[8px] font-bold uppercase tracking-tighter">
-                    Bản nháp
-                  </div>
-                )}
-              </div>
-
-              <div className="absolute top-3 right-3">
-                <span className="px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-md text-slate-800 text-[8px] font-black uppercase tracking-widest border border-white/20">
-                  {r.category_name || 'Voucher'}
-                </span>
-              </div>
-
-              <div className="absolute bottom-3 left-3 right-3 text-white">
-                <h3 className="text-[15px] font-bold leading-tight truncate drop-shadow-md">{r.title}</h3>
-              </div>
-            </div>
-
-            {/* Content Area - 1/3 Height (122px) */}
-            <div className="p-3 flex-1 flex flex-col justify-between bg-white">
-              {/* Compact Stats Grid - Human Friendly */}
-              <div className="grid grid-cols-3 gap-1 py-2.5 px-1 rounded-2xl bg-slate-50/50 border border-slate-100/50">
-                <div className="text-center border-r border-slate-200/40">
-                  <p className="text-[8px] uppercase font-bold text-slate-400 leading-none mb-1.5">Còn lại</p>
-                  <p className={`text-[12px] font-black ${r.stock <= 5 ? 'text-rose-500' : 'text-slate-700'}`}>
-                    {r.stock}<span className="text-[8px] ml-0.5 font-bold opacity-60">món</span>
-                  </p>
-                </div>
-                <div className="text-center border-r border-slate-200/40">
-                  <p className="text-[8px] uppercase font-bold text-slate-400 leading-none mb-1.5">Mỗi bạn</p>
-                  <p className="text-[12px] font-black text-slate-700">
-                    {r.limit_per_student || 1}<span className="text-[8px] ml-0.5 font-bold opacity-60">lượt</span>
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[8px] uppercase font-bold text-slate-400 leading-none mb-1.5">Hạn dùng</p>
-                  <p className="text-[11px] font-black text-slate-700 truncate px-0.5 leading-tight">
-                    {(() => {
-                      if (!r.expiry_date) return '—'
-                      if (r.start_date && r.expiry_date) {
-                        const start = new Date(r.start_date)
-                        const end = new Date(r.expiry_date)
-                        const diffTime = end - start
-                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-                        if (diffDays > 0) return `${diffDays} ngày`
-                      }
-                      return new Date(r.expiry_date).toLocaleDateString('vi-VN', { month: '2', day: '2' })
-                    })()}
-                  </p>
-                </div>
-              </div>
-
-              {/* Minimal Actions */}
-              <div className="flex items-center justify-between pt-1">
-                <button onClick={() => handleEditClick(r)} className="flex items-center gap-1.5 text-slate-400 hover:text-primary transition-all duration-300">
-                  <span className="material-symbols-outlined text-[18px]">edit_square</span>
-                  <span className="text-[10px] font-black uppercase tracking-tight">Cập nhật</span>
-                </button>
-
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleDelete(r.id); }}
-                  disabled={busy === r.id}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-50 text-slate-300 hover:bg-rose-50 hover:text-rose-500 transition-all duration-300 disabled:opacity-30 shadow-sm"
-                >
-                  <span className="material-symbols-outlined text-[20px]">
-                    {busy === r.id ? 'sync' : 'delete_forever'}
-                  </span>
-                </button>
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
-
-      {/* Create / Edit Form */}
-      <div id="create-form" className="bg-surface-container-low rounded-3xl p-8 border border-outline-variant/10 shadow-xl shadow-black/5">
-        <h2 className="font-headline text-2xl font-extrabold text-on-surface mb-1">{editingId ? 'Cập Nhật Phần Thưởng' : 'Tạo Phần Thưởng Mới'}</h2>
-        <p className="text-sm text-on-surface-variant mb-6">Điền thông tin chi tiết để {editingId ? 'cập nhật' : 'thêm'} ưu đãi vào hệ thống.</p>
-
-        <form onSubmit={handleCreate} className="space-y-5">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
-            {/* Image upload */}
-            <div className="lg:col-span-1 space-y-2">
-              <label className="text-sm font-semibold capitalize text-on-surface-variant block px-1">Hình ảnh minh họa</label>
-              <div
-                onClick={() => document.getElementById('fileInput').click()}
-                onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-primary', 'bg-primary/5'); }}
-                onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-primary', 'bg-primary/5'); }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.currentTarget.classList.remove('border-primary', 'bg-primary/5');
-                  const file = e.dataTransfer.files[0];
-                  if (file && file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onload = (ev) => setForm(f => ({ ...f, image_url: ev.target.result }));
-                    reader.readAsDataURL(file);
-                  }
-                }}
-                className="group relative h-48 lg:h-[188px] border-2 border-dashed border-outline-variant/40 rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all overflow-hidden"
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1">
+              <select
+                className="text-[13px] font-bold text-gray-700 bg-transparent border-none outline-none cursor-pointer appearance-none pr-1 hover:text-green-600 transition-colors"
+                value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
               >
-                {form.image_url ? (
-                  <>
-                    <img src={form.image_url} alt="Preview" className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-40 transition-opacity" />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 text-white">
-                      <span className="material-symbols-outlined text-3xl">edit</span>
-                      <p className="text-[11px] font-bold">Thay đổi ảnh</p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-3xl text-on-surface-variant/40 group-hover:text-primary/60 transition-colors">upload_file</span>
-                    <p className="text-[11px] text-on-surface-variant/60 text-center px-4 leading-tight">Kéo thả tải lên<br />hoặc click để chọn</p>
-                  </>
-                )}
-                <input
-                  id="fileInput"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onload = (ev) => setForm(f => ({ ...f, image_url: ev.target.result }));
-                      reader.readAsDataURL(file);
-                    }
-                  }}
-                />
-              </div>
+                <option value="all">Tất cả danh mục</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <span className="material-symbols-outlined text-[16px] text-gray-400 pointer-events-none">expand_more</span>
             </div>
 
-            {/* Main fields */}
-            <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2 md:col-span-3">
-                <label className="text-sm font-semibold capitalize text-on-surface-variant block px-1">Tên phần thưởng</label>
-                <input className="w-full h-11 bg-surface-container-high border-none rounded-xl px-4 text-sm text-on-surface placeholder-on-surface-variant/50 focus:ring-2 focus:ring-primary/40 outline-none"
-                  placeholder="VD: Voucher Trà Sữa 20k" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between px-1 mb-1">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Danh mục</label>
-                  <button type="button" onClick={() => setShowNewCatInline(v => !v)}
-                    className="text-[10px] font-bold text-primary flex items-center gap-0.5 hover:underline">
-                    <span className="material-symbols-outlined text-xs">{showNewCatInline ? 'remove' : 'add'}</span>
-                    {showNewCatInline ? 'Đóng' : 'Tạo mới'}
+            <div className="w-[1px] h-4 bg-gray-200"></div>
+
+            <div className="flex items-center gap-1">
+              <select
+                className="text-[13px] font-bold text-gray-700 bg-transparent border-none outline-none cursor-pointer appearance-none pr-1 hover:text-green-600 transition-colors"
+                value={filterPrice} onChange={e => setFilterPrice(e.target.value)}
+              >
+                <option value="all">Mức giá UGC</option>
+                <option value="lt10">Dưới 10</option>
+                <option value="10-50">10 – 50</option>
+                <option value="gt50">Trên 50</option>
+              </select>
+              <span className="material-symbols-outlined text-[16px] text-gray-400 pointer-events-none">expand_more</span>
+            </div>
+
+            <div className="w-[1px] h-4 bg-gray-200"></div>
+
+            <button
+              onClick={() => setShowCatMgmt(!showCatMgmt)}
+              className={`flex items-center gap-1.5 text-[13px] font-bold transition-colors ${showCatMgmt ? 'text-green-600' : 'text-gray-700 hover:text-green-600'}`}
+            >
+              <span className="material-symbols-outlined text-[16px]">account_tree</span>
+              Quản lý danh mục
+            </button>
+          </div>
+        </div>
+
+        {/* Category Management UI - Slide down */}
+        {showCatMgmt && (
+          <div className="mb-8 bg-surface-container-low rounded-3xl p-6 border border-primary/10 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">settings_suggest</span>
+                Thiết lập Danh mục Phần thưởng
+              </h2>
+              <button onClick={() => setShowCatMgmt(false)} className="p-2 rounded-full hover:bg-surface-container-high transition-colors">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Create Cat */}
+              <div className="bg-white/50 p-5 rounded-2xl border border-outline-variant/10">
+                <p className="text-xs font-black uppercase tracking-widest text-primary mb-4">Thêm danh mục mới</p>
+                <div className="space-y-4">
+                  <input className="w-full h-11 bg-white border border-outline-variant/30 rounded-xl px-4 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="Tên danh mục (VD: Quà lưu niệm)" value={newCat.name} onChange={e => setNewCat(f => ({ ...f, name: e.target.value }))} />
+                  <textarea className="w-full h-20 bg-white border border-outline-variant/30 rounded-xl p-4 text-sm outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                    placeholder="Mô tả ngắn..." value={newCat.description} onChange={e => setNewCat(f => ({ ...f, description: e.target.value }))} />
+                  <button
+                    onClick={async () => {
+                      if (!newCat.name) return showToast('⚠️ Nhập tên danh mục')
+                      setBusy('cat')
+                      try {
+                        await api('/reward-categories', { method: 'POST', body: JSON.stringify(newCat) })
+                        showToast('✅ Đã thêm danh mục')
+                        setNewCat({ name: '', description: '' })
+                        load()
+                      } catch (e) { showToast('❌ Lỗi khi thêm') } finally { setBusy(null) }
+                    }}
+                    disabled={busy === 'cat'}
+                    className="w-full py-3 rounded-xl editorial-gradient text-white font-bold text-sm shadow-md active:scale-95 transition-all">
+                    {busy === 'cat' ? 'Đang lưu...' : 'Lưu danh mục'}
                   </button>
                 </div>
-                
-                {showNewCatInline && (
-                  <div className="rounded-xl bg-[#eef5ed]/50 p-3 space-y-3 border border-primary/10 mb-2">
-                    <p className="text-[10px] font-bold text-primary flex items-center gap-1">
-                      <span className="material-symbols-outlined text-xs">eco</span>Danh mục mới
-                    </p>
-                    <div className="space-y-2">
-                      <input className="w-full bg-surface-container border-none rounded-lg py-2.5 px-3 text-xs outline-none focus:ring-1 focus:ring-primary/40"
-                        placeholder="Tên danh mục (VD: Lưu niệm)" required={showNewCatInline}
-                        value={newCat.name} onChange={e => setNewCat(f => ({ ...f, name: e.target.value }))} />
+              </div>
+
+              {/* Cat List */}
+              <div className="lg:col-span-2">
+                <p className="text-xs font-black uppercase tracking-widest text-on-surface-variant/40 mb-4 px-2">Danh sách hiện có</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {categories.map(c => (
+                    <div key={c.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-outline-variant/5 shadow-sm group hover:border-primary/20 transition-all">
+                      <div>
+                        <p className="text-sm font-bold text-on-surface">{c.name}</p>
+                        <p className="text-[10px] text-on-surface-variant opacity-60 truncate max-w-[150px]">{c.description || 'Chưa có mô tả'}</p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!window.confirm(`Xoá danh mục "${c.name}"?`)) return
+                          try {
+                            await api(`/reward-categories/${c.id}`, { method: 'DELETE' })
+                            showToast('🗑️ Đã xoá danh mục')
+                            load()
+                          } catch (e) { showToast('❌ Không thể xoá danh mục đang có sản phẩm') }
+                        }}
+                        className="p-2 rounded-lg opacity-0 group-hover:opacity-100 bg-rose-50 text-rose-500 hover:bg-rose-100 transition-all">
+                        <span className="material-symbols-outlined text-base">delete</span>
+                      </button>
                     </div>
-                    <button type="button" 
-                      onClick={async () => {
-                        if (!newCat.name) return showToast('⚠️ Nhập tên danh mục')
-                        setBusy('catInline')
-                        try {
-                          const created = await api('/reward-categories', { method: 'POST', body: JSON.stringify(newCat) })
-                          showToast('✅ Đã tạo danh mục')
-                          setNewCat({ name: '', description: '' })
-                          setShowNewCatInline(false)
-                          load()
-                          setForm(f => ({ ...f, category_id: created.id }))
-                        } catch (e) { showToast('❌ Lỗi khi thêm') } finally { setBusy(null) }
-                      }}
-                      disabled={busy === 'catInline'}
-                      className="w-full py-2.5 rounded-lg bg-[#161d16] text-[#edf6ea] font-bold text-xs disabled:opacity-50 transition-transform active:scale-[0.98]">
-                      {busy === 'catInline' ? 'Đang lưu...' : '✓ Tạo & chọn danh mục này'}
-                    </button>
-                  </div>
-                )}
-
-                <select className="w-full h-11 bg-surface-container-high border-none rounded-xl px-4 text-sm text-on-surface focus:ring-2 focus:ring-primary/40 outline-none appearance-none"
-                  value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}>
-                  <option value="">— Chọn danh mục —</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold capitalize text-on-surface-variant block px-1">Giá trị (UGC)</label>
-                <input className="w-full h-11 bg-surface-container-high border-none rounded-xl px-4 text-sm font-bold text-on-surface placeholder-on-surface-variant/50 focus:ring-2 focus:ring-primary/40 outline-none"
-                  type="number" min="1" placeholder="500" value={form.cost_credits} onChange={e => setForm(f => ({ ...f, cost_credits: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold capitalize text-on-surface-variant block px-1">Số lượng kho</label>
-                <input className="w-full h-11 bg-surface-container-high border-none rounded-xl px-4 text-sm font-bold text-on-surface placeholder-on-surface-variant/50 focus:ring-2 focus:ring-primary/40 outline-none"
-                  type="number" min="0" placeholder="100" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} />
-              </div>
-            </div>
-          </div>
-
-          {/* Description */}
-          <div className="space-y-2 pt-2">
-            <label className="text-sm font-semibold capitalize text-on-surface-variant block px-1">Mô tả chi tiết</label>
-            <textarea className="w-full bg-surface-container-high border-none rounded-xl p-4 text-sm text-on-surface placeholder-on-surface-variant/50 focus:ring-2 focus:ring-primary/40 outline-none h-28 resize-none"
-              placeholder="Nhập mô tả chi tiết và điều kiện áp dụng..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-          </div>
-
-          {/* Advanced settings */}
-          <div className="bg-surface-container-high/30 border border-outline-variant/10 rounded-2xl p-6 space-y-6 mt-2">
-            <p className="text-xs font-black uppercase tracking-widest text-on-surface-variant/50">Cài đặt nâng cao</p>
-            
-            {/* Hàng 1: Thời gian */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-on-surface-variant flex items-center gap-1.5 px-1">
-                  <span className="material-symbols-outlined text-base text-primary/60">calendar_add_on</span>
-                  Thời gian bắt đầu
-                </label>
-                <input type="date" className="w-full h-11 bg-white border border-outline-variant/20 rounded-xl px-4 text-sm text-on-surface focus:ring-2 focus:ring-primary/40 outline-none transition-shadow"
-                  value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-on-surface-variant flex items-center gap-1.5 px-1">
-                  <span className="material-symbols-outlined text-base text-rose-400/70">event_busy</span>
-                  Thời gian kết thúc
-                </label>
-                <input type="date" className="w-full h-11 bg-white border border-outline-variant/20 rounded-xl px-4 text-sm text-on-surface focus:ring-2 focus:ring-primary/40 outline-none transition-shadow"
-                  value={form.expiry_date} onChange={e => setForm(f => ({ ...f, expiry_date: e.target.value }))} />
-              </div>
-            </div>
-
-            {/* Hàng 2: Hạn mức và Trạng thái */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-on-surface-variant flex items-center gap-1.5 px-1">
-                  <span className="material-symbols-outlined text-base text-amber-500/70">group</span>
-                  Giới hạn mỗi sinh viên
-                  <span className="text-[10px] font-normal opacity-50 ml-1">(Lượt đổi tối đa)</span>
-                </label>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => setForm(f => ({ ...f, limit_per_student: Math.max(1, (Number(f.limit_per_student) - 1)).toString() }))}
-                    className="w-11 h-11 rounded-xl bg-white border border-outline-variant/20 text-on-surface font-black text-lg hover:bg-surface-container-high transition-colors flex items-center justify-center flex-shrink-0">−</button>
-                  <input type="number" min="1" max="99"
-                    className="flex-1 h-11 bg-white border border-outline-variant/20 rounded-xl px-3 text-sm font-black text-on-surface text-center focus:ring-2 focus:ring-primary/40 outline-none transition-shadow"
-                    value={form.limit_per_student} onChange={e => setForm(f => ({ ...f, limit_per_student: e.target.value }))} />
-                  <button type="button" onClick={() => setForm(f => ({ ...f, limit_per_student: Math.min(99, (Number(f.limit_per_student) + 1)).toString() }))}
-                    className="w-11 h-11 rounded-xl bg-white border border-outline-variant/20 text-on-surface font-black text-lg hover:bg-surface-container-high transition-colors flex items-center justify-center flex-shrink-0">+</button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-on-surface-variant flex items-center gap-1.5 px-1">
-                  <span className="material-symbols-outlined text-base text-primary/40">visibility</span>
-                  Trạng thái hiển thị
-                </label>
-                <div className="flex gap-3 h-11 items-center">
-                  {[{ val: 'active', label: 'Công khai', icon: 'public', style: 'bg-primary/10 text-primary border-primary/30' },
-                    { val: 'inactive', label: 'Bản nháp', icon: 'draft', style: 'bg-white text-slate-500 border-outline-variant/30' }].map(s => (
-                    <label key={s.val} className={`flex-1 flex items-center justify-center gap-2 h-11 rounded-xl border cursor-pointer transition-all ${
-                      form.status === s.val ? s.style + ' font-black shadow-sm' : 'bg-white border-outline-variant/20 text-on-surface-variant/60 hover:border-outline-variant/40'
-                    }`}>
-                      <input type="radio" name="status" value={s.val} checked={form.status === s.val} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className="hidden" />
-                      <span className="material-symbols-outlined text-[16px]">{s.icon}</span>
-                      <span className="text-sm">{s.label}</span>
-                    </label>
                   ))}
                 </div>
               </div>
             </div>
           </div>
+        )}
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={() => { setForm(EMPTY_FORM); setEditingId(null); }} className="px-6 py-3 rounded-xl bg-surface-container-high text-on-surface font-bold text-sm hover:bg-surface-container-highest transition-colors">
-              Hủy bỏ
-            </button>
-            <button type="submit" disabled={busy === 'create'} className="px-8 py-3 rounded-xl editorial-gradient text-on-primary font-headline font-bold text-sm shadow-md active:scale-[0.98] transition-all">
-              {busy === 'create' ? 'Đang xử lý...' : (editingId ? 'Cập Nhật' : 'Tạo Phần Thưởng')}
-            </button>
+        {/* Reward Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 mb-12">
+          {filtered.length === 0 && (
+            <div className="col-span-3 flex flex-col items-center justify-center py-16 text-slate-400">
+              <span className="material-symbols-outlined text-5xl mb-3 block">inventory_2</span>
+              <p className="font-bold mb-4 text-base text-slate-800">Chưa có phần thưởng nào</p>
+              <button onClick={() => document.getElementById('create-form').scrollIntoView({ behavior: 'smooth' })} className="px-5 py-2.5 rounded-xl bg-[#16a34a] text-white font-bold text-sm shadow-md hover:-translate-y-0.5 transition-transform">
+                Tạo ngay
+              </button>
+            </div>
+          )}
+          {paginatedRewards.map(r => (
+            <article key={r.id} className="group bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col w-full mx-auto">
+              {/* Media Area */}
+              <div className="relative h-[220px] bg-gradient-to-b from-slate-50 to-slate-200 overflow-hidden shrink-0 flex items-center justify-center p-8">
+                <img alt={r.title} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700 drop-shadow-xl" src={r.image_url || DEFAULT_IMG} />
+
+                {/* Title Overlay */}
+                <div className="absolute bottom-0 left-0 right-0 p-4 pt-12 bg-gradient-to-t from-black/60 to-transparent">
+                  <h3 className="text-[15px] font-bold leading-tight text-white drop-shadow-md truncate">{r.title}</h3>
+                </div>
+
+                {/* Top Left Badge */}
+                <div className="absolute top-4 left-4">
+                  <div className="px-3 py-1.5 rounded-full bg-[#16a34a] text-white text-[11px] font-bold tracking-tight shadow-md">
+                    {r.cost_credits} UGC
+                  </div>
+                </div>
+
+                {/* Top Right Badge */}
+                <div className="absolute top-4 right-4">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-700">
+                    {r.category_name || 'VOUCHER'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Content Area */}
+              <div className="px-4 py-3 flex-1 flex flex-col justify-between bg-white border-t border-slate-100">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-3 gap-0 py-3 mb-2 border-b border-slate-100">
+                  <div className="text-center border-r border-slate-100">
+                    <p className="text-[9px] uppercase font-bold text-slate-400 mb-1">Còn lại</p>
+                    <p className={`text-[13px] font-black ${r.stock <= 5 ? 'text-rose-500' : 'text-slate-800'}`}>
+                      {r.stock}<span className="text-[9px] ml-0.5 font-bold text-slate-500">món</span>
+                    </p>
+                  </div>
+                  <div className="text-center border-r border-slate-100">
+                    <p className="text-[9px] uppercase font-bold text-slate-400 mb-1">Mỗi bạn</p>
+                    <p className="text-[13px] font-black text-slate-800">
+                      {r.limit_per_student || 1}<span className="text-[9px] ml-0.5 font-bold text-slate-500">lượt</span>
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[9px] uppercase font-bold text-slate-400 mb-1">Hạn dùng</p>
+                    <p className="text-[12px] font-black text-slate-800 truncate px-0.5">
+                      {(() => {
+                        if (!r.expiry_date) return '—'
+                        if (r.start_date && r.expiry_date) {
+                          const start = new Date(r.start_date)
+                          const end = new Date(r.expiry_date)
+                          const diffTime = end - start
+                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+                          if (diffDays > 0) return `${diffDays} ngày`
+                        }
+                        return new Date(r.expiry_date).toLocaleDateString('vi-VN', { month: '2', day: '2' })
+                      })()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-between pt-2 pb-1">
+                  <button onClick={() => handleEditClick(r)} className="flex items-center gap-1.5 text-slate-500 hover:text-[#16a34a] transition-colors">
+                    <span className="material-symbols-outlined text-[18px]">edit_square</span>
+                    <span className="text-[11px] font-bold uppercase tracking-tight">Cập nhật</span>
+                  </button>
+
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDelete(r.id); }}
+                    disabled={busy === r.id}
+                    className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-colors disabled:opacity-30"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      {busy === r.id ? 'sync' : 'delete'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        {/* Pagination UI */}
+        {totalPages > 0 && (
+          <div className="flex items-center justify-center gap-3 mt-6 mb-8 animate-in fade-in">
+            <span className="text-[12px] font-bold text-slate-500 mr-3">Trang {page} / {totalPages}</span>
+            <div className="flex items-center gap-1.5">
+              <button 
+                onClick={() => setPage(1)} disabled={page === 1}
+                className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:border-[#16a34a] hover:text-[#16a34a] hover:bg-green-50 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[16px]">keyboard_double_arrow_left</span>
+              </button>
+              <button 
+                onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:border-[#16a34a] hover:text-[#16a34a] hover:bg-green-50 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+              </button>
+              <button 
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages || totalPages === 0}
+                className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:border-[#16a34a] hover:text-[#16a34a] hover:bg-green-50 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+              </button>
+              <button 
+                onClick={() => setPage(totalPages)} disabled={page === totalPages || totalPages === 0}
+                className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:border-[#16a34a] hover:text-[#16a34a] hover:bg-green-50 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[16px]">keyboard_double_arrow_right</span>
+              </button>
+            </div>
           </div>
-        </form>
+        )}
+
+        {/* Create / Edit Form */}
+        <div id="create-form" className="mt-12 border-t border-slate-200 pt-8 pb-12">
+          <div className="mb-8">
+            <h2 className="text-xl font-extrabold text-slate-900 mb-1">{editingId ? 'Cập Nhật Phần Thưởng' : 'Tạo Phần Thưởng Mới'}</h2>
+            <p className="text-[13px] text-slate-500">Điền thông tin chi tiết để {editingId ? 'cập nhật' : 'thêm'} ưu đãi vào hệ thống.</p>
+          </div>
+
+          <form onSubmit={handleCreate} className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-10 lg:gap-12 items-start">
+            
+            {/* Left Column: Main info */}
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-col sm:flex-row gap-6">
+                {/* Image upload */}
+                <div className="w-full sm:w-[160px] shrink-0 space-y-2">
+                  <label className="text-[12px] font-bold text-slate-700 block">Hình Ảnh Minh Họa</label>
+                  <div
+                    onClick={() => document.getElementById('fileInput').click()}
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-[#16a34a]', 'bg-green-50'); }}
+                    onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-[#16a34a]', 'bg-green-50'); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.remove('border-[#16a34a]', 'bg-green-50');
+                      const file = e.dataTransfer.files[0];
+                      if (file && file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setForm(f => ({ ...f, image_url: ev.target.result }));
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="group relative h-[140px] border border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-[#16a34a] hover:bg-green-50/50 transition-all overflow-hidden bg-slate-50/30"
+                  >
+                    {form.image_url ? (
+                      <>
+                        <img src={form.image_url} alt="Preview" className="absolute inset-0 w-full h-full object-cover group-hover:opacity-60 transition-opacity" />
+                        <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 text-white">
+                          <span className="material-symbols-outlined text-2xl mb-1">edit</span>
+                          <p className="text-[10px] font-bold">Thay đổi</p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-2xl text-slate-400 group-hover:text-[#16a34a] transition-colors">upload_file</span>
+                        <p className="text-[11px] text-slate-500 text-center px-2 font-medium leading-tight mt-1">Kéo thả tải lên<br />hoặc click để chọn</p>
+                      </>
+                    )}
+                    <input id="fileInput" type="file" accept="image/*" className="hidden" onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setForm(f => ({ ...f, image_url: ev.target.result }));
+                        reader.readAsDataURL(file);
+                      }
+                    }} />
+                  </div>
+                </div>
+
+                {/* Main fields (Name, Category, Price) */}
+                <div className="flex-1 flex flex-col justify-between">
+                  <div className="space-y-2 mb-4 sm:mb-0">
+                    <label className="text-[12px] font-bold text-slate-700 block">Tên Phần Thưởng</label>
+                    <input className="w-full h-11 bg-white border border-slate-200 rounded-xl px-4 text-[13px] text-slate-800 placeholder-slate-400 focus:border-[#16a34a] outline-none transition-all shadow-sm"
+                      placeholder="VD: Voucher Trà Sữa 20k" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2 relative">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">DANH MỤC</label>
+                        <button type="button" onClick={() => setShowNewCatInline(v => !v)}
+                          className="text-[10px] font-bold text-[#16a34a] flex items-center hover:underline">
+                          <span className="material-symbols-outlined text-[12px] mr-0.5">{showNewCatInline ? 'remove' : 'add'}</span>
+                          {showNewCatInline ? 'Đóng' : 'Tạo mới'}
+                        </button>
+                      </div>
+
+                      {showNewCatInline && (
+                        <div className="absolute bottom-full left-0 right-0 z-20 mb-1 rounded-xl bg-white p-3 space-y-2 border border-slate-200 shadow-xl">
+                          <p className="text-[10px] font-bold text-slate-700 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">add_circle</span>Danh mục mới
+                          </p>
+                          <input className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-2 text-[12px] outline-none focus:border-[#16a34a]"
+                            placeholder="Tên danh mục..." required={showNewCatInline}
+                            value={newCat.name} onChange={e => setNewCat(f => ({ ...f, name: e.target.value }))} />
+                          <button type="button"
+                            onClick={async () => {
+                              if (!newCat.name) return showToast('⚠️ Nhập tên danh mục')
+                              setBusy('catInline')
+                              try {
+                                const created = await api('/reward-categories', { method: 'POST', body: JSON.stringify(newCat) })
+                                showToast('✅ Đã tạo danh mục')
+                                setNewCat({ name: '', description: '' })
+                                setShowNewCatInline(false)
+                                load()
+                                setForm(f => ({ ...f, category_id: created.id }))
+                              } catch (e) { showToast('❌ Lỗi khi thêm') } finally { setBusy(null) }
+                            }}
+                            disabled={busy === 'catInline'}
+                            className="w-full py-1.5 rounded-lg bg-[#16a34a] text-white font-bold text-[11px] disabled:opacity-50">
+                            {busy === 'catInline' ? 'Đang lưu...' : 'Lưu & Chọn'}
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="relative">
+                        <select className="w-full h-11 bg-white border border-slate-200 rounded-xl px-4 text-[13px] font-medium text-slate-800 focus:border-[#16a34a] outline-none appearance-none transition-all shadow-sm"
+                          value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}>
+                          <option value="">— Chọn danh mục —</option>
+                          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                        <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[16px] text-slate-400 pointer-events-none">expand_more</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[12px] font-bold text-slate-700 block">Giá Trị (UGC)</label>
+                      <input className="w-full h-11 bg-white border border-slate-200 rounded-xl px-4 text-[13px] font-bold text-slate-800 placeholder-slate-400 focus:border-[#16a34a] outline-none transition-all shadow-sm"
+                        type="number" min="1" placeholder="500" value={form.cost_credits} onChange={e => setForm(f => ({ ...f, cost_credits: e.target.value }))} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-2">
+                <label className="text-[12px] font-bold text-slate-700 block">Mô Tả Chi Tiết</label>
+                <textarea className="w-full bg-white border border-slate-200 rounded-xl p-4 text-[13px] text-slate-800 placeholder-slate-400 focus:border-[#16a34a] outline-none h-[88px] resize-none transition-all shadow-sm"
+                  placeholder="Nhập mô tả chi tiết và điều kiện áp dụng..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+              </div>
+            </div>
+
+            {/* Right Column: Advanced settings + Buttons */}
+            <div className="flex flex-col h-full">
+              <div className="border border-slate-200 rounded-2xl p-6 bg-white shadow-sm space-y-6">
+                <p className="text-[11px] font-black uppercase tracking-widest text-slate-800">CÀI ĐẶT NÂNG CAO</p>
+
+                <div className="grid grid-cols-2 gap-6">
+                  {/* Cột 1 */}
+                  <div className="space-y-5">
+                    <div className="space-y-2">
+                      <label className="text-[12px] font-bold text-slate-700 flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[16px] text-[#16a34a]">calendar_add_on</span>
+                        Thời gian bắt đầu
+                      </label>
+                      <input type="date" className="w-full h-10 bg-white border border-slate-200 rounded-xl px-3 text-[13px] text-slate-800 focus:border-[#16a34a] outline-none transition-all shadow-sm"
+                        value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[12px] font-bold text-slate-700 flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[16px] text-amber-500">group</span>
+                        Giới hạn mỗi sinh viên
+                        <span className="text-[9px] font-normal text-slate-400 ml-1">(Lượt đổi)</span>
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <button type="button" onClick={() => setForm(f => ({ ...f, limit_per_student: Math.max(1, (Number(f.limit_per_student) - 1)).toString() }))}
+                          className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-600 font-black text-lg hover:bg-slate-50 flex items-center justify-center shrink-0 shadow-sm">−</button>
+                        <input type="number" min="1" max="99"
+                          className="flex-1 w-full h-10 bg-white border border-slate-200 rounded-xl px-2 text-[14px] font-black text-slate-800 text-center focus:border-[#16a34a] outline-none shadow-sm"
+                          value={form.limit_per_student} onChange={e => setForm(f => ({ ...f, limit_per_student: e.target.value }))} />
+                        <button type="button" onClick={() => setForm(f => ({ ...f, limit_per_student: Math.min(99, (Number(f.limit_per_student) + 1)).toString() }))}
+                          className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-600 font-black text-lg hover:bg-slate-50 flex items-center justify-center shrink-0 shadow-sm">+</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cột 2 */}
+                  <div className="space-y-5">
+                    <div className="space-y-2">
+                      <label className="text-[12px] font-bold text-slate-700 flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[16px] text-rose-500">event_busy</span>
+                        Thời gian kết thúc
+                      </label>
+                      <input type="date" className="w-full h-10 bg-white border border-slate-200 rounded-xl px-3 text-[13px] text-slate-800 focus:border-[#16a34a] outline-none transition-all shadow-sm"
+                        value={form.expiry_date} onChange={e => setForm(f => ({ ...f, expiry_date: e.target.value }))} />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[12px] font-bold text-slate-700 flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[16px] text-blue-500">visibility</span>
+                        Trạng thái hiển thị
+                      </label>
+                      <div className="flex gap-2 h-10 items-center">
+                        {[{ val: 'active', label: 'Công khai', style: 'bg-[#e2f3e9] text-[#16a34a] border-[#16a34a]' },
+                        { val: 'inactive', label: 'Bản nháp', style: 'bg-slate-50 text-slate-600 border-slate-200' }].map(s => (
+                          <label key={s.val} className={`flex-1 flex items-center justify-center h-full rounded-xl border cursor-pointer transition-all shadow-sm ${form.status === s.val ? s.style + ' font-bold ring-2 ring-[#16a34a]/20' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                            }`}>
+                            <input type="radio" name="status" value={s.val} checked={form.status === s.val} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className="hidden" />
+                            <span className="text-[12px] font-bold flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[16px]">{s.val === 'active' ? 'public' : 'draft'}</span>
+                              {s.label}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button type="button" onClick={() => { setForm(EMPTY_FORM); setEditingId(null); }} className="px-6 py-3 rounded-xl border border-slate-200 bg-white text-slate-600 font-bold text-[13px] hover:bg-slate-50 transition-colors shadow-sm">
+                  Hủy bỏ
+                </button>
+                <button type="submit" disabled={busy === 'create'} className="px-8 py-3 rounded-xl bg-[#16a34a] text-white font-bold text-[13px] shadow-md hover:bg-[#15803d] active:scale-[0.98] transition-all">
+                  {busy === 'create' ? 'Đang xử lý...' : (editingId ? 'Cập Nhật' : 'Tạo Phần Thưởng')}
+                </button>
+              </div>
+            </div>
+            
+          </form>
+        </div>
       </div>
     </main>
   )

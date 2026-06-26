@@ -1,0 +1,1360 @@
+/* ==========================================================================
+   TREASURY PAGE STYLES
+   ========================================================================== */
+
+.treasury-page {
+  max-width: 1200px;
+  margin-inline: auto;
+  padding: 2rem 1.5rem;
+  position: relative;
+  animation: fadeIn 0.3s ease-in-out;
+  zoom: 1.08;
+}
+
+@media (min-width: 1024px) {
+  .treasury-page {
+    padding-inline: 2rem;
+  }
+}
+
+/* ==========================================================================
+   HEADER
+   ========================================================================== */
+.treasury-header {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2.5rem;
+  gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .treasury-header {
+    flex-direction: row;
+  }
+}
+
+.treasury-header__subtitle {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-primary, #16a34a);
+  margin-bottom: 0.25rem;
+}
+
+.treasury-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.treasury-header__title {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: #0f172a;
+  margin: 0;
+}
+
+.treasury-header__badge {
+  background-color: #f0fdf4;
+  color: var(--color-primary, #16a34a);
+  border-radius: 9999px;
+  font-size: 1.125rem;
+  padding: 0.125rem;
+}
+
+.treasury-header__desc {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+  margin: 0;
+}
+
+.treasury-header__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+/* Wallet Connected State */
+.treasury-wallet-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.treasury-wallet-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background-color: #ffffff;
+  padding: 0.5rem 1rem 0.5rem 0.5rem;
+  border-radius: 9999px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  border: 1px solid #f1f5f9;
+}
+
+.treasury-wallet-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.625rem;
+}
+
+.treasury-wallet-icon--internal {
+  background-color: #9333ea;
+}
+
+.treasury-wallet-icon--metamask {
+  background-color: #f97316;
+}
+
+.treasury-wallet-type {
+  font-size: 0.5625rem;
+  font-weight: 900;
+  color: #64748b;
+  line-height: 1;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.treasury-wallet-address {
+  font-size: 0.875rem;
+  font-family: monospace;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.treasury-wallet-disconnect {
+  margin-left: 0.5rem;
+  color: #94a3b8;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.treasury-wallet-disconnect:hover {
+  color: #ef4444;
+}
+
+/* Connect Wallet Button */
+.treasury-connect-btn {
+  padding: 0.75rem 1.5rem;
+  border-radius: 9999px;
+  background-color: var(--color-primary, #16a34a);
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 700;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.treasury-connect-btn:hover {
+  background-color: #15803d;
+}
+
+.treasury-connect-note {
+  font-size: 0.625rem;
+  color: #64748b;
+  margin-top: 0.5rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
+/* ==========================================================================
+   STAT CARDS
+   ========================================================================== */
+.treasury-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+@media (min-width: 768px) {
+  .treasury-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .treasury-stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.treasury-stat-card {
+  background-color: #ffffff;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.treasury-stat-card__main {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.treasury-stat-card__icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.treasury-stat-card__icon--emerald { background-color: #ecfdf5; color: #10b981; }
+.treasury-stat-card__icon--blue { background-color: #eff6ff; color: #3b82f6; }
+.treasury-stat-card__icon--purple { background-color: #faf5ff; color: #a855f7; }
+.treasury-stat-card__icon--orange { background-color: #fff7ed; color: #f97316; }
+
+.treasury-stat-card__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.treasury-stat-card__label {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #475569;
+  margin: 0 0 0.125rem 0;
+}
+
+.treasury-stat-card__value {
+  font-size: 1.125rem;
+  font-weight: 900;
+  margin: 0 0 0.125rem 0;
+}
+
+.treasury-stat-card__value--emerald { color: #059669; }
+.treasury-stat-card__value--blue { color: #2563eb; }
+.treasury-stat-card__value--purple { color: #9333ea; }
+.treasury-stat-card__value--slate { color: #1e293b; }
+
+.treasury-stat-card__unit {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.treasury-stat-card__usd {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  color: #64748b;
+  margin: 0;
+}
+
+.treasury-stat-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: 0.5rem;
+  z-index: 10;
+}
+
+.treasury-stat-card__trend {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  color: #059669;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.treasury-stat-card__trend-desc {
+  font-size: 0.5rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.treasury-stat-card__bg {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 50%;
+  height: 2.5rem;
+  pointer-events: none;
+  opacity: 0.3;
+}
+
+.treasury-stat-card__bg svg {
+  width: 100%;
+  height: 100%;
+}
+
+.treasury-stat-proposals {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.treasury-stat-proposals__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.treasury-stat-proposals__count--orange { color: #f97316; }
+.treasury-stat-proposals__count--emerald { color: #059669; }
+
+/* ==========================================================================
+   MAIN CONTENT LAYOUT
+   ========================================================================== */
+.treasury-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.treasury-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+@media (min-width: 1024px) {
+  .treasury-row {
+    grid-template-columns: repeat(12, 1fr);
+  }
+}
+
+.treasury-chart-section {
+  background-color: #ffffff;
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+@media (min-width: 1024px) {
+  .treasury-chart-section { grid-column: span 8 / span 8; }
+}
+
+.treasury-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.treasury-section-title {
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0;
+}
+
+.treasury-section-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.treasury-filter-btn {
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid #e2e8f0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  background: none;
+}
+
+.treasury-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.treasury-chart-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.treasury-chart-legend__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+}
+
+.treasury-chart-legend__dot--minted { background-color: #10b981; }
+.treasury-chart-legend__dot--burned { background-color: #ef4444; }
+
+.treasury-chart-container {
+  height: 12rem;
+  width: 100%;
+}
+
+/* ==========================================================================
+   ADMIN LIST
+   ========================================================================== */
+.treasury-admin-section {
+  background-color: #ffffff;
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+@media (min-width: 1024px) {
+  .treasury-admin-section { grid-column: span 4 / span 4; }
+}
+
+.treasury-admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.treasury-admin-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f8fafc;
+}
+
+.treasury-admin-item:last-child {
+  border-bottom: none;
+}
+
+.treasury-admin-item__info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.treasury-admin-item__avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  background-color: #f1f5f9;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+.treasury-admin-item__name {
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: #0f172a;
+  margin: 0;
+}
+
+.treasury-admin-item__address {
+  font-size: 0.625rem;
+  color: #64748b;
+  font-family: monospace;
+  margin: 0.125rem 0 0 0;
+}
+
+.treasury-admin-item__status {
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.treasury-admin-item__status--signed { background-color: #ecfdf5; color: #059669; }
+.treasury-admin-item__status--unsigned { background-color: #eff6ff; color: #3b82f6; }
+.treasury-admin-item__status--ready { background-color: #f8fafc; color: #94a3b8; border: 1px solid #f1f5f9; }
+
+.treasury-admin-btn {
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 0.75rem 0;
+  border-radius: 9999px;
+  color: var(--color-primary, #16a34a);
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  transition: background-color 0.2s;
+}
+
+.treasury-admin-btn:hover {
+  background-color: #f0fdf4;
+}
+
+/* ==========================================================================
+   PROPOSAL FORM
+   ========================================================================== */
+.treasury-form-section {
+  background-color: #ffffff;
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 1024px) {
+  .treasury-form-section { grid-column: span 4 / span 4; }
+}
+
+.treasury-form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.treasury-form-header__info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.treasury-form-header__icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  background-color: #ecfdf5;
+  color: var(--color-primary, #16a34a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(209, 250, 229, 0.5);
+}
+
+.treasury-form-header__desc {
+  font-size: 0.625rem;
+  color: #64748b;
+  font-weight: 500;
+  margin: 0;
+}
+
+.treasury-form-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  background-color: #ecfdf5;
+  font-size: 0.5625rem;
+  font-weight: 900;
+  color: var(--color-primary, #16a34a);
+  text-transform: uppercase;
+  border: 1px solid rgba(209, 250, 229, 0.5);
+}
+
+.treasury-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 1rem;
+}
+
+.treasury-form-group {
+  display: block;
+}
+
+.treasury-form-label {
+  font-size: 0.625rem;
+  font-weight: 900;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.treasury-form-type-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.treasury-type-btn {
+  padding: 0.75rem 0;
+  border-radius: 1rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  color: #475569;
+  cursor: pointer;
+}
+
+.treasury-type-btn:hover {
+  background-color: #f8fafc;
+}
+
+.treasury-type-btn--mint-active {
+  border-color: var(--color-primary, #16a34a);
+  background-color: rgba(236, 253, 245, 0.3);
+  color: var(--color-primary, #16a34a);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.treasury-type-btn--burn-active {
+  border-color: #ef4444;
+  background-color: rgba(254, 242, 242, 0.3);
+  color: #dc2626;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.treasury-type-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background-color: #cbd5e1;
+}
+
+.treasury-type-btn--mint-active .treasury-type-dot { background-color: var(--color-primary, #16a34a); }
+.treasury-type-btn--burn-active .treasury-type-dot { background-color: #ef4444; }
+
+.treasury-input-wrapper {
+  position: relative;
+}
+
+.treasury-input {
+  width: 100%;
+  background-color: #ffffff;
+  border-radius: 1rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  outline: none;
+  transition: all 0.2s;
+  border: 1px solid #e2e8f0;
+  box-sizing: border-box;
+}
+
+.treasury-input:focus {
+  border-color: var(--color-primary, #16a34a);
+  box-shadow: 0 0 0 2px #ecfdf5;
+}
+
+.treasury-input--mono { font-family: monospace; }
+.treasury-input--bold { font-weight: 700; color: #0f172a; }
+
+.treasury-input--valid {
+  border-color: #10b981;
+  box-shadow: 0 0 0 2px #ecfdf5;
+}
+
+.treasury-input--invalid {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 2px #fef2f2;
+}
+
+.treasury-input-icon {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.treasury-input-suffix {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.625rem;
+  font-weight: 900;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.treasury-textarea-wrapper {
+  flex: 1;
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+}
+
+.treasury-textarea-container {
+  position: relative;
+  height: calc(100% - 1.5rem);
+  flex: 1;
+}
+
+.treasury-textarea {
+  width: 100%;
+  height: 100%;
+  background-color: #ffffff;
+  border-radius: 1rem;
+  padding: 0.75rem 1rem;
+  padding-bottom: 1.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #0f172a;
+  outline: none;
+  transition: all 0.2s;
+  border: 1px solid #e2e8f0;
+  resize: none;
+  box-sizing: border-box;
+}
+
+.treasury-textarea:focus {
+  border-color: var(--color-primary, #16a34a);
+  box-shadow: 0 0 0 2px #ecfdf5;
+}
+
+.treasury-textarea-counter {
+  position: absolute;
+  bottom: 0.75rem;
+  right: 0.75rem;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.treasury-submit-btn {
+  width: 100%;
+  padding: 0.75rem 0;
+  margin-top: 1rem;
+  border-radius: 1rem;
+  background-color: var(--color-primary, #16a34a);
+  color: #ffffff;
+  font-weight: 900;
+  font-size: 0.8125rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.treasury-submit-btn:hover:not(:disabled) {
+  background-color: #15803d;
+}
+
+.treasury-submit-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.treasury-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.treasury-submit-btn .material-symbols-outlined {
+  font-size: 1rem;
+}
+
+/* ==========================================================================
+   PROPOSALS LIST (TABLE)
+   ========================================================================== */
+.treasury-proposals-section {
+  background-color: #ffffff;
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 1024px) {
+  .treasury-proposals-section { grid-column: span 8 / span 8; }
+}
+
+.treasury-proposals-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.treasury-refresh-btn {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  cursor: pointer;
+  color: #64748b;
+  transition: background-color 0.2s;
+}
+
+.treasury-refresh-btn:hover {
+  background-color: #f8fafc;
+}
+
+.treasury-refresh-btn .material-symbols-outlined {
+  font-size: 1rem;
+}
+
+.treasury-tabs {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.treasury-tab {
+  padding-bottom: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  transition: color 0.2s;
+  position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+}
+
+.treasury-tab:hover {
+  color: #1e293b;
+}
+
+.treasury-tab--active {
+  color: var(--color-primary, #16a34a);
+}
+
+.treasury-tab--active-dark {
+  color: #1e293b;
+}
+
+.treasury-tab__indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: var(--color-primary, #16a34a);
+}
+
+.treasury-tab__indicator--dark {
+  background-color: #1e293b;
+}
+
+.treasury-table-container {
+  flex: 1;
+}
+
+.treasury-empty-state {
+  padding: 5rem 0;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.treasury-empty-icon {
+  font-size: 2.25rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.5;
+}
+
+.treasury-empty-text {
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.treasury-table-wrapper {
+  overflow-x: auto;
+}
+
+.treasury-table {
+  width: 100%;
+  text-align: left;
+  border-collapse: collapse;
+}
+
+.treasury-table th {
+  padding: 0 1rem 1rem 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.treasury-table tr {
+  border-top: 1px solid #f8fafc;
+  transition: background-color 0.2s;
+}
+
+.treasury-table tr:hover {
+  background-color: rgba(248, 250, 252, 0.5);
+}
+
+.treasury-table td {
+  padding: 1rem 1rem 1rem 0;
+  vertical-align: middle;
+}
+
+.treasury-proposal-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.treasury-proposal-id {
+  padding: 0.25rem 0.5rem;
+  background-color: #ecfdf5;
+  color: var(--color-primary, #16a34a);
+  font-weight: 900;
+  font-size: 0.625rem;
+  border-radius: 0.25rem;
+}
+
+.treasury-proposal-reason {
+  font-weight: 700;
+  font-size: 0.75rem;
+  color: #0f172a;
+  margin: 0 0 0.125rem 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 150px;
+}
+
+.treasury-proposal-target {
+  font-size: 0.625rem;
+  color: #64748b;
+  font-family: monospace;
+  margin: 0;
+}
+
+.treasury-tx-type {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.treasury-tx-type--mint { background-color: #d1fae5; color: #047857; }
+.treasury-tx-type--burn { background-color: #fee2e2; color: #b91c1c; }
+
+.treasury-amount-val {
+  font-weight: 900;
+  font-size: 0.875rem;
+  color: #0f172a;
+  margin: 0;
+}
+
+.treasury-amount-unit {
+  font-size: 0.625rem;
+  color: #64748b;
+  font-weight: 400;
+}
+
+.treasury-amount-usd {
+  font-size: 0.5625rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.treasury-creator-name {
+  font-weight: 700;
+  font-size: 0.75rem;
+  color: #1e293b;
+  margin: 0;
+}
+
+.treasury-creator-address {
+  font-size: 0.625rem;
+  color: #64748b;
+  font-family: monospace;
+  margin: 0;
+}
+
+.treasury-status-done {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #059669;
+}
+
+.treasury-status-done .material-symbols-outlined { font-size: 0.875rem; }
+
+.treasury-status-done-text {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.treasury-status-pending {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  background-color: #ffedd5;
+  color: #ea580c;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  display: inline-block;
+}
+
+.treasury-status-sigs {
+  font-size: 0.5625rem;
+  color: #94a3b8;
+  margin: 0.25rem 0 0 0;
+}
+
+.treasury-signatures {
+  display: flex;
+}
+
+.treasury-signatures > * {
+  margin-left: -0.5rem;
+}
+
+.treasury-signatures > *:first-child {
+  margin-left: 0;
+}
+
+.treasury-sig-avatar {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  background-color: #e2e8f0;
+  border: 1px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.5rem;
+  font-weight: 700;
+  color: #64748b;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.treasury-sig-avatar--signed {
+  background-color: #f1f5f9;
+  border: 1.5px solid #10b981;
+  color: #0f172a;
+}
+
+.treasury-sig-avatar--pending {
+  background-color: transparent;
+  border: 1.5px dashed #cbd5e1;
+  color: #94a3b8;
+  box-shadow: none;
+}
+
+.treasury-sig-btn {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+.treasury-sig-btn--sign {
+  background-color: #ffffff;
+  border: 1px dashed #cbd5e1;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.treasury-sig-btn--sign:hover {
+  color: var(--color-primary, #16a34a);
+  border-color: var(--color-primary, #16a34a);
+}
+
+.treasury-sig-btn--execute {
+  background-color: #10b981;
+  color: #ffffff;
+  border: 1px solid #ffffff;
+}
+
+.treasury-sig-btn--execute .material-symbols-outlined {
+  font-size: 0.75rem;
+}
+
+.treasury-view-all-btn {
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.75rem 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary, #16a34a);
+  background: none;
+  border: none;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.treasury-view-all-btn:hover {
+  background-color: #f0fdf4;
+}
+
+/* ==========================================================================
+   MODAL
+   ========================================================================== */
+.treasury-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+.treasury-modal {
+  background-color: #ffffff;
+  border-radius: 1.5rem;
+  padding: 2rem;
+  width: 100%;
+  max-width: 28rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.treasury-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.treasury-modal-title {
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: #0f172a;
+  margin: 0;
+}
+
+.treasury-modal-close {
+  color: #94a3b8;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.treasury-modal-close:hover {
+  color: #0f172a;
+}
+
+.treasury-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.treasury-wallet-option {
+  width: 100%;
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid #e2e8f0;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.treasury-wallet-option:hover {
+  border-color: #f97316;
+  background-color: #fff7ed;
+}
+
+.treasury-wallet-option__icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.75rem;
+  background-color: #ffedd5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.treasury-wallet-option__icon img {
+  width: 2rem;
+  height: 2rem;
+}
+
+.treasury-wallet-option__name {
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.treasury-wallet-option__desc {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.treasury-modal-divider {
+  position: relative;
+  padding: 0.5rem 0;
+  text-align: center;
+}
+
+.treasury-modal-divider__text {
+  background-color: #ffffff;
+  padding: 0 1rem;
+  font-size: 0.625rem;
+  font-weight: 900;
+  color: #94a3b8;
+  text-transform: uppercase;
+  position: relative;
+  z-index: 10;
+}
+
+.treasury-modal-divider__line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-color: #f1f5f9;
+}
+
+.treasury-internal-box {
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid #f3e8ff;
+  background-color: #faf5ff;
+}
+
+.treasury-internal-box__title {
+  font-size: 0.625rem;
+  font-weight: 900;
+  color: #9333ea;
+  text-transform: uppercase;
+  margin: 0 0 0.75rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.treasury-internal-box__input {
+  width: 100%;
+  background-color: #ffffff;
+  border: 1px solid #e9d5ff;
+  border-radius: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  font-family: monospace;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.treasury-internal-box__input:focus {
+  box-shadow: 0 0 0 2px #c084fc;
+}
+
+.treasury-internal-box__btn {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.75rem 0;
+  background-color: #9333ea;
+  color: #ffffff;
+  border-radius: 0.75rem;
+  font-weight: 700;
+  font-size: 0.875rem;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.2s;
+}
+
+.treasury-internal-box__btn:hover {
+  background-color: #7e22ce;
+}
+
+.treasury-internal-box__note {
+  font-size: 0.5625rem;
+  color: #c084fc;
+  margin: 0.5rem 0 0 0;
+  text-align: center;
+  font-style: italic;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

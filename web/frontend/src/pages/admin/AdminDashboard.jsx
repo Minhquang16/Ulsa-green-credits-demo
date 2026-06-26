@@ -1,12 +1,19 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
-import { TrendingUp } from "lucide-react"
-import { Bar, BarChart as RechartsBarChart, Line, LineChart, Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
+import { CalendarIcon, ChevronDownIcon, TrendingUp } from "lucide-react"
+import { Line, LineChart, CartesianGrid, XAxis } from "recharts"
 import ClaimsDataTable from '../../components/ClaimsDataTable'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Calendar } from '@/components/ui/calendar'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { format } from 'date-fns'
+import { vi } from 'date-fns/locale'
 
 import iconCard1 from '../../assets/icon_dashboard/o_1.png'
 import iconCard4 from '../../assets/icon_dashboard/o_4.png'
@@ -75,41 +82,6 @@ function renderAvatar(u, sizeClass = "w-10 h-10") {
   )
 }
 
-function BarChart({ data }) {
-  if (!data?.length) return (
-    <div className="flex items-end justify-center gap-3 h-full pb-6">
-      {[40, 65, 30, 80, 55, 70, 45].map((h, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-2">
-          <div className="w-full rounded-t-lg bg-gray-100" style={{ height: `${h}%` }} />
-          <span className="text-[9px] text-gray-400">{['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'][i]}</span>
-        </div>
-      ))}
-    </div>
-  )
-  const max = Math.max(...data.map(d => d.total_ugc), 1)
-  return (
-    <div className="flex items-end justify-between gap-2 h-full pb-6">
-      {data.map((d, i) => {
-        const pct = Math.max((d.total_ugc / max) * 85, 4)
-        const isMax = d.total_ugc === Math.max(...data.map(x => x.total_ugc))
-        return (
-          <div key={i} className="flex-1 flex flex-col items-center gap-2">
-            {isMax && <span className="text-[9px] font-black text-gray-500 bg-white border border-gray-200 rounded px-1.5 py-0.5 shadow-sm whitespace-nowrap">{d.total_ugc} UGC</span>}
-            {!isMax && <span className="text-[9px] text-transparent">.</span>}
-            <div className="w-full rounded-t-xl transition-all duration-700 relative group"
-              style={{ height: `${pct}%`, background: isMax ? 'linear-gradient(to top,#16a34a,#4ade80)' : '#e5e7eb' }}>
-              <div className="absolute -top-7 left-1/2 -translate-x-1/2 hidden group-hover:block bg-gray-800 text-white text-[9px] rounded px-1.5 py-0.5 whitespace-nowrap z-10">{d.total_ugc}</div>
-            </div>
-            <span className="text-[9px] text-gray-400 font-medium">
-              {new Date(d.day).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 function LineSparkline({ value, positive = true }) {
   const pts = [20, 35, 28, 45, 38, 52, 47, 60].map((y, x) => ({ x: x * 14, y: 80 - y }))
   const d = `M ${pts.map(p => `${p.x},${p.y}`).join(' L ')}`
@@ -151,6 +123,8 @@ export default function AdminDashboard() {
   const { api, user, logout } = useAuth()
   const { showToast } = useToast()
   const nav = useNavigate()
+  const location = useLocation()
+
   const [stats, setStats] = useState(null)
   const [balance, setBalance] = useState(null)
   const [contract, setContract] = useState('')
@@ -159,19 +133,14 @@ export default function AdminDashboard() {
   const [wallets, setWallets] = useState([])
   const [walletSearch, setWalletSearch] = useState('')
   const [walletRole, setWalletRole] = useState('all')
-  const [isSearchOpen, setIsSearchOpen] = useState(false)
-  const [showHelp, setShowHelp] = useState(false)
+  const [dateRange, setDateRange] = useState({
+    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    to: new Date(),
+  })
   const [showNotif, setShowNotif] = useState(false)
-  const [showProfile, setShowProfile] = useState(false)
-  const [timePeriod, setTimePeriod] = useState('month')
-  const [showTimePicker, setShowTimePicker] = useState(false)
-  // Admin states
-  const isAdmin = user.role === 'admin' || user.role === 'verifier'
-
-  // News state & handlers
+  const [showAddNewsModal, setShowAddNewsModal] = useState(false)
   const [newsList, setNewsList] = useState([])
   const [selectedNews, setSelectedNews] = useState(null)
-  const [showAddNewsModal, setShowAddNewsModal] = useState(false)
   const [newNews, setNewNews] = useState({
     title: '',
     summary: '',
@@ -179,6 +148,13 @@ export default function AdminDashboard() {
     category: 'Tin tức',
     author: 'Ban Quản trị UGC'
   })
+
+  const isAdmin = user.role === 'admin' || user.role === 'verifier'
+
+  useEffect(() => {
+    const query = new URLSearchParams(location.search).get('search') || ''
+    setWalletSearch(query)
+  }, [location.search])
 
   useEffect(() => {
     const DEFAULT_NEWS = [
@@ -266,7 +242,35 @@ export default function AdminDashboard() {
     })
   }
 
-  const timePeriodLabel = { week: '7 ngày qua', month: 'Tháng này', quarter: 'Quý này', year: 'Năm nay' }[timePeriod]
+  const dateRangeLabel = dateRange?.from ? (
+    dateRange.to
+      ? `${format(dateRange.from, 'dd/MM/yyyy')} - ${format(dateRange.to, 'dd/MM/yyyy')}`
+      : format(dateRange.from, 'dd/MM/yyyy')
+  ) : 'Chọn khoảng thời gian'
+
+  const fromDateString = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : ''
+  const toDateString = dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : ''
+
+  const chartConfig = {
+    ugc: {
+      label: 'UGC tiêu thụ',
+      color: '#60a5fa',
+    },
+  }
+
+  const chartData = (stats?.txHistory || []).map(item => ({
+    day: format(new Date(item.day), 'dd/MM', { locale: vi }),
+    fullDay: format(new Date(item.day), 'dd/MM/yyyy', { locale: vi }),
+    ugc: Number(item.total_ugc || 0),
+  }))
+
+  const totalConsumed = chartData.reduce((sum, item) => sum + item.ugc, 0)
+  const firstPoint = chartData[0]?.ugc ?? 0
+  const lastPoint = chartData[chartData.length - 1]?.ugc ?? 0
+  const trendPercent = firstPoint > 0 ? ((lastPoint - firstPoint) / firstPoint) * 100 : null
+  const trendLabel = trendPercent === null
+    ? 'Chưa đủ dữ liệu để so sánh xu hướng'
+    : `${trendPercent >= 0 ? 'Tăng' : 'Giảm'} ${Math.abs(trendPercent).toFixed(1).replace('.', ',')}% so với đầu kỳ`
 
   function exportCSV() {
     if (!wallets.length) { showToast('Không có dữ liệu để xuất'); return }
@@ -291,8 +295,13 @@ export default function AdminDashboard() {
     setLoading(true)
     try {
       if (isAdmin) {
+        const statsParams = new URLSearchParams({ period: 'month' })
+        if (fromDateString && toDateString) {
+          statsParams.set('from', fromDateString)
+          statsParams.set('to', toDateString)
+        }
         const [s, b, c, w] = await Promise.all([
-          api(`/dashboard/stats?period=${timePeriod}`).catch(() => null),
+          api(`/dashboard/stats?${statsParams.toString()}`).catch(() => null),
           api('/wallet/balance').catch(() => ({ balance: null })),
           api('/wallet/contract').catch(() => ({ address: '' })),
           api('/wallets/all').catch(() => []),
@@ -300,7 +309,7 @@ export default function AdminDashboard() {
         setStats(s); setBalance(b?.balance ?? null); setContract(c?.address || ''); setWallets(w || [])
       }
     } catch { showToast('⚠️ Lỗi tải dashboard') } finally { setLoading(false) }
-  }, [api, isAdmin, showToast, timePeriod])
+  }, [api, isAdmin, showToast, fromDateString, toDateString])
 
   useEffect(() => { load() }, [load])
 
@@ -310,7 +319,6 @@ export default function AdminDashboard() {
     catch { showToast('❌ Lỗi khi duyệt') } finally { setApprovingId(null) }
   }
 
-  // --- ADMIN VIEW ---
   const pending = stats?.pendingClaims ?? 0
   const students = stats?.totalStudents ?? 0
   const supply = stats?.totalSupply ?? 0
@@ -325,52 +333,11 @@ export default function AdminDashboard() {
 
   return (
     <div style={{ background: '#ffffff' }} className="min-h-screen">
-      {/* ===== MODALS & DROPDOWNS — outside layout flow ===== */}
-      {/* Help Modal */}
-      {showHelp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setShowHelp(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-black text-gray-800">Trợ giúp & Hướng dẫn</h2>
-              <button onClick={() => setShowHelp(false)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center">
-                <span className="material-symbols-outlined text-gray-500">close</span>
-              </button>
-            </div>
-            <div className="space-y-3">
-              {[
-                { icon: 'dashboard', title: 'Dashboard', desc: 'Tổng quan số liệu: tổng UGC, sinh viên, claims cần duyệt.' },
-                { icon: 'pending_actions', title: 'Claims', desc: 'Xem và duyệt các yêu cầu tín chỉ từ sinh viên.' },
-                { icon: 'eco', title: 'Sự kiện', desc: 'Quản lý các hoạt động xanh đang diễn ra.' },
-                { icon: 'account_balance', title: 'Ngân sách', desc: 'Phát hành và theo dõi tổng cung UGC token.' },
-                { icon: 'redeem', title: 'Đổi thưởng', desc: 'Xem các phần thưởng sinh viên có thể đổi bằng UGC.' },
-              ].map((item, i) => (
-                <div key={i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50">
-                  <div className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
-                    <span className="material-symbols-outlined text-green-600 text-lg">{item.icon}</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-800">{item.title}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Notification Panel */}
       {showNotif && (
         <div className="fixed inset-0 z-50" onClick={() => setShowNotif(false)}>
           <div className="absolute top-16 right-6 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 w-[380px] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-
-            {/* Header */}
-            <div className="px-4 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white">
-              <h3 className="font-bold text-[15px] text-gray-800">Thông báo</h3>
-              <button className="text-[13px] text-gray-500 hover:text-gray-800 font-medium transition-colors">
-                Đánh dấu tất cả đã đọc
-              </button>
-            </div>
 
             {/* Body (Scrollable list) */}
             <div className="max-h-[400px] overflow-y-auto">
@@ -421,50 +388,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Profile Dropdown */}
-      {showProfile && (
-        <div className="fixed inset-0 z-50" onClick={() => setShowProfile(false)}>
-          <div className="absolute top-16 right-6 bg-white rounded-2xl shadow-2xl border border-gray-100 w-64 overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="p-4 border-b border-gray-100">
-              <div className="flex items-center gap-3">
-                {renderAvatar(user, "w-10 h-10")}
-                <div>
-                  <p className="font-bold text-sm text-gray-800">{user.full_name}</p>
-                  <p className="text-xs text-gray-500">{user.role === 'admin' ? 'Quản trị viên' : user.role === 'verifier' ? 'Người duyệt' : 'Sinh viên'}</p>
-                  <p className="text-xs text-gray-400 font-mono">@{user.username}</p>
-                </div>
-              </div>
-            </div>
-            <div className="p-2">
-              <button onClick={() => { setShowProfile(false); showToast('Tính năng đang phát triển') }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 transition-colors">
-                <span className="material-symbols-outlined text-gray-400 text-lg">manage_accounts</span> Cài đặt tài khoản
-              </button>
-              <button onClick={() => { logout(); nav('/login') }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-red-50 text-sm text-red-600 transition-colors">
-                <span className="material-symbols-outlined text-red-400 text-lg">logout</span> Đăng xuất
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Time Picker Dropdown */}
-      {showTimePicker && (
-        <div className="fixed inset-0 z-50" onClick={() => setShowTimePicker(false)}>
-          <div className="absolute top-32 right-6 bg-white rounded-2xl shadow-2xl border border-gray-100 w-48 overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="p-2">
-              {[['week', '7 ngày qua'], ['month', 'Tháng này'], ['quarter', 'Quý này'], ['year', 'Năm nay']].map(([val, label]) => (
-                <button key={val} onClick={() => { setTimePeriod(val); setShowTimePicker(false); showToast(`Đang xem: ${label}`) }}
-                  className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors flex items-center justify-between ${timePeriod === val ? 'bg-green-50 text-green-700 font-bold' : 'hover:bg-gray-50 text-gray-700'
-                    }`}>
-                  {label}
-                  {timePeriod === val && <span className="material-symbols-outlined text-green-600 text-base">check</span>}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ===== MAIN CONTENT ===== */}
       <div className="max-w-[1280px] mx-auto px-6 lg:px-8 pt-4 pb-8 space-y-7">
 
@@ -475,51 +398,7 @@ export default function AdminDashboard() {
             <p className="text-gray-500 text-sm mt-0.5">Cập nhật trạng thái hệ thống ULSA Green Credit.</p>
           </div>
           <div className="flex flex-col items-end gap-2">
-            {/* Top Row */}
-            <div className="flex items-center gap-2">
-              {/* Search */}
-              <div className={`flex items-center bg-white border border-gray-200 rounded-2xl overflow-hidden h-9 shadow-sm transition-all duration-300 ${isSearchOpen ? 'w-[290px]' : 'w-9'}`}>
-                <button
-                  onClick={() => { setIsSearchOpen(!isSearchOpen); if (!isSearchOpen) setTimeout(() => document.getElementById('headerSearch')?.focus(), 50) }}
-                  className="w-9 h-9 flex-shrink-0 flex items-center justify-center"
-                >
-                  <span className="material-symbols-outlined text-[20px] text-gray-600" style={{ fontVariationSettings: "'wght' 300" }}>search</span>
-                </button>
-                <input
-                  id="headerSearch"
-                  type="text"
-                  placeholder="Tìm kiếm..."
-                  value={walletSearch}
-                  onChange={e => setWalletSearch(e.target.value)}
-                  className={`w-full outline-none focus:ring-0 caret-gray-800 text-[13px] text-gray-700 bg-transparent placeholder-gray-400 pr-3 transition-opacity duration-200 ${isSearchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-                  onBlur={() => { if (!walletSearch) setIsSearchOpen(false) }}
-                />
-              </div>
-
-              {/* Help */}
-              <button onClick={() => setShowHelp(true)}
-                className="w-9 h-9 flex-shrink-0 rounded-2xl bg-white border border-gray-200 shadow-sm flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all duration-150">
-                <span className="material-symbols-outlined text-[20px] text-gray-600" style={{ fontVariationSettings: "'wght' 300" }}>help_outline</span>
-              </button>
-
-              {/* Notifications */}
-              <button onClick={() => { setShowNotif(!showNotif); setShowProfile(false); setShowTimePicker(false) }}
-                className={`w-9 h-9 flex-shrink-0 rounded-2xl border shadow-sm flex items-center justify-center relative active:scale-95 transition-all duration-150 ${showNotif ? 'bg-green-50 border-green-300' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-                <span className={`material-symbols-outlined text-[20px] ${showNotif ? 'text-green-600' : 'text-gray-600'}`} style={{ fontVariationSettings: "'wght' 300" }}>notifications</span>
-                {(stats?.pendingClaims ?? 0) > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white px-1">
-                    {stats.pendingClaims}
-                  </span>
-                )}
-              </button>
-
-              {/* Profile — circle avatar + chevron only, no text */}
-              <div onClick={() => { setShowProfile(!showProfile); setShowNotif(false); setShowTimePicker(false) }}
-                className={`flex flex-shrink-0 items-center gap-1 rounded-2xl border shadow-sm cursor-pointer h-9 pl-1 pr-2 active:scale-95 transition-all duration-150 ${showProfile ? 'bg-green-50 border-green-300' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-                {renderAvatar(user, "w-7 h-7")}
-                <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${showProfile ? 'rotate-180 text-green-600' : 'text-gray-500'}`}>unfold_more</span>
-              </div>
-
+            <div className="flex flex-wrap items-center justify-end gap-2">
               {/* Export CSV */}
               <button onClick={exportCSV}
                 className="flex flex-shrink-0 whitespace-nowrap items-center gap-2 px-4 h-9 rounded-2xl text-[13px] font-semibold text-white bg-[#2d7a4f] hover:bg-[#246140] active:scale-95 transition-all duration-150 shadow-sm">
@@ -533,15 +412,46 @@ export default function AdminDashboard() {
                 <span className="material-symbols-outlined text-[16px]">add_circle</span>
                 Đăng tin tức
               </button>
-            </div>
-
-            {/* Bottom Row */}
-            <div className="flex items-center gap-2">
-              <div onClick={() => { setShowTimePicker(!showTimePicker); setShowNotif(false); setShowProfile(false) }}
-                className={`flex items-center gap-1 rounded-2xl border shadow-sm cursor-pointer px-3 h-8 active:scale-95 transition-all duration-150 ${showTimePicker ? 'bg-green-50 border-green-300' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-                <span className={`text-[13px] font-medium ${showTimePicker ? 'text-green-700' : 'text-gray-700'}`}>{timePeriodLabel}</span>
-                <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${showTimePicker ? 'rotate-180 text-green-600' : 'text-gray-500'}`}>expand_more</span>
-              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="flex h-9 w-[238px] justify-between rounded-2xl border-gray-200 bg-white px-3 text-[13px] font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  >
+                    <span className="flex items-center gap-2 truncate">
+                      <CalendarIcon className="h-4 w-4 text-gray-600" />
+                      <span className="truncate">{dateRangeLabel}</span>
+                    </span>
+                    <ChevronDownIcon className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-auto p-0 rounded-xl overflow-hidden border border-gray-200 shadow-lg"
+                  align="start"
+                  style={{
+                    '--primary': '240 5.9% 10%',
+                    '--primary-foreground': '0 0% 98%',
+                    '--accent': '240 4.8% 95.9%',
+                    '--accent-foreground': '240 5.9% 10%',
+                    '--radius': '0.5rem',
+                  }}
+                >
+                  <Calendar
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                    locale={vi}
+                    disabled={dateRange?.from && !dateRange?.to ? [{ before: dateRange.from }] : []}
+                    formatters={{
+                      formatWeekdayName: (date) => ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][date.getDay()],
+                      formatCaption: (date) => `Tháng ${date.getMonth() + 1}/${date.getFullYear()}`,
+                      formatMonthCaption: (date) => `Tháng ${date.getMonth() + 1}/${date.getFullYear()}`,
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </div>
@@ -574,60 +484,112 @@ export default function AdminDashboard() {
         {/* Row 2: Chart + Quick Approve */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
 
-          {/* Bar Chart */}
-          <div className="lg:col-span-3 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="flex justify-between items-start mb-1">
-              <div>
-                <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-widest">Tổng quan UGC tiêu thụ</p>
-                <p className="text-xl font-black text-gray-900 mt-0.5">
-                  {loading ? '...' : ((stats?.txHistory || []).reduce((a, b) => a + (b.total_ugc || 0), 0)).toLocaleString()} UGC
-                  <span className="ml-2 text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">7 ngày qua</span>
-                </p>
+          {/* Line Chart */}
+          <Card className="lg:col-span-3 rounded-2xl border border-gray-100 bg-white shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardDescription className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                    Tổng quan UGC tiêu thụ
+                  </CardDescription>
+                  <CardTitle className="mt-1 text-xl font-black text-gray-900">
+                    {loading ? '...' : `${totalConsumed.toLocaleString('vi-VN')} UGC`}
+                    <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-600">
+                      {dateRangeLabel}
+                    </span>
+                  </CardTitle>
+                </div>
+                <Link to="/admin/rewards" className="text-xs font-bold text-gray-400 hover:text-blue-600 flex items-center gap-1 transition-colors">
+                  Chi tiết <span className="material-symbols-outlined" style={{ fontSize: '11px' }}>north_east</span>
+                </Link>
               </div>
-              <Link to="/admin/rewards" className="text-xs font-bold text-gray-400 hover:text-green-600 flex items-center gap-1 transition-colors">
-                ··· <span className="hidden">Xem thêm</span>
-              </Link>
-            </div>
-            <div className="h-52 mt-6">
-              <BarChart data={stats?.txHistory || []} />
-            </div>
-          </div>
+            </CardHeader>
+            <CardContent className="px-2 pb-0">
+              <div className="h-[280px] w-full">
+                {loading ? (
+                  <div className="flex h-full items-center justify-center text-gray-400">
+                    <span className="material-symbols-outlined animate-spin text-3xl">refresh</span>
+                  </div>
+                ) : chartData.length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center text-center text-gray-400 px-6">
+                    <span className="material-symbols-outlined text-4xl">show_chart</span>
+                    <p className="mt-2 text-sm font-medium">Chưa có dữ liệu UGC trong khoảng thời gian này</p>
+                  </div>
+                ) : (
+                  <ChartContainer config={chartConfig} className="h-full w-full">
+                    <LineChart
+                      accessibilityLayer
+                      data={chartData}
+                      margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
+                    >
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="day"
+                        tickLine={false}
+                        axisLine={false}
+                        tickMargin={10}
+                      />
+                      <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+                      <Line
+                        dataKey="ugc"
+                        type="natural"
+                        stroke="var(--color-ugc)"
+                        strokeWidth={3}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ChartContainer>
+                )}
+              </div>
+            </CardContent>
+            <CardFooter className="flex flex-col items-start gap-2 px-6 pb-6 pt-4 text-sm">
+              <div className="flex items-center gap-2 font-semibold text-gray-900">
+                {trendLabel}
+                <TrendingUp className={`h-4 w-4 ${trendPercent != null && trendPercent >= 0 ? 'text-emerald-600' : 'text-red-500'}`} />
+              </div>
+              <div className="leading-none text-gray-500">
+                Tổng UGC được ghi nhận từ hoạt động hoàn / trả và đổi thưởng trong khoảng đã chọn.
+              </div>
+            </CardFooter>
+          </Card>
 
           {/* Quick Approve */}
           <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex justify-between items-start mb-5">
               <div>
-                <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-widest">Duyệt nhanh</p>
-                <p className="text-lg font-black text-gray-900 mt-0.5">Claims mới nhất</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-400">Duyệt nhanh</p>
+                <p className="mt-1.5 text-[18px] font-black tracking-tight text-gray-900">Claims mới nhất</p>
               </div>
-              <Link to="/admin/claims" className="text-[10px] font-bold text-green-600 flex items-center gap-0.5 hover:gap-1.5 transition-all">
-                Tất cả <span className="material-symbols-outlined" style={{ fontSize: '11px' }}>north_east</span>
+              <Link to="/admin/claims" className="mt-1 flex items-center gap-1 text-[12px] font-semibold text-green-600 transition-all hover:gap-1.5 hover:text-green-700">
+                Tất cả <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>north_east</span>
               </Link>
             </div>
-            <div className="space-y-2.5">
+            <ScrollArea className="h-[320px] pr-3">
+              <div className="space-y-3">
               {loading ? (
-                <div className="flex justify-center py-8"><span className="material-symbols-outlined animate-spin text-gray-300 text-3xl">refresh</span></div>
+                <div className="flex justify-center py-10 text-gray-300"><span className="material-symbols-outlined animate-spin text-3xl">refresh</span></div>
               ) : (stats?.recentClaims?.length ?? 0) === 0 ? (
-                <div className="flex flex-col items-center py-8 text-gray-300 gap-2">
+                <div className="flex flex-col items-center justify-center py-10 text-center text-gray-300 gap-2">
                   <span className="material-symbols-outlined text-4xl">task_alt</span>
-                  <p className="text-sm font-medium">Không có claim nào chờ duyệt</p>
+                  <p className="text-sm font-medium text-gray-500">Chưa có yêu cầu nào cần duyệt</p>
                 </div>
               ) : stats.recentClaims.map(c => (
-                <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
-                  <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center font-black text-green-700 text-xs flex-shrink-0">
+                <div key={c.id} className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white p-3.5 transition-colors hover:bg-gray-50/80 group">
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 font-black text-emerald-700 text-[10px] shadow-sm">
                     {c.student_name?.split(' ').pop()?.slice(0, 2).toUpperCase() || 'SV'}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-800 truncate">{c.student_name}</p>
-                    <p className="text-[10px] text-gray-400 truncate">{c.activity_name} · {timeAgo(c.created_at)}</p>
+                    <p className="truncate text-[13px] font-bold tracking-tight text-gray-900">{c.student_name}</p>
+                    <p className="truncate text-[11px] text-gray-500">{c.activity_name} · {timeAgo(c.created_at)}</p>
                   </div>
                   <button onClick={() => handleApprove(c.id)} disabled={approvingId === c.id}
-                    className="w-8 h-8 rounded-lg bg-green-50 text-green-600 hover:bg-green-600 hover:text-white transition-all flex items-center justify-center flex-shrink-0 disabled:opacity-40 text-xs font-black">
-                    <span className="material-symbols-outlined text-base">{approvingId === c.id ? 'sync' : 'check'}</span>
+                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-all hover:bg-emerald-600 hover:text-white disabled:opacity-40">
+                    <span className="material-symbols-outlined text-[16px]">{approvingId === c.id ? 'sync' : 'check'}</span>
                   </button>
                 </div>
               ))}
-            </div>
+              </div>
+            </ScrollArea>
           </div>
         </div>
 
@@ -635,121 +597,125 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
           {/* Top Events */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="flex justify-between items-center mb-5">
+          <div className="flex h-fit self-start flex-col rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
+            <div className="mb-2.5 flex items-center justify-between">
               <div>
-                <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-widest">Hoạt động nổi bật</p>
-                <p className="text-lg font-black text-gray-900 mt-0.5">Top chiến dịch đang chạy</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-gray-400">Hoạt động nổi bật</p>
+                <p className="mt-0.5 text-[14px] font-black tracking-tight text-gray-900">Top chiến dịch đang chạy</p>
               </div>
-              <Link to="/admin/events" className="text-[10px] font-bold text-green-600 flex items-center gap-0.5 hover:gap-1.5 transition-all">
-                Xem tất cả <span className="material-symbols-outlined" style={{ fontSize: '11px' }}>north_east</span>
+              <Link to="/admin/events" className="flex items-center gap-1 text-[12px] font-semibold text-green-600 transition-all hover:gap-1.5 hover:text-green-700">
+                Xem tất cả <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>north_east</span>
               </Link>
             </div>
-            <div className="space-y-3">
+            <ScrollArea className="h-[188px] pr-3">
+              <div className="space-y-1.5 pb-1">
               {loading ? (
-                <div className="flex justify-center py-8"><span className="material-symbols-outlined animate-spin text-gray-300 text-3xl">refresh</span></div>
+                <div className="flex justify-center py-5 text-gray-300"><span className="material-symbols-outlined animate-spin text-xl">refresh</span></div>
               ) : (stats?.topEvents?.length ?? 0) === 0 ? (
-                <div className="flex flex-col items-center py-8 text-gray-300 gap-2">
-                  <span className="material-symbols-outlined text-4xl">event_busy</span>
-                  <p className="text-sm">Chưa có chiến dịch nào</p>
+                <div className="flex flex-col items-center justify-center py-5 text-center text-gray-300 gap-2">
+                  <span className="material-symbols-outlined text-2xl">event_busy</span>
+                  <p className="text-sm font-medium text-gray-500">Chưa có chiến dịch nào</p>
                 </div>
               ) : stats.topEvents.map((ev, i) => (
-                <div key={i} className="flex items-center gap-4 p-3.5 rounded-xl hover:bg-gray-50 transition-colors">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0 ${i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-gray-100 text-gray-500' : i === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-50 text-gray-400'
+                <div key={i} className="flex items-center gap-2 rounded-2xl border border-gray-100 bg-white px-2.5 py-2 transition-colors hover:bg-gray-50/80">
+                  <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl font-black text-[9px] ${i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-gray-100 text-gray-500' : i === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-50 text-gray-400'
                     }`}>#{i + 1}</div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-800 truncate">{ev.title}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-gray-400 font-medium">{ev.activity_name}</span>
+                    <p className="truncate text-[11px] font-bold tracking-tight text-gray-900">{ev.title}</p>
+                    <div className="mt-0.5 flex items-center gap-1">
+                      <span className="truncate text-[9px] font-medium text-gray-500">{ev.activity_name}</span>
                       <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${ev.status === 'published' ? 'bg-green-100 text-green-700' :
                         ev.status === 'ended' ? 'bg-gray-100 text-gray-500' : 'bg-yellow-100 text-yellow-700'
                         }`}>{ev.status === 'published' ? 'Đang chạy' : ev.status === 'ended' ? 'Đã kết thúc' : 'Nháp'}</span>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-xl font-black text-green-600">{ev.participant_count}</p>
-                    <p className="text-[9px] text-gray-400 font-semibold uppercase">Tham gia</p>
+                    <p className="text-[15px] font-black text-green-600">{ev.participant_count}</p>
+                    <p className="text-[9px] font-semibold uppercase text-gray-400">Tham gia</p>
                   </div>
                 </div>
               ))}
-            </div>
+              </div>
+            </ScrollArea>
           </div>
 
           {/* Blockchain Status */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-4">
-            <div>
+          <div className="flex h-full min-h-[300px] flex-col rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
+            <div className="mb-2.5">
               <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-widest">Hạ tầng kỹ thuật</p>
-              <p className="text-lg font-black text-gray-900 mt-0.5">Trạng thái Blockchain</p>
+              <p className="mt-0.5 text-[15px] font-black text-gray-900">Trạng thái Blockchain</p>
             </div>
 
-            {/* Network status */}
-            <div className="flex items-center gap-4 p-4 rounded-xl bg-green-50 border border-green-100">
-              <div className="w-10 h-10 rounded-xl bg-green-500 flex items-center justify-center flex-shrink-0">
-                <span className="material-symbols-outlined text-white text-xl">lan</span>
+            <div className="flex flex-1 flex-col justify-between gap-3">
+              {/* Network status */}
+              <div className="flex items-center gap-3 rounded-2xl border border-green-100 bg-green-50 p-3 shadow-sm">
+                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-green-500">
+                  <span className="material-symbols-outlined text-lg text-white">lan</span>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[13px] font-bold text-green-800">Hardhat Node — Đang hoạt động</p>
+                  <p className="text-[10px] font-medium text-green-600">http://localhost:8545 · Chain 31337</p>
+                </div>
+                <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full bg-green-500 animate-pulse" />
               </div>
-              <div className="flex-1">
-                <p className="font-bold text-green-800 text-sm">Hardhat Node — Đang hoạt động</p>
-                <p className="text-green-600 text-[10px] font-medium">http://localhost:8545 · Chain 31337</p>
-              </div>
-              <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
-            </div>
 
-            {/* Contract + Block */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gray-50 rounded-xl p-3.5 border border-gray-100">
-                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Block Number</p>
-                <p className="font-mono font-black text-gray-800">{loading ? '...' : blockNum.toLocaleString()}</p>
+              {/* Contract + Block */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="mb-1.5 text-[9px] font-bold uppercase tracking-wider text-gray-400">Block Number</p>
+                  <p className="font-mono text-[20px] font-black leading-none text-gray-800">{loading ? '...' : blockNum.toLocaleString()}</p>
+                </div>
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="mb-1.5 text-[9px] font-bold uppercase tracking-wider text-gray-400">Gas Price</p>
+                  <p className="font-mono text-[20px] font-black leading-none text-gray-800">1 Gwei</p>
+                </div>
               </div>
-              <div className="bg-gray-50 rounded-xl p-3.5 border border-gray-100">
-                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Gas Price</p>
-                <p className="font-mono font-black text-gray-800">1 Gwei</p>
-              </div>
-            </div>
 
-            {/* Smart contract address */}
-            <div className="bg-gray-50 rounded-xl p-3.5 border border-gray-100">
-              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Địa chỉ Smart Contract (UGC Token)</p>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs text-gray-700 flex-1 truncate">{contract || stats?.ugcContractAddress || '—'}</span>
-                <button onClick={() => { navigator.clipboard.writeText(contract || ''); showToast('Đã sao chép!') }}
-                  className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors">
-                  <span className="material-symbols-outlined text-sm">content_copy</span>
-                </button>
+              {/* Smart contract address */}
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                <p className="mb-1.5 text-[9px] font-bold uppercase tracking-wider text-gray-400">Địa chỉ Smart Contract (UGC Token)</p>
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 truncate font-mono text-xs text-gray-700">{contract || stats?.ugcContractAddress || '—'}</span>
+                  <button onClick={() => { navigator.clipboard.writeText(contract || ''); showToast('Đã sao chép!') }}
+                    className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600">
+                    <span className="material-symbols-outlined text-sm">content_copy</span>
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Quick nav */}
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <Link to="/admin/claims" className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-600 text-white font-bold text-xs hover:bg-green-700 transition-colors">
-                <span className="material-symbols-outlined text-sm">pending_actions</span>Quản lý Claims
-              </Link>
-              <Link to="/treasury" className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-100 text-gray-700 font-bold text-xs hover:bg-gray-200 transition-colors">
-                <span className="material-symbols-outlined text-sm">account_balance</span>Ngân sách
-              </Link>
+              {/* Quick nav */}
+              <div className="grid grid-cols-2 gap-2.5 pt-0.5">
+                <Link to="/admin/claims" className="flex items-center justify-center gap-2 rounded-2xl bg-green-600 py-2 text-[11px] font-bold text-white transition-colors hover:bg-green-700">
+                  <span className="material-symbols-outlined text-sm">pending_actions</span>Quản lý Claims
+                </Link>
+                <Link to="/treasury" className="flex items-center justify-center gap-2 rounded-2xl bg-gray-100 py-2 text-[11px] font-bold text-gray-700 transition-colors hover:bg-gray-200">
+                  <span className="material-symbols-outlined text-sm">account_balance</span>Ngân sách
+                </Link>
+              </div>
             </div>
           </div>
         </div>
 
         {/* ===== TẦNG 4: QUẢN LÝ VÍ BLOCKCHAIN ===== */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-6 border-b border-gray-100">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex h-[620px] min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <div className="border-b border-gray-100 p-5">
+            <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
               <div>
-                <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-widest">Kho quỹ & Hạ tầng</p>
-                <p className="text-lg font-black text-gray-900 mt-0.5">Quản lý Ví Blockchain</p>
-                <p className="text-xs text-gray-400 mt-0.5">{wallets.length} địa chỉ ví trong hệ thống · Số dư UGC theo thời gian thực</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-gray-400">Kho quỹ & Hạ tầng</p>
+                <p className="mt-0.5 text-lg font-black text-gray-900">Quản lý Ví Blockchain</p>
+                <p className="mt-0.5 text-xs text-gray-400">{wallets.length} địa chỉ ví trong hệ thống · Số dư UGC theo thời gian thực</p>
               </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
+              <div className="flex flex-shrink-0 items-center gap-3">
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">search</span>
                   <input
-                    className="pl-9 pr-4 py-2 rounded-xl border border-gray-200 text-sm outline-none focus:border-green-400 bg-gray-50 w-48"
+                    className="w-48 rounded-xl border border-gray-200 bg-gray-50 py-2 pl-9 pr-4 text-sm outline-none focus:border-green-400"
                     placeholder="Tìm tên, địa chỉ..."
                     value={walletSearch} onChange={e => setWalletSearch(e.target.value)}
                   />
                 </div>
                 <select
-                  className="py-2 px-3 rounded-xl border border-gray-200 text-sm outline-none focus:border-green-400 bg-gray-50 font-semibold text-gray-600"
+                  className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-600 outline-none focus:border-green-400"
                   value={walletRole} onChange={e => setWalletRole(e.target.value)}>
                   <option value="all">Tất cả</option>
                   <option value="student">Sinh viên</option>
@@ -761,84 +727,91 @@ export default function AdminDashboard() {
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 text-left">
-                  <th className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Người dùng</th>
-                  <th className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Vai trò</th>
-                  <th className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Địa chỉ ví</th>
-                  <th className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 text-right">Số dư UGC</th>
-                  <th className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 text-center">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {loading ? (
-                  <tr><td colSpan={5} className="py-16 text-center">
-                    <span className="material-symbols-outlined animate-spin text-gray-300 text-4xl">refresh</span>
-                  </td></tr>
-                ) : wallets
-                  .filter(w => {
-                    const q = walletSearch.toLowerCase()
-                    const matchSearch = !q || w.full_name?.toLowerCase().includes(q) || w.wallet_address?.toLowerCase().includes(q) || w.username?.toLowerCase().includes(q)
-                    const matchRole = walletRole === 'all' || w.role === walletRole
-                    return matchSearch && matchRole
-                  })
-                  .map(w => (
-                    <tr key={w.id} className="hover:bg-gray-50 transition-colors group">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          {renderAvatar(w, "w-9 h-9")}
-                          <div>
-                            <p className="text-sm font-bold text-gray-800">{w.full_name}</p>
-                            <p className="text-[10px] text-gray-400 font-mono">@{w.username}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${w.role === 'admin' ? 'bg-purple-100 text-purple-700' :
-                          w.role === 'verifier' ? 'bg-blue-100 text-blue-700' :
-                            'bg-green-100 text-green-700'
-                          }`}>{w.role === 'admin' ? 'Admin' : w.role === 'verifier' ? 'Verifier' : 'Sinh viên'}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-lg">
-                            {w.wallet_address ? w.wallet_address.slice(0, 10) + '...' + w.wallet_address.slice(-6) : '—'}
-                          </span>
-                          <button
-                            onClick={() => { navigator.clipboard.writeText(w.wallet_address || ''); showToast('Đã sao chép địa chỉ!') }}
-                            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-all">
-                            <span className="material-symbols-outlined text-sm">content_copy</span>
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className={`text-lg font-black ${w.ugc_balance > 0 ? 'text-green-600' : 'text-gray-400'
-                          }`}>{w.ugc_balance.toLocaleString()}</span>
-                        <span className="text-xs text-gray-400 ml-1">UGC</span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <a
-                          href={`https://etherscan.io/address/${w.wallet_address}`}
-                          target="_blank" rel="noreferrer"
-                          onClick={e => { e.preventDefault(); showToast('Hardhat local — không hỗ trợ Etherscan thật') }}
-                          className="text-[10px] font-bold text-green-600 hover:text-green-700 flex items-center justify-center gap-0.5">
-                          Xem on-chain <span className="material-symbols-outlined" style={{ fontSize: '11px' }}>north_east</span>
-                        </a>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <ScrollArea className="h-full min-h-0">
+              <div className="min-w-[920px]">
+                <Table>
+                  <TableHeader className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_rgba(229,231,235,1)]">
+                    <TableRow className="border-0 bg-gray-50/80 hover:bg-gray-50">
+                      <TableHead className="px-5 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Người dùng</TableHead>
+                      <TableHead className="px-5 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Vai trò</TableHead>
+                      <TableHead className="px-5 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Địa chỉ ví</TableHead>
+                      <TableHead className="px-5 py-3 text-right text-[10px] font-black uppercase tracking-widest text-gray-400">Số dư UGC</TableHead>
+                      <TableHead className="px-5 py-3 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">Thao tác</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-16 text-center">
+                          <span className="material-symbols-outlined animate-spin text-4xl text-gray-300">refresh</span>
+                        </TableCell>
+                      </TableRow>
+                    ) : wallets
+                      .filter(w => {
+                        const q = walletSearch.toLowerCase()
+                        const matchSearch = !q || w.full_name?.toLowerCase().includes(q) || w.wallet_address?.toLowerCase().includes(q) || w.username?.toLowerCase().includes(q)
+                        const matchRole = walletRole === 'all' || w.role === walletRole
+                        return matchSearch && matchRole
+                      })
+                      .map(w => (
+                        <TableRow key={w.id} className="group border-gray-50 transition-colors hover:bg-gray-50/80">
+                          <TableCell className="px-5 py-4 align-middle">
+                            <div className="flex items-center gap-3">
+                              {renderAvatar(w, "w-9 h-9")}
+                              <div>
+                                <p className="text-sm font-bold text-gray-800">{w.full_name}</p>
+                                <p className="font-mono text-[10px] text-gray-400">@{w.username}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-5 py-4 align-middle">
+                            <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${w.role === 'admin' ? 'bg-purple-100 text-purple-700' :
+                              w.role === 'verifier' ? 'bg-blue-100 text-blue-700' :
+                                'bg-green-100 text-green-700'
+                              }`}>{w.role === 'admin' ? 'Admin' : w.role === 'verifier' ? 'Verifier' : 'Sinh viên'}</span>
+                          </TableCell>
+                          <TableCell className="px-5 py-4 align-middle">
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-lg bg-gray-100 px-2.5 py-1 font-mono text-xs text-gray-500">
+                                {w.wallet_address ? w.wallet_address.slice(0, 10) + '...' + w.wallet_address.slice(-6) : '—'}
+                              </span>
+                              <button
+                                onClick={() => { navigator.clipboard.writeText(w.wallet_address || ''); showToast('Đã sao chép địa chỉ!') }}
+                                className="rounded p-1 text-gray-400 opacity-0 transition-all hover:bg-gray-200 hover:text-gray-600 group-hover:opacity-100">
+                                <span className="material-symbols-outlined text-sm">content_copy</span>
+                              </button>
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-5 py-4 text-right align-middle">
+                            <span className={`text-lg font-black ${w.ugc_balance > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                              {w.ugc_balance.toLocaleString()}
+                            </span>
+                            <span className="ml-1 text-xs text-gray-400">UGC</span>
+                          </TableCell>
+                          <TableCell className="px-5 py-4 text-center align-middle">
+                            <a
+                              href={`https://etherscan.io/address/${w.wallet_address}`}
+                              target="_blank" rel="noreferrer"
+                              onClick={e => { e.preventDefault(); showToast('Hardhat local — không hỗ trợ Etherscan thật') }}
+                              className="inline-flex items-center justify-center gap-0.5 text-[10px] font-bold text-green-600 hover:text-green-700">
+                              Xem on-chain <span className="material-symbols-outlined" style={{ fontSize: '11px' }}>north_east</span>
+                            </a>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </ScrollArea>
           </div>
 
           {/* Footer summary */}
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
-            <span className="text-xs text-gray-400">
+          <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-5 py-3">
+            <span className="text-xs text-gray-500">
               Tổng UGC lưu hành: <strong className="text-green-600 font-black">{wallets.reduce((a, w) => a + w.ugc_balance, 0).toLocaleString()} UGC</strong>
             </span>
-            <span className="text-xs text-gray-400">{wallets.filter(w => w.ugc_balance > 0).length} ví đang có số dư</span>
+            <span className="text-xs text-gray-500">{wallets.filter(w => w.ugc_balance > 0).length} ví đang có số dư</span>
           </div>
         </div>
 

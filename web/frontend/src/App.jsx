@@ -31,6 +31,7 @@ import ProvenancePage from './pages/admin/ProvenancePage.jsx'
 import TrainingPointsPage from './pages/shared/TrainingPointsPage.jsx'
 import ProfilePage from './pages/shared/ProfilePage.jsx'
 import AttendancePage from './pages/student/AttendancePage.jsx'
+import HelpPage from './pages/student/HelpPage.jsx' // Force rebuild
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import ChatBot from './components/ChatBot.jsx'
 // Prototype Styles
@@ -38,6 +39,7 @@ import './styles/base.css'
 import './styles/style.css'
 import './styles/components.css'
 import StudentSidebar from './components/StudentSidebar.jsx'
+import AdminSidebar from './components/AdminSidebar.jsx'
 import { InputGroup, InputGroupAddon, InputGroupInput } from './components/ui/input-group.jsx'
 import { Search } from 'lucide-react'
 import {
@@ -54,7 +56,9 @@ function Layout({ children }) {
   const { showToast } = useToast()
   const [showProfile, setShowProfile] = useState(false)
   const [showNotif, setShowNotif] = useState(false)
+  const [headerSearch, setHeaderSearch] = useState('')
   const [studentStats, setStudentStats] = useState({ pending: 0, totalEarned: 0 })
+  const [adminStats, setAdminStats] = useState({ pendingClaims: 0 })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mobileAdminMenuOpen, setMobileAdminMenuOpen] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -68,6 +72,24 @@ function Layout({ children }) {
   const loc = useLocation()
   const nav = useNavigate()
 
+  const handleGlobalSearch = (event) => {
+    event.preventDefault()
+    const query = headerSearch.trim()
+    if (!query) return
+
+    if (user?.role === 'student') {
+      nav(`/student/events?search=${encodeURIComponent(query)}`)
+      return
+    }
+
+    if (user?.role === 'verifier') {
+      nav(`/verifier/dashboard?search=${encodeURIComponent(query)}`)
+      return
+    }
+
+    nav(`/admin/dashboard?search=${encodeURIComponent(query)}`)
+  }
+
   useEffect(() => {
     if (user?.role === 'student') {
       api('/me/claims').then(res => {
@@ -76,8 +98,14 @@ function Layout({ children }) {
         const totalEarned = claims.filter(c => c.status === 'approved').reduce((sum, c) => sum + (c.credit_amount || 0), 0)
         setStudentStats({ pending, totalEarned })
       }).catch(console.error)
+    } else if (user?.role) {
+      api('/dashboard/stats?period=month').then(res => {
+        setAdminStats({ pendingClaims: res?.pendingClaims ?? 0 })
+      }).catch(() => setAdminStats({ pendingClaims: 0 }))
     }
   }, [user, api])
+
+  const notificationCount = user?.role === 'student' ? studentStats.pending : adminStats.pendingClaims
 
   // Background Sync logic for offline check-ins
   useEffect(() => {
@@ -130,7 +158,7 @@ function Layout({ children }) {
   return (
     <div
       className="bg-surface text-on-surface min-h-screen font-body flex flex-row"
-      data-sidebar={user.role === 'student' ? (isSidebarCollapsed ? 'collapsed' : 'expanded') : undefined}
+      data-sidebar={isSidebarCollapsed ? 'collapsed' : 'expanded'}
     >
 
       {/* Student Sidebar + Phantom spacer (shadcn pattern) */}
@@ -147,70 +175,18 @@ function Layout({ children }) {
           />
         </>
       )}
-      {/* Admin/Verifier Sidebar (1:1 Prototype HTML) */}
+      {/* Admin/Verifier Sidebar */}
       {user.role !== 'student' && (
         <>
-          {/* Phantom spacer for admin sidebar */}
-          <div className="hidden lg:block flex-shrink-0 w-72" />
-          <aside id="adminSidebar" className={`fixed left-0 top-0 h-screen w-72 bg-white border-r border-outline-variant/20 z-[60] pt-2 pb-8 px-6 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-transform duration-300 ${mobileAdminMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-            <div className="flex justify-center items-center pb-4 mb-2 border-b border-gray-200 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => { nav('/'); setMobileAdminMenuOpen(false); }}>
-              <img src={new URL('./logo_web.png', import.meta.url).href} alt="UGC Logo" className="w-auto object-contain" style={{ maxHeight: '20px' }} />
-            </div>
-
-            <nav className="flex-grow space-y-2">
-              <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/dashboard' ? 'active' : '')} to="/admin/dashboard" onClick={() => setMobileAdminMenuOpen(false)}>
-                <span className="material-symbols-outlined">dashboard</span> <span>Dashboard</span>
-              </Link>
-              <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/events' ? 'active' : '')} to="/admin/events" onClick={() => setMobileAdminMenuOpen(false)}>
-                <span className="material-symbols-outlined">event_note</span> <span>Quản lý Hoạt động</span>
-              </Link>
-              <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/claims' ? 'active' : '')} to="/admin/claims" onClick={() => setMobileAdminMenuOpen(false)}>
-                <span className="material-symbols-outlined">verified</span> <span>Phê duyệt Claims</span>
-              </Link>
-              <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/rewards' ? 'active' : '')} to="/admin/rewards" onClick={() => setMobileAdminMenuOpen(false)}>
-                <span className="material-symbols-outlined">redeem</span> <span>Ưu đãi &amp; Quà tặng</span>
-              </Link>
-              {isAdmin && (
-                <div className="pt-2 mt-4 border-t border-gray-200">
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 mt-2 px-3">Quản trị hệ thống</p>
-                  <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/users' ? 'active' : '')} to="/admin/users" onClick={() => setMobileAdminMenuOpen(false)}>
-                    <span className="material-symbols-outlined">manage_accounts</span> <span>Quản trị Users &amp; Stats</span>
-                  </Link>
-                  <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/treasury' ? 'active' : '')} to="/admin/treasury" onClick={() => setMobileAdminMenuOpen(false)}>
-                    <span className="material-symbols-outlined">account_balance</span> <span>Quản lý Kho quỹ</span>
-                  </Link>
-                </div>
-              )}
-              <div className="pt-2 mt-4 border-t border-gray-200">
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 mt-2 px-3">Blockchain</p>
-                <Link className={"sidebar-link flex items-center " + (loc.pathname === '/admin/provenance' ? 'active' : '')} to="/admin/provenance" onClick={() => setMobileAdminMenuOpen(false)}>
-                  <span className="material-symbols-outlined">policy</span> <span>Nguồn gốc tín chỉ</span>
-                </Link>
-              </div>
-            </nav>
-
-            {/* Admin/Verifier profile info at bottom of sidebar */}
-            <div className="pt-4 mt-auto border-t border-gray-200">
-              <div className="flex items-center gap-3 mb-3 px-3">
-                <Avatar className="w-9 h-9 border border-gray-200">
-                  <AvatarFallback className="bg-gray-800 text-white text-[11px] font-bold">
-                    {user.full_name?.split(' ').pop()?.slice(0, 2).toUpperCase() || 'AD'}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[13px] font-bold text-gray-800 truncate">{user.full_name || 'Admin'}</span>
-                  <span className="text-[11px] text-gray-500 truncate">{user.email || 'admin@ulsa.edu.vn'}</span>
-                </div>
-              </div>
-              <button
-                onClick={() => { setMobileAdminMenuOpen(false); logout(); }}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-red-50 text-xs text-red-600 transition-colors"
-              >
-                <span className="material-symbols-outlined text-[18px]">logout</span>
-                <span className="font-bold">Đăng xuất</span>
-              </button>
-            </div>
-          </aside>
+          <div
+            className="hidden lg:block flex-shrink-0 transition-[width] duration-300"
+            style={{ width: isSidebarCollapsed ? '65px' : '220px' }}
+          />
+          <AdminSidebar
+            isCollapsed={isSidebarCollapsed}
+            setIsCollapsed={setIsSidebarCollapsed}
+            isAdmin={isAdmin}
+          />
         </>
       )}
 
@@ -240,9 +216,9 @@ function Layout({ children }) {
       {/* Main content: flex-1 + min-w-0 — NO padding-left anymore, space is handled by phantom divs above */}
       <div className="flex-1 min-w-0 transition-all duration-300 min-h-screen flex flex-col">
 
-        {/* Student Top Header Area (Search, Notifications, Profile) */}
-        {user.role === 'student' && (
-          <header className={`sticky top-0 z-40 bg-white border-b border-gray-100 h-20 pr-8 transition-all duration-300 flex items-center justify-between ${isSidebarCollapsed ? 'pl-[52px]' : 'pl-3'}`}>
+        {/* Top Header Area (Search, Notifications, Profile) */}
+        {true && (
+          <header className={`${user.role !== 'student' ? 'hidden lg:flex' : 'flex'} sticky top-0 z-40 bg-white border-b border-gray-100 h-20 pr-8 transition-all duration-300 items-center justify-between ${isSidebarCollapsed ? 'pl-[52px]' : 'pl-3'}`}>
             {/* Left: Breadcrumb */}
             <div className="flex items-center gap-2">
               <Breadcrumb className="hidden lg:block">
@@ -255,7 +231,19 @@ function Layout({ children }) {
                         '/student/claims': 'Ghi nhận',
                         '/student/rewards': 'Ưu đãi',
                         '/profile': 'Hồ sơ',
-                        '/training-points': 'Điểm rèn luyện'
+                        '/training-points': 'Điểm rèn luyện',
+                        '/admin/dashboard': 'Dashboard',
+                        '/admin/events': 'Quản lý Hoạt động',
+                        '/admin/claims': 'Phê duyệt Claims',
+                        '/admin/rewards': 'Ưu đãi & Quà tặng',
+                        '/admin/users': 'Quản trị Users & Stats',
+                        '/admin/treasury': 'Quản lý Kho quỹ',
+                        '/admin/provenance': 'Nguồn gốc tín chỉ',
+                        '/verifier/dashboard': 'Dashboard',
+                        '/verifier/events': 'Quản lý Hoạt động',
+                        '/verifier/claims': 'Phê duyệt Claims',
+                        '/verifier/rewards': 'Ưu đãi & Quà tặng',
+                        '/verifier/provenance': 'Nguồn gốc tín chỉ'
                       }[loc.pathname] || 'Trang chủ'}
                     </BreadcrumbPage>
                   </BreadcrumbItem>
@@ -263,17 +251,33 @@ function Layout({ children }) {
               </Breadcrumb>
             </div>
 
-            {/* Right: Search, Notifications & Profile */}
+            {/* Right: Search, Help, Notifications & Profile */}
             <div className="flex items-center gap-5">
               {/* Search Bar */}
-              <div className="hidden md:block w-72">
+              <form onSubmit={handleGlobalSearch} className="hidden md:block w-72">
                 <InputGroup className="bg-gray-50 border-gray-100 rounded-full h-10 focus-within:ring-emerald-500/20 focus-within:border-emerald-500">
                   <InputGroupAddon className="bg-transparent border-none">
-                    <Search className="w-4 h-4 text-gray-500" />
+                    <button type="submit" aria-label="Tìm kiếm" className="flex items-center justify-center text-gray-500 hover:text-gray-800 transition-colors">
+                      <Search className="w-4 h-4" />
+                    </button>
                   </InputGroupAddon>
-                  <InputGroupInput placeholder="Tìm kiếm hoạt động..." className="border-none focus-visible:ring-0 shadow-none px-0 text-[13px]" />
+                  <InputGroupInput
+                    value={headerSearch}
+                    onChange={e => setHeaderSearch(e.target.value)}
+                    placeholder="Tìm kiếm hoạt động..."
+                    className="border-none focus-visible:ring-0 shadow-none px-0 text-[13px]"
+                  />
                 </InputGroup>
-              </div>
+              </form>
+
+              {/* Help */}
+              <button
+                onClick={() => nav('/help')}
+                className="hidden md:flex items-center justify-center transition-all text-gray-500 hover:text-gray-800"
+                aria-label="Trợ giúp"
+              >
+                <span className="material-symbols-outlined text-[24px]">help_outline</span>
+              </button>
 
               {/* Notifications */}
               <div className="relative flex items-center">
@@ -282,9 +286,9 @@ function Layout({ children }) {
                   className={`relative flex items-center justify-center transition-all ${showNotif ? 'text-emerald-600' : 'text-gray-500 hover:text-gray-800'}`}
                 >
                   <span className="material-symbols-outlined text-[24px]">notifications</span>
-                  {studentStats.pending > 0 && (
+                  {notificationCount > 0 && (
                     <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] text-[10px] font-bold text-white bg-red-500 rounded-full border-2 border-white px-1">
-                      {studentStats.pending}
+                      {notificationCount}
                     </span>
                   )}
                 </button>
@@ -299,18 +303,18 @@ function Layout({ children }) {
                         <button onClick={() => setShowNotif(false)} className="text-[12px] text-gray-500 hover:text-gray-800 font-medium">Đóng</button>
                       </div>
                       <div className="max-h-[350px] overflow-y-auto flex flex-col">
-                        {studentStats.pending > 0 && (
+                        {notificationCount > 0 && (
                           <div className="flex gap-3 p-4 hover:bg-gray-50 border-b border-gray-50 bg-orange-50/50 cursor-pointer" onClick={() => { setShowNotif(false); nav('/claims'); }}>
                             <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 border border-orange-200">
                               <span className="material-symbols-outlined text-orange-600 text-[20px]">pending_actions</span>
                             </div>
                             <div className="flex-1">
-                              <p className="text-[13px] text-gray-800 font-bold">Yêu cầu chờ duyệt</p>
-                              <p className="text-[13px] text-gray-600 mt-0.5">Bạn có <span className="font-bold text-orange-600">{studentStats.pending} yêu cầu</span> đang đợi người duyệt xác nhận.</p>
+                              <p className="text-[13px] text-gray-800 font-bold">Yêu cầu chờ xử lý</p>
+                              <p className="text-[13px] text-gray-600 mt-0.5">Bạn có <span className="font-bold text-orange-600">{notificationCount} yêu cầu</span> đang đợi xác nhận.</p>
                             </div>
                           </div>
                         )}
-                        {studentStats.totalEarned > 0 && (
+                        {user?.role === 'student' && studentStats.totalEarned > 0 && (
                           <div className="flex gap-3 p-4 hover:bg-gray-50 border-b border-gray-50 cursor-pointer" onClick={() => { setShowNotif(false); nav('/claims'); }}>
                             <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 border border-emerald-200">
                               <span className="material-symbols-outlined text-emerald-600 text-[20px]">verified</span>
@@ -321,7 +325,7 @@ function Layout({ children }) {
                             </div>
                           </div>
                         )}
-                        {studentStats.pending === 0 && studentStats.totalEarned === 0 && (
+                        {notificationCount === 0 && (!user || user.role !== 'student' || studentStats.totalEarned === 0) && (
                           <div className="py-8 flex flex-col items-center justify-center px-4">
                             <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-2">
                               <span className="material-symbols-outlined text-[24px] text-gray-300">notifications_off</span>
@@ -899,7 +903,7 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
               <div className="space-y-3">
                 <div>
                   <h4 className="font-extrabold text-base text-gray-800">Thông tin cá nhân</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">Cập nhật hồ sơ sinh viên của bạn trong hệ thống.</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{user?.role === 'admin' ? "Cập nhật thông tin quản trị viên của bạn." : "Cập nhật hồ sơ sinh viên của bạn trong hệ thống."}</p>
                 </div>
                 <div className="h-px bg-gray-100 my-2" />
 
@@ -918,120 +922,124 @@ function SettingsModal({ isOpen, onClose, api, user, showToast }) {
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Địa chỉ Email</label>
                   <input className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
-                    type="email" placeholder="Ví dụ: student@ulsa.edu.vn" value={email} onChange={e => setEmail(e.target.value)} />
+                    type="email" placeholder={user?.role === 'admin' ? "Ví dụ: admin@ulsa.edu.vn" : "Ví dụ: student@ulsa.edu.vn"} value={email} onChange={e => setEmail(e.target.value)} />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1 relative">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Niên khóa (Khóa)</label>
-                    <div className="relative">
-                      <select
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-3 pr-10 text-xs outline-none text-gray-800 appearance-none cursor-pointer"
-                        value={selectedCohort}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setSelectedCohort(val);
-                          setCohort(val);
-                          if (!isCustomClass && val && selectedMajor) {
-                            const opts = getClassOptions(val, selectedMajor);
-                            if (opts.length > 0) {
-                              setClassName(opts[0]);
-                            }
-                          }
-                        }}
-                      >
-                        <option value="">-- Chọn Khóa --</option>
-                        {COHORTS.map(c => (
-                          <option key={c.id} value={c.id}>{c.label}</option>
-                        ))}
-                      </select>
-                      <span className="material-symbols-outlined absolute right-3 top-2 text-gray-400 pointer-events-none text-base">expand_more</span>
-                    </div>
-                  </div>
+                {user?.role !== 'admin' && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1 relative">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Niên khóa (Khóa)</label>
+                        <div className="relative">
+                          <select
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-3 pr-10 text-xs outline-none text-gray-800 appearance-none cursor-pointer"
+                            value={selectedCohort}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setSelectedCohort(val);
+                              setCohort(val);
+                              if (!isCustomClass && val && selectedMajor) {
+                                const opts = getClassOptions(val, selectedMajor);
+                                if (opts.length > 0) {
+                                  setClassName(opts[0]);
+                                }
+                              }
+                            }}
+                          >
+                            <option value="">-- Chọn Khóa --</option>
+                            {COHORTS.map(c => (
+                              <option key={c.id} value={c.id}>{c.label}</option>
+                            ))}
+                          </select>
+                          <span className="material-symbols-outlined absolute right-3 top-2 text-gray-400 pointer-events-none text-base">expand_more</span>
+                        </div>
+                      </div>
 
-                  <div className="space-y-1 relative">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Ngành học</label>
-                    <div className="relative">
-                      <select
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-3 pr-10 text-xs outline-none text-gray-800 appearance-none cursor-pointer"
-                        value={selectedMajor}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setSelectedMajor(val);
-                          if (!isCustomClass && selectedCohort && val) {
-                            const opts = getClassOptions(selectedCohort, val);
-                            if (opts.length > 0) {
-                              setClassName(opts[0]);
-                            }
-                          }
-                        }}
-                      >
-                        <option value="">-- Chọn Ngành --</option>
-                        {MAJORS.map(m => (
-                          <option key={m.code} value={m.code}>{m.name}</option>
-                        ))}
-                      </select>
-                      <span className="material-symbols-outlined absolute right-3 top-2 text-gray-400 pointer-events-none text-base">expand_more</span>
+                      <div className="space-y-1 relative">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Ngành học</label>
+                        <div className="relative">
+                          <select
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-3 pr-10 text-xs outline-none text-gray-800 appearance-none cursor-pointer"
+                            value={selectedMajor}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setSelectedMajor(val);
+                              if (!isCustomClass && selectedCohort && val) {
+                                const opts = getClassOptions(selectedCohort, val);
+                                if (opts.length > 0) {
+                                  setClassName(opts[0]);
+                                }
+                              }
+                            }}
+                          >
+                            <option value="">-- Chọn Ngành --</option>
+                            {MAJORS.map(m => (
+                              <option key={m.code} value={m.code}>{m.name}</option>
+                            ))}
+                          </select>
+                          <span className="material-symbols-outlined absolute right-3 top-2 text-gray-400 pointer-events-none text-base">expand_more</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Lớp học (Hành chính/Lớp học phần)</label>
-                  {!isCustomClass && selectedCohort && selectedMajor ? (
-                    <div className="relative">
-                      <select
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-3 pr-10 text-xs outline-none text-gray-800 appearance-none cursor-pointer"
-                        value={className}
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (val === "custom") {
-                            setIsCustomClass(true);
-                            setClassName(customClassName || getClassOptions(selectedCohort, selectedMajor)[0]);
-                          } else {
-                            setClassName(val);
-                          }
-                        }}
-                      >
-                        {getClassOptions(selectedCohort, selectedMajor).map(opt => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                        <option value="custom">-- Nhập lớp học khác --</option>
-                      </select>
-                      <span className="material-symbols-outlined absolute right-3 top-2 text-gray-400 pointer-events-none text-base">expand_more</span>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <input
-                        className="flex-1 bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
-                        placeholder="VD: D19QT1, D20KT2..."
-                        value={isCustomClass ? customClassName : className}
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (isCustomClass) {
-                            setCustomClassName(val);
-                          }
-                          setClassName(val);
-                        }}
-                      />
-                      {selectedCohort && selectedMajor && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsCustomClass(false);
-                            const opts = getClassOptions(selectedCohort, selectedMajor);
-                            if (opts.length > 0) {
-                              setClassName(opts[0]);
-                            }
-                          }}
-                          className="px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-xs font-bold transition-all"
-                        >
-                          Gợi ý lớp
-                        </button>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block px-1">Lớp học (Hành chính/Lớp học phần)</label>
+                      {!isCustomClass && selectedCohort && selectedMajor ? (
+                        <div className="relative">
+                          <select
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-3 pr-10 text-xs outline-none text-gray-800 appearance-none cursor-pointer"
+                            value={className}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === "custom") {
+                                setIsCustomClass(true);
+                                setClassName(customClassName || getClassOptions(selectedCohort, selectedMajor)[0]);
+                              } else {
+                                setClassName(val);
+                              }
+                            }}
+                          >
+                            {getClassOptions(selectedCohort, selectedMajor).map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                            <option value="custom">-- Nhập lớp học khác --</option>
+                          </select>
+                          <span className="material-symbols-outlined absolute right-3 top-2 text-gray-400 pointer-events-none text-base">expand_more</span>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <input
+                            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-xs outline-none text-gray-800"
+                            placeholder="VD: D19QT1, D20KT2..."
+                            value={isCustomClass ? customClassName : className}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (isCustomClass) {
+                                setCustomClassName(val);
+                              }
+                              setClassName(val);
+                            }}
+                          />
+                          {selectedCohort && selectedMajor && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsCustomClass(false);
+                                const opts = getClassOptions(selectedCohort, selectedMajor);
+                                if (opts.length > 0) {
+                                  setClassName(opts[0]);
+                                }
+                              }}
+                              className="px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-xs font-bold transition-all"
+                            >
+                              Gợi ý lớp
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
+                  </>
+                )}
               </div>
 
               <button type="submit" disabled={busy}
@@ -1174,7 +1182,8 @@ function RequireAuth({ children }) {
 function IndexRedirect() {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
-  if (user.role === 'admin' || user.role === 'verifier') return <Navigate to="/admin/dashboard" replace />
+  if (user.role === 'admin') return <Navigate to="/admin/dashboard" replace />
+  if (user.role === 'verifier') return <Navigate to="/verifier/dashboard" replace />
   return <Navigate to="/student/dashboard" replace />
 }
 
@@ -1200,6 +1209,13 @@ export default function App() {
             <Route path="/admin/treasury" element={<RequireAuth><TreasuryPage /></RequireAuth>} />
             <Route path="/admin/provenance" element={<RequireAuth><ProvenancePage /></RequireAuth>} />
 
+            {/* Verifier Routes */}
+            <Route path="/verifier/dashboard" element={<RequireAuth><AdminDashboard /></RequireAuth>} />
+            <Route path="/verifier/events" element={<RequireAuth><AdminEvents /></RequireAuth>} />
+            <Route path="/verifier/claims" element={<RequireAuth><AdminClaims /></RequireAuth>} />
+            <Route path="/verifier/rewards" element={<RequireAuth><AdminRewards /></RequireAuth>} />
+            <Route path="/verifier/provenance" element={<RequireAuth><ProvenancePage /></RequireAuth>} />
+
             {/* Student Routes */}
             <Route path="/student/dashboard" element={<RequireAuth><StudentDashboard /></RequireAuth>} />
             <Route path="/student/events" element={<RequireAuth><StudentEvents /></RequireAuth>} />
@@ -1208,6 +1224,7 @@ export default function App() {
             <Route path="/attendance" element={<RequireAuth><AttendancePage /></RequireAuth>} />
 
             {/* Shared */}
+            <Route path="/help" element={<RequireAuth><HelpPage /></RequireAuth>} />
             <Route path="/training-points" element={<RequireAuth><TrainingPointsPage /></RequireAuth>} />
             <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
 

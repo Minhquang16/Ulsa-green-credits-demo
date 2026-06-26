@@ -251,6 +251,38 @@ async function seedIfNeeded() {
     ALTER TABLE rewards ADD COLUMN IF NOT EXISTS limit_per_student INT DEFAULT 1;
     ALTER TABLE rewards ADD COLUMN IF NOT EXISTS start_date DATE;
     ALTER TABLE rewards ADD COLUMN IF NOT EXISTS expiry_date DATE;
+
+    CREATE TABLE IF NOT EXISTS reward_suggestions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS ugc_points_history (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      points INT NOT NULL,
+      source TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_ugc_points_history_student_date ON ugc_points_history (student_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS user_daily_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      checkin_date DATE NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(student_id, checkin_date)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_streak_stats (
+      student_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      current_streak INT NOT NULL DEFAULT 0,
+      longest_streak INT NOT NULL DEFAULT 0,
+      last_checkin_date DATE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 
   // Provenance: add column to claims table
@@ -278,6 +310,13 @@ async function seedIfNeeded() {
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;");
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS student_card_image TEXT;");
+
+  // Training Points: add faculty column for leaderboard filtering
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS faculty TEXT;");
+
+  // Training Points: add esg_category and point_group to activity_types
+  await pool.query("ALTER TABLE activity_types ADD COLUMN IF NOT EXISTS esg_category TEXT DEFAULT 'Xã hội';");
+  await pool.query("ALTER TABLE activity_types ADD COLUMN IF NOT EXISTS point_group TEXT DEFAULT 'Bổ trợ';");
 
   // Make student_id unique but handle potential error if duplicates exist (should not exist on fresh/reset systems, but if they do, we log and ignore)
   try {
@@ -307,6 +346,26 @@ async function seedIfNeeded() {
       );
     }
   }
+
+  // Update demo student profiles with realistic data for training points page
+  await pool.query(`
+    UPDATE users SET 
+      student_id = 'D19CN02',
+      class_name = 'D19CN02',
+      faculty = 'Công nghệ thông tin',
+      cohort = 'K2019',
+      email = 'student1@ulsa.edu.vn'
+    WHERE username = 'student1' AND (student_id IS NULL OR student_id = '')
+  `);
+  await pool.query(`
+    UPDATE users SET 
+      student_id = 'D19KT01',
+      class_name = 'D19KT01',
+      faculty = 'Kinh tế',
+      cohort = 'K2019',
+      email = 'student2@ulsa.edu.vn'
+    WHERE username = 'student2' AND (student_id IS NULL OR student_id = '')
+  `);
 
   // activity types
   const aCount = await pool.query("SELECT COUNT(*)::int AS n FROM activity_types");
@@ -391,6 +450,43 @@ async function seedIfNeeded() {
         "INSERT INTO achievements (icon, label, description, target_type, target_value) VALUES ($1, $2, $3, $4, $5)",
         [ach.icon, ach.label, ach.description, ach.target_type, ach.target_value]
       );
+    }
+  }
+
+  // Seed dummy UGC points history and streak stats for all students to test the stats API
+  const allStudentsRes = await pool.query("SELECT id FROM users WHERE role='student'");
+  
+  for (const student of allStudentsRes.rows) {
+    const sId = student.id;
+
+    // Seed UGC Points History
+    const historyCount = await pool.query("SELECT COUNT(*)::int AS n FROM ugc_points_history WHERE student_id=$1", [sId]);
+    if (historyCount.rows[0].n === 0) {
+      console.log(`Seeding dummy UGC points history for ${sId}...`);
+      await pool.query(`
+        INSERT INTO ugc_points_history (student_id, points, source, created_at) VALUES 
+        ($1, 25, 'claim_approved', NOW()),
+        ($1, 25, 'bonus', NOW() - INTERVAL '2 days'),
+        ($1, 10, 'claim_approved', NOW() - INTERVAL '1 month'),
+        ($1, 15, 'reward_redemption_refund', NOW() - INTERVAL '1 month 5 days')
+      `, [sId]);
+    }
+
+    // Seed Streak Stats
+    const streakCount = await pool.query("SELECT COUNT(*)::int AS n FROM user_streak_stats WHERE student_id=$1", [sId]);
+    if (streakCount.rows[0].n === 0) {
+      console.log(`Seeding dummy streak stats for ${sId}...`);
+      await pool.query(`
+        INSERT INTO user_streak_stats (student_id, current_streak, longest_streak, last_checkin_date)
+        VALUES ($1, 12, 28, CURRENT_DATE)
+      `, [sId]);
+
+      await pool.query(`
+        INSERT INTO user_daily_logs (student_id, checkin_date)
+        SELECT $1, (date_trunc('week', CURRENT_DATE) + (i || ' days')::interval)::date
+        FROM generate_series(0, 5) AS i
+        ON CONFLICT (student_id, checkin_date) DO NOTHING
+      `, [sId]);
     }
   }
 
@@ -638,10 +734,137 @@ app.post("/auth/register", upload.single("student_card"), async (req, res) => {
   }
 });
 
+// -------------------- UGC Overview Stats --------------------
+app.get("/stats/ugc-overview", authRequired, async (req, res) => {
+  try {
+    const studentId = req.user.id;
+    const rs = await pool.query(`
+      WITH stats AS (
+        SELECT
+          SUM(points) AS total_points,
+          SUM(CASE WHEN date_trunc('month', created_at) = date_trunc('month', CURRENT_DATE) THEN points ELSE 0 END) AS current_month_points,
+          SUM(CASE WHEN date_trunc('month', created_at) = date_trunc('month', CURRENT_DATE - INTERVAL '1 month') THEN points ELSE 0 END) AS previous_month_points
+        FROM ugc_points_history
+        WHERE student_id = $1
+      )
+      SELECT * FROM stats;
+    `, [studentId]);
+
+    const row = rs.rows[0];
+    const totalPoints = parseInt(row.total_points || 0);
+    const currentMonthPoints = parseInt(row.current_month_points || 0);
+    const previousMonthPoints = parseInt(row.previous_month_points || 0);
+
+    const trendDifference = currentMonthPoints - previousMonthPoints;
+    const trendDirection = trendDifference >= 0 ? 'up' : 'down';
+    const trendPoints = Math.abs(trendDifference);
+
+    res.json({
+      success: true,
+      data: {
+        totalPoints,
+        trendPoints,
+        trendDirection
+      }
+    });
+  } catch (e) {
+    console.error("Error fetching ugc-overview:", e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+// -------------------- Streak Overview Stats --------------------
+app.get("/stats/streak-overview", authRequired, async (req, res) => {
+  try {
+    const studentId = req.user.id;
+    
+    // 1. Calculate streaks dynamically from real claims
+    const streakQuery = `
+      WITH user_dates AS (
+          SELECT DISTINCT date_trunc('day', created_at)::date AS checkin_date 
+          FROM claims 
+          WHERE student_id = $1
+      ),
+      groups AS (
+          SELECT 
+              checkin_date,
+              checkin_date - (DENSE_RANK() OVER (ORDER BY checkin_date))::int AS grp
+          FROM user_dates
+      ),
+      streaks AS (
+          SELECT 
+              grp, 
+              MIN(checkin_date) AS start_date, 
+              MAX(checkin_date) AS end_date, 
+              COUNT(*) AS streak_length
+          FROM groups
+          GROUP BY grp
+      )
+      SELECT 
+          COALESCE(MAX(streak_length), 0)::int AS longest_streak,
+          COALESCE((SELECT streak_length FROM streaks WHERE end_date >= CURRENT_DATE - INTERVAL '1 day' ORDER BY end_date DESC LIMIT 1), 0)::int AS current_streak
+      FROM streaks;
+    `;
+    const statsRes = await pool.query(streakQuery, [studentId]);
+    const currentStreak = statsRes.rows[0]?.current_streak || 0;
+    const longestStreak = statsRes.rows[0]?.longest_streak || 0;
+
+    // 2. Get real daily logs for current week (Monday to Sunday)
+    const logsRes = await pool.query(`
+      SELECT DISTINCT date_trunc('day', created_at)::date AS checkin_date 
+      FROM claims 
+      WHERE student_id = $1 
+        AND created_at >= date_trunc('week', CURRENT_DATE)
+        AND created_at < date_trunc('week', CURRENT_DATE) + INTERVAL '7 days'
+    `, [studentId]);
+
+    const completedDates = new Set(
+      logsRes.rows.map(r => {
+        const d = new Date(r.checkin_date);
+        return d.toISOString().split('T')[0];
+      })
+    );
+
+    // 3. Build weeklyProgress array by asking Postgres for the dates of the current week
+    const weekDatesRes = await pool.query(`
+      SELECT 
+        (date_trunc('week', CURRENT_DATE) + (i || ' days')::interval)::date AS date_val,
+        EXTRACT(ISODOW FROM (date_trunc('week', CURRENT_DATE) + (i || ' days')::interval)) AS isodow
+      FROM generate_series(0, 6) AS i
+    `);
+
+    const labelMap = { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6', 6: 'T7', 7: 'CN' };
+
+    const weeklyProgress = weekDatesRes.rows.map(row => {
+      const isodow = parseInt(row.isodow);
+      const d = new Date(row.date_val);
+      const dateStr = d.toISOString().split('T')[0];
+      
+      return {
+        dayOfWeek: isodow === 7 ? 0 : isodow,
+        label: labelMap[isodow],
+        completed: completedDates.has(dateStr)
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        currentStreak,
+        longestStreak,
+        weeklyProgress
+      }
+    });
+
+  } catch (e) {
+    console.error("Error fetching streak-overview:", e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 app.get("/me/claims", authRequired, async (req, res) => {
   try {
     const rs = await pool.query(
-      `SELECT c.*, e.title AS event_title, a.name AS activity_name, a.credit_amount,
+      `SELECT c.*, e.title AS event_title, e.image_url AS event_image_url, a.name AS activity_name, a.credit_amount,
               a.description AS activity_description, u.full_name AS student_name
        FROM claims c
        JOIN events e ON e.id = c.event_id
@@ -654,6 +877,45 @@ app.get("/me/claims", authRequired, async (req, res) => {
     res.json(rs.rows);
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/me/claims/export", authRequired, async (req, res) => {
+  try {
+    const rs = await pool.query(
+      `SELECT c.*, e.title AS event_title, a.name AS activity_name, a.credit_amount,
+              u.full_name AS student_name
+       FROM claims c
+       JOIN events e ON e.id = c.event_id
+       JOIN activity_types a ON a.id = e.activity_type_id
+       JOIN users u ON u.id = c.student_id
+       WHERE c.student_id=$1
+       ORDER BY c.created_at DESC`,
+      [req.user.id]
+    );
+
+    let csv = "\uFEFFMã ghi nhận,Hoạt động,Trạng thái,UGC,Thời gian,TxHash\n";
+    for (const row of rs.rows) {
+      const id = row.id;
+      const activity = `"${(row.event_title || row.activity_name || 'Hoạt động').replace(/"/g, '""')}"`;
+      
+      let status = row.status;
+      if (status === 'approved') status = 'Đã duyệt';
+      else if (status === 'submitted') status = 'Đang xử lý';
+      else if (status === 'rejected') status = 'Từ chối';
+      
+      const ugc = row.credit_amount || 0;
+      const date = row.created_at ? new Date(row.created_at).toLocaleString('vi-VN') : '';
+      const tx = row.provenance_tx_hash || '';
+      csv += `${id},${activity},${status},${ugc},"${date}",${tx}\n`;
+    }
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="ugc_ledger.csv"');
+    res.send(csv);
+  } catch (e) {
+    console.error("Export error:", e);
+    res.status(500).json({ error: "Lỗi xuất dữ liệu: " + e.message });
   }
 });
 
@@ -903,6 +1165,67 @@ app.post("/treasury/proposals", authRequired, requireRole("admin"), async (req, 
     [onchain_id, req.user.id, target_address, amount, transaction_type, reason]
   );
   res.json(rs.rows[0]);
+});
+
+app.get("/treasury/stats", authRequired, requireRole("admin"), async (req, res) => {
+  try {
+    // Minted from treasury
+    const tMint = await pool.query("SELECT COALESCE(SUM(amount), 0) as s FROM treasury_proposals WHERE transaction_type='MINT' AND status='Successful'");
+    // Minted from claims
+    const cMint = await pool.query("SELECT COALESCE(SUM(a.credit_amount), 0) as s FROM claims c JOIN events e ON e.id = c.event_id JOIN activity_types a ON a.id = e.activity_type_id WHERE c.status='approved'");
+    
+    // Burned from treasury
+    const tBurn = await pool.query("SELECT COALESCE(SUM(amount), 0) as s FROM treasury_proposals WHERE transaction_type='BURN' AND status='Successful'");
+    // Burned from redemptions
+    const rBurn = await pool.query("SELECT COALESCE(SUM(cost_credits), 0) as s FROM redemptions");
+
+    const totalMinted = Number(tMint.rows[0].s) + Number(cMint.rows[0].s);
+    const totalBurned = Number(tBurn.rows[0].s) + Number(rBurn.rows[0].s);
+    const totalSupply = totalMinted - totalBurned;
+
+    res.json({ totalMinted, totalBurned, totalSupply });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/treasury/cashflow", authRequired, requireRole("admin"), async (req, res) => {
+  try {
+    const tMint = await pool.query("SELECT DATE(created_at) as d, SUM(amount) as s FROM treasury_proposals WHERE transaction_type='MINT' AND status='Successful' AND created_at >= NOW() - INTERVAL '30 days' GROUP BY DATE(created_at)");
+    const cMint = await pool.query("SELECT DATE(c.updated_at) as d, SUM(a.credit_amount) as s FROM claims c JOIN events e ON e.id = c.event_id JOIN activity_types a ON a.id = e.activity_type_id WHERE c.status='approved' AND c.updated_at >= NOW() - INTERVAL '30 days' GROUP BY DATE(c.updated_at)");
+    
+    const tBurn = await pool.query("SELECT DATE(created_at) as d, SUM(amount) as s FROM treasury_proposals WHERE transaction_type='BURN' AND status='Successful' AND created_at >= NOW() - INTERVAL '30 days' GROUP BY DATE(created_at)");
+    const rBurn = await pool.query("SELECT DATE(created_at) as d, SUM(cost_credits) as s FROM redemptions WHERE created_at >= NOW() - INTERVAL '30 days' GROUP BY DATE(created_at)");
+
+    const dataMap = {};
+    for(let i=29; i>=0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dayStr = String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0');
+      const key = d.toISOString().split('T')[0];
+      dataMap[key] = { day: dayStr, minted: 0, burned: 0 };
+    }
+
+    const process = (rows, type) => {
+      for(const r of rows) {
+        let dateObj = r.d;
+        if (typeof dateObj === 'string') dateObj = new Date(dateObj);
+        const key = dateObj.toISOString().split('T')[0];
+        if (dataMap[key]) {
+          if (type === 'mint') dataMap[key].minted += Number(r.s);
+          if (type === 'burn') dataMap[key].burned -= Number(r.s);
+        }
+      }
+    };
+    process(tMint.rows, 'mint');
+    process(cMint.rows, 'mint');
+    process(tBurn.rows, 'burn');
+    process(rBurn.rows, 'burn');
+
+    res.json(Object.values(dataMap));
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get("/config", (req, res) => {
@@ -1254,7 +1577,7 @@ app.get("/claims", authRequired, async (req, res) => {
   }
 
   const rs = await pool.query(
-    `SELECT c.*, e.title AS event_title, a.name AS activity_name, a.credit_amount,
+    `SELECT c.*, e.title AS event_title, e.image_url AS event_image_url, a.name AS activity_name, a.credit_amount,
             u.full_name AS student_name
      FROM claims c
      JOIN events e ON e.id = c.event_id
@@ -1538,7 +1861,7 @@ app.post("/admin/users/:id/reject", authRequired, requireRole("admin"), async (r
 });
 
 // wallets management (admin)
-app.get("/wallets/all", authRequired, requireRole("admin"), async (req, res) => {
+app.get("/wallets/all", authRequired, requireRole("admin", "verifier"), async (req, res) => {
   try {
     const usersRes = await pool.query(
       "SELECT id, username, full_name, role, wallet_address, wallet_index, student_card_image, created_at FROM users ORDER BY role, full_name"
@@ -1690,15 +2013,103 @@ app.delete("/reward-categories/:id", authRequired, requireRole("admin"), async (
 
 // rewards
 app.get("/rewards", authRequired, async (req, res) => {
-  const where = req.user.role === "admin" ? "" : "WHERE r.status='active'";
-  const rs = await pool.query(`
-    SELECT r.*, c.name as category_name 
-    FROM rewards r 
-    LEFT JOIN reward_categories c ON r.category_id = c.id 
-    ${where} 
-    ORDER BY r.created_at DESC
-  `);
-  res.json(rs.rows);
+  try {
+    const { search, category, sort } = req.query;
+    let whereClauses = [];
+    let params = [];
+    let paramIdx = 1;
+
+    if (req.user.role !== "admin") {
+      whereClauses.push("r.status='active'");
+    }
+
+    if (search) {
+      whereClauses.push(`(r.title ILIKE $${paramIdx} OR r.description ILIKE $${paramIdx})`);
+      params.push(`%${search}%`);
+      paramIdx++;
+    }
+
+    if (category) {
+      whereClauses.push(`r.category_id = $${paramIdx}`);
+      params.push(category);
+      paramIdx++;
+    }
+
+    let whereStr = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : "";
+
+    let orderStr = "ORDER BY r.created_at DESC";
+    if (sort === "price_asc") orderStr = "ORDER BY r.cost_credits ASC";
+    if (sort === "price_desc") orderStr = "ORDER BY r.cost_credits DESC";
+    if (sort === "popular") orderStr = "ORDER BY (SELECT COUNT(*) FROM redemptions rd WHERE rd.reward_id = r.id) DESC";
+
+    const rs = await pool.query(`
+      SELECT r.*, c.name as category_name 
+      FROM rewards r 
+      LEFT JOIN reward_categories c ON r.category_id = c.id 
+      ${whereStr} 
+      ${orderStr}
+    `, params);
+    
+    res.json(rs.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/rewards/history", authRequired, requireRole("student"), async (req, res) => {
+  try {
+    const rs = await pool.query(`
+      SELECT rd.id, rd.cost_credits, rd.created_at, rd.tx_hash, r.title, r.image_url, r.description
+      FROM redemptions rd
+      JOIN rewards r ON r.id = rd.reward_id
+      WHERE rd.student_id = $1
+      ORDER BY rd.created_at DESC
+    `, [req.user.id]);
+    res.json(rs.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/rewards/member-level", authRequired, requireRole("student"), async (req, res) => {
+  try {
+    // Member level calculation: Total UGC earned over lifetime
+    const claimRs = await pool.query(`
+      SELECT COALESCE(SUM(a.credit_amount), 0)::int as total_earned
+      FROM claims c
+      JOIN events e ON e.id = c.event_id
+      JOIN activity_types a ON a.id = e.activity_type_id
+      WHERE c.student_id = $1 AND c.status = 'approved'
+    `, [req.user.id]);
+    const totalEarned = claimRs.rows[0].total_earned;
+
+    let level = 'Bronze';
+    let nextLevelScore = 100;
+    
+    if (totalEarned >= 500) { level = 'Diamond'; nextLevelScore = null; }
+    else if (totalEarned >= 300) { level = 'Emerald'; nextLevelScore = 500; }
+    else if (totalEarned >= 200) { level = 'Gold'; nextLevelScore = 300; }
+    else if (totalEarned >= 100) { level = 'Silver'; nextLevelScore = 200; }
+
+    res.json({ level, totalEarned, nextLevelScore });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/rewards/suggest", authRequired, requireRole("student"), async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content || content.trim().length < 5) return res.status(400).json({ error: "Content too short" });
+
+    await pool.query(
+      "INSERT INTO reward_suggestions (student_id, content) VALUES ($1, $2)",
+      [req.user.id, content]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get("/rewards/stats", authRequired, requireRole("admin"), async (req, res) => {
@@ -2118,7 +2529,7 @@ app.get("/provenance/verify/:txHash", authRequired, async (req, res) => {
 });
 
 // analytics (admin)
-app.get("/analytics/overview", authRequired, requireRole("admin"), async (req, res) => {
+app.get("/analytics/overview", authRequired, requireRole("admin", "verifier"), async (req, res) => {
   const users = await pool.query("SELECT COUNT(*)::int AS n FROM users");
   const events = await pool.query("SELECT COUNT(*)::int AS n FROM events");
   const claims = await pool.query("SELECT COUNT(*)::int AS n FROM claims");
@@ -2144,7 +2555,7 @@ app.get("/analytics/overview", authRequired, requireRole("admin"), async (req, r
 
 
 // analytics weekly claims (admin)
-app.get("/analytics/weekly-claims", authRequired, requireRole("admin"), async (req, res) => {
+app.get("/analytics/weekly-claims", authRequired, requireRole("admin", "verifier"), async (req, res) => {
   try {
     const rs = await pool.query(`
       SELECT 
@@ -2169,13 +2580,50 @@ app.get("/analytics/weekly-claims", authRequired, requireRole("admin"), async (r
 
 // dashboard stats (admin)
 
-app.get("/dashboard/stats", authRequired, requireRole("admin"), async (req, res) => {
+app.get("/dashboard/stats", authRequired, requireRole("admin", "verifier"), async (req, res) => {
   try {
     const period = req.query.period || 'month';
     let interval = '30 days';
     if (period === 'week') interval = '7 days';
     else if (period === 'quarter') interval = '90 days';
     else if (period === 'year') interval = '365 days';
+
+    const fromParam = req.query.from;
+    const toParam = req.query.to;
+    const hasCustomRange = Boolean(fromParam && toParam);
+    const fromDate = hasCustomRange ? new Date(`${fromParam}T00:00:00`) : null;
+    const toDate = hasCustomRange ? new Date(`${toParam}T23:59:59.999`) : null;
+    const validCustomRange = hasCustomRange && !Number.isNaN(fromDate?.getTime()) && !Number.isNaN(toDate?.getTime());
+
+    const txHistoryQuery = validCustomRange
+      ? `
+        SELECT day, SUM(total_ugc)::int AS total_ugc
+        FROM (
+          SELECT DATE(created_at) AS day, amount AS total_ugc
+          FROM retirements
+          WHERE created_at >= $1 AND created_at <= $2
+          UNION ALL
+          SELECT DATE(created_at) AS day, cost_credits AS total_ugc
+          FROM redemptions
+          WHERE created_at >= $1 AND created_at <= $2
+        ) t
+        GROUP BY day ORDER BY day
+      `
+      : `
+        SELECT day, SUM(total_ugc)::int AS total_ugc
+        FROM (
+          SELECT DATE(created_at) AS day, amount AS total_ugc 
+          FROM retirements 
+          WHERE created_at >= NOW() - INTERVAL '${interval}'
+          UNION ALL
+          SELECT DATE(created_at) AS day, cost_credits AS total_ugc 
+          FROM redemptions 
+          WHERE created_at >= NOW() - INTERVAL '${interval}'
+        ) t
+        GROUP BY day ORDER BY day
+      `;
+
+    const txHistoryParams = validCustomRange ? [fromDate.toISOString(), toDate.toISOString()] : [];
 
     const [pendingRes, studentRes, supplyRes, recentClaimsRes, topEventsRes, txHistoryRes] = await Promise.all([
       pool.query("SELECT COUNT(*)::int AS n FROM claims WHERE status='submitted'"),
@@ -2203,19 +2651,7 @@ app.get("/dashboard/stats", authRequired, requireRole("admin"), async (req, res)
         GROUP BY e.id, e.title, a.name, e.status
         ORDER BY participant_count DESC LIMIT 5
       `),
-      pool.query(`
-        SELECT day, SUM(total_ugc)::int AS total_ugc
-        FROM (
-          SELECT DATE(created_at) AS day, amount AS total_ugc 
-          FROM retirements 
-          WHERE created_at >= NOW() - INTERVAL '${interval}'
-          UNION ALL
-          SELECT DATE(created_at) AS day, cost_credits AS total_ugc 
-          FROM redemptions 
-          WHERE created_at >= NOW() - INTERVAL '${interval}'
-        ) t
-        GROUP BY day ORDER BY day
-      `)
+      pool.query(txHistoryQuery, txHistoryParams)
     ]);
 
     const blockNumber = await provider.getBlockNumber();
@@ -2453,6 +2889,592 @@ Bạn là chuyên gia về hệ thống ULSA Green Credit, đồng thời là tr
     res.json({ reply: null, fallback: true, error: e.message });
   }
 });
+
+
+// ==================================================================================
+// TRAINING POINTS PAGE — 5 AGGREGATOR APIs
+// ==================================================================================
+
+// Helper: tính điểm rèn luyện từ claims (reuse logic hiện có)
+function calcTrainingScore(approvedClaims, totalClaims) {
+  const totalApproved = approvedClaims.length;
+  const approvalRatio = totalClaims > 0 ? (totalApproved / totalClaims) : 0;
+  const frequency = totalApproved;
+  const uniqueTypes = new Set(approvedClaims.map(c => c.activity_type_id));
+  const diversityCount = uniqueTypes.size;
+  let score = (approvalRatio * 40) + (Math.min(frequency, 10) * 4) + (Math.min(diversityCount, 5) * 4);
+  if (score > 100) score = 100;
+  if (totalClaims === 0) score = 0;
+  return Math.round(score);
+}
+
+function getGrade(score) {
+  if (score >= 90) return 'Xuất sắc';
+  if (score >= 80) return 'Giỏi';
+  if (score >= 65) return 'Khá';
+  if (score >= 50) return 'Trung bình';
+  return 'Yếu';
+}
+
+function getRankTitle(score) {
+  if (score >= 90) return 'Diamond';
+  if (score >= 80) return 'Emerald';
+  if (score >= 65) return 'Gold';
+  if (score >= 50) return 'Silver';
+  return 'Bronze';
+}
+
+// Helper: classify activity sang ESG (tái sử dụng classifyActivity + map sang ESG labels)
+function classifyToESG(name, title) {
+  const s = ((name || '') + ' ' + (title || '')).toLowerCase();
+  if (s.includes('môi trường') || s.includes('dọn rác') || s.includes('trồng cây') || s.includes('phủ xanh') || s.includes('vệ sinh') || s.includes('tái chế') || s.includes('xanh')) return 'Môi trường';
+  if (s.includes('học') || s.includes('nghiên cứu') || s.includes('thi') || s.includes('kỹ năng') || s.includes('đào tạo') || s.includes('hội thảo') || s.includes('seminar')) return 'Học tập';
+  if (s.includes('lãnh đạo') || s.includes('ban cán sự') || s.includes('đoàn') || s.includes('hội') || s.includes('câu lạc bộ') || s.includes('clb') || s.includes('sinh hoạt') || s.includes('họp')) return 'Lãnh đạo';
+  if (s.includes('từ thiện') || s.includes('nhân đạo') || s.includes('đoàn kết') || s.includes('cộng đồng')) return 'Cộng đồng';
+  return 'Xã hội'; // default
+}
+
+// 1. GET /training-points/profile — Hồ sơ xanh tổng hợp
+app.get("/training-points/profile", authRequired, async (req, res) => {
+  try {
+    const studentId = req.user.id;
+
+    // User info
+    const userRs = await pool.query(
+      "SELECT id, username, full_name, email, avatar_url, role, wallet_address, student_id, class_name, cohort, faculty, created_at FROM users WHERE id=$1",
+      [studentId]
+    );
+    const user = userRs.rows[0];
+
+    // Claims
+    const claimsRs = await pool.query(
+      `SELECT c.*, e.title AS event_title, a.id AS activity_type_id, a.name AS activity_name, a.credit_amount
+       FROM claims c
+       JOIN events e ON e.id = c.event_id
+       JOIN activity_types a ON a.id = e.activity_type_id
+       WHERE c.student_id=$1`,
+      [studentId]
+    );
+    const claims = claimsRs.rows;
+    const approvedClaims = claims.filter(c => c.status === 'approved');
+    const trainingScore = calcTrainingScore(approvedClaims, claims.length);
+    const grade = getGrade(trainingScore);
+    const rankTitle = getRankTitle(trainingScore);
+
+    // UGC Balance from blockchain
+    let ugcBalance = 0;
+    if (user?.wallet_address) {
+      try {
+        ugcBalance = Number(await ugcContract.balanceOf(user.wallet_address));
+      } catch (e) { /* blockchain may be down */ }
+    }
+
+    // Rank (training score based)
+    const allStudentsRs = await pool.query(
+      `SELECT u.id,
+        (SELECT COUNT(*) FROM claims c WHERE c.student_id = u.id) AS total_claims,
+        (SELECT COUNT(*) FROM claims c WHERE c.student_id = u.id AND c.status='approved') AS approved_claims
+       FROM users u WHERE u.role='student'`
+    );
+    const allScores = allStudentsRs.rows.map(s => ({
+      id: s.id,
+      score: calcTrainingScore(
+        Array(Number(s.approved_claims)).fill({ activity_type_id: 'x' }),
+        Number(s.total_claims)
+      )
+    })).sort((a, b) => b.score - a.score);
+    const rank = allScores.findIndex(s => s.id === studentId) + 1;
+    const totalStudents = allScores.length;
+
+    // Streak data
+    let streakData = { currentStreak: 0, longestStreak: 0 };
+    try {
+      const streakRes = await pool.query(`
+        WITH user_dates AS (
+            SELECT DISTINCT date_trunc('day', created_at)::date AS checkin_date 
+            FROM claims WHERE student_id = $1
+        ),
+        groups AS (
+            SELECT checkin_date, checkin_date - (DENSE_RANK() OVER (ORDER BY checkin_date))::int AS grp FROM user_dates
+        ),
+        streaks AS (
+            SELECT grp, MIN(checkin_date) AS start_date, MAX(checkin_date) AS end_date, COUNT(*) AS streak_length FROM groups GROUP BY grp
+        )
+        SELECT 
+          COALESCE(MAX(streak_length), 0)::int AS longest_streak,
+          COALESCE((SELECT streak_length FROM streaks WHERE end_date >= CURRENT_DATE - INTERVAL '1 day' ORDER BY end_date DESC LIMIT 1), 0)::int AS current_streak
+        FROM streaks
+      `, [studentId]);
+      if (streakRes.rows[0]) {
+        streakData = { currentStreak: streakRes.rows[0].current_streak, longestStreak: streakRes.rows[0].longest_streak };
+      }
+    } catch (e) { /* ignore */ }
+
+    // Badge count
+    const badgeRs = await pool.query(
+      "SELECT COUNT(*)::int AS n FROM user_achievements WHERE student_id=$1",
+      [studentId]
+    );
+    const badgeCount = badgeRs.rows[0]?.n || 0;
+
+    res.json({
+      success: true,
+      data: {
+        user,
+        trainingScore,
+        grade,
+        rankTitle,
+        rank,
+        totalStudents,
+        ugcBalance,
+        totalActivities: approvedClaims.length,
+        streakData,
+        badgeCount
+      }
+    });
+  } catch (e) {
+    console.error("training-points/profile error:", e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// 2. GET /training-points/leaderboard?scope=school|faculty|class
+app.get("/training-points/leaderboard", authRequired, async (req, res) => {
+  try {
+    const scope = req.query.scope || 'school';
+    const studentId = req.user.id;
+
+    // Get current user's faculty/class
+    const meRs = await pool.query("SELECT faculty, class_name FROM users WHERE id=$1", [studentId]);
+    const me = meRs.rows[0];
+
+    let filterClause = "WHERE u.role='student'";
+    if (scope === 'faculty' && me?.faculty) {
+      filterClause = `WHERE u.role='student' AND u.faculty=$1`;
+    } else if (scope === 'class' && me?.class_name) {
+      filterClause = `WHERE u.role='student' AND u.class_name=$1`;
+    }
+
+    const filterValue = scope === 'faculty' ? me?.faculty : scope === 'class' ? me?.class_name : null;
+
+    const studentsRs = await pool.query(
+      `SELECT u.id, u.full_name, u.avatar_url, u.faculty, u.class_name,
+        COUNT(c.id) AS total_claims,
+        COUNT(CASE WHEN c.status='approved' THEN 1 END) AS approved_claims
+       FROM users u
+       LEFT JOIN claims c ON c.student_id = u.id
+       ${filterClause}
+       GROUP BY u.id, u.full_name, u.avatar_url, u.faculty, u.class_name`,
+      filterValue ? [filterValue] : []
+    );
+
+    const ranked = studentsRs.rows
+      .map(s => ({
+        id: s.id,
+        full_name: s.full_name,
+        avatar_url: s.avatar_url,
+        faculty: s.faculty,
+        class_name: s.class_name,
+        score: calcTrainingScore(
+          Array(Number(s.approved_claims)).fill({ activity_type_id: 'x' }),
+          Number(s.total_claims)
+        )
+      }))
+      .sort((a, b) => b.score - a.score)
+      .map((s, idx) => ({ ...s, rank: idx + 1 }));
+
+    const top3 = ranked.slice(0, 3);
+    const myEntry = ranked.find(s => s.id === studentId) || {
+      id: studentId, full_name: req.user.full_name, score: 0, rank: ranked.length + 1
+    };
+
+    res.json({ success: true, data: { top3, me: myEntry, scope, total: ranked.length } });
+  } catch (e) {
+    console.error("training-points/leaderboard error:", e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// 3. GET /training-points/radar — ESG Radar Chart data
+app.get("/training-points/radar", authRequired, async (req, res) => {
+  try {
+    const studentId = req.user.id;
+
+    // Get student's approved claims
+    const claimsRs = await pool.query(
+      `SELECT a.name AS activity_name, e.title AS event_title, a.credit_amount
+       FROM claims c
+       JOIN events e ON e.id = c.event_id
+       JOIN activity_types a ON a.id = e.activity_type_id
+       WHERE c.student_id=$1 AND c.status='approved'`,
+      [studentId]
+    );
+
+    // Bucket into ESG categories
+    const buckets = { 'Môi trường': 0, 'Xã hội': 0, 'Học tập': 0, 'Lãnh đạo': 0, 'Cộng đồng': 0 };
+    for (const c of claimsRs.rows) {
+      const cat = classifyToESG(c.activity_name, c.event_title);
+      buckets[cat] = (buckets[cat] || 0) + (Number(c.credit_amount) || 1);
+    }
+
+    // Normalize to 0-100 scale (max 20 UGC per category = 100 points)
+    const MAX_UGC = 20;
+    const normalize = (ugc) => Math.min(Math.round((ugc / MAX_UGC) * 100), 100);
+
+    // Calculate school average (simple: total approved claims / total students / 5 categories)
+    const avgRs = await pool.query(`
+      SELECT AVG(cnt)::float AS avg_count FROM (
+        SELECT COUNT(*) AS cnt FROM claims WHERE status='approved' GROUP BY student_id
+      ) sub
+    `);
+    const avgActivities = avgRs.rows[0]?.avg_count || 0;
+    const avgPerCategory = Math.min(Math.round((avgActivities / 5 / MAX_UGC) * 100), 100);
+
+    const data = Object.entries(buckets).map(([subject, ugc]) => ({
+      subject,
+      student: normalize(ugc),
+      avg: Math.max(15, avgPerCategory), // at least 15 for visual clarity
+      fullMark: 100
+    }));
+
+    res.json({ success: true, data });
+  } catch (e) {
+    console.error("training-points/radar error:", e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// 4. GET /training-points/recent-activity — Timeline dữ liệu thực
+app.get("/training-points/recent-activity", authRequired, async (req, res) => {
+  try {
+    const studentId = req.user.id;
+
+    // Approved claims (activities)
+    const claimsRs = await pool.query(
+      `SELECT c.id, c.created_at, c.status, a.credit_amount,
+              e.title AS event_title, a.name AS activity_name
+       FROM claims c
+       JOIN events e ON e.id = c.event_id
+       JOIN activity_types a ON a.id = e.activity_type_id
+       WHERE c.student_id=$1 AND c.status='approved'
+       ORDER BY c.created_at DESC LIMIT 3`,
+      [studentId]
+    );
+
+    // Recent redemptions
+    const redemptionsRs = await pool.query(
+      `SELECT r.id, r.created_at, rw.title, rw.cost_credits
+       FROM redemptions r
+       JOIN rewards rw ON rw.id = r.reward_id
+       WHERE r.student_id=$1
+       ORDER BY r.created_at DESC LIMIT 1`,
+      [studentId]
+    );
+
+    const activities = claimsRs.rows.map(c => ({
+      id: c.id,
+      date: c.created_at,
+      title: c.event_title,
+      type: 'Sự kiện',
+      ugc: `+${c.credit_amount || 0} UGC`,
+      ugcPositive: true,
+      status: 'Đã duyệt',
+      icon: 'eco'
+    }));
+
+    const redemptions = redemptionsRs.rows.map(r => ({
+      id: r.id,
+      date: r.created_at,
+      title: r.title,
+      type: 'Đổi quà',
+      ugc: `-${r.cost_credits} UGC`,
+      ugcPositive: false,
+      status: 'Thành công',
+      icon: 'card_giftcard'
+    }));
+
+    // Merge and sort by date, take latest 4
+    const combined = [...activities, ...redemptions]
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 4);
+
+    res.json({ success: true, data: combined });
+  } catch (e) {
+    console.error("training-points/recent-activity error:", e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// 5. GET /training-points/quick-stats — Thống kê nhanh (4 ô nhỏ)
+app.get("/training-points/quick-stats", authRequired, async (req, res) => {
+  try {
+    const studentId = req.user.id;
+
+    // Streak
+    let currentStreak = 0;
+    try {
+      const streakRs = await pool.query(`
+        WITH user_dates AS (
+          SELECT DISTINCT date_trunc('day', created_at)::date AS checkin_date FROM claims WHERE student_id=$1
+        ),
+        groups AS (SELECT checkin_date, checkin_date - (DENSE_RANK() OVER (ORDER BY checkin_date))::int AS grp FROM user_dates),
+        streaks AS (SELECT grp, MAX(checkin_date) AS end_date, COUNT(*) AS streak_length FROM groups GROUP BY grp)
+        SELECT COALESCE((SELECT streak_length FROM streaks WHERE end_date >= CURRENT_DATE - INTERVAL '1 day' ORDER BY end_date DESC LIMIT 1), 0)::int AS current_streak
+      `, [studentId]);
+      currentStreak = streakRs.rows[0]?.current_streak || 0;
+    } catch(e) {}
+
+    // Total claims
+    const claimsRs = await pool.query(
+      "SELECT COUNT(*)::int AS n FROM claims WHERE student_id=$1 AND status='approved'",
+      [studentId]
+    );
+    const totalClaims = claimsRs.rows[0]?.n || 0;
+
+    // UGC Balance
+    let ugcBalance = 0;
+    const userRs = await pool.query("SELECT wallet_address FROM users WHERE id=$1", [studentId]);
+    const walletAddress = userRs.rows[0]?.wallet_address;
+    if (walletAddress) {
+      try { ugcBalance = Number(await ugcContract.balanceOf(walletAddress)); } catch(e) {}
+    }
+
+    // Badge count
+    const badgeRs = await pool.query(
+      "SELECT COUNT(*)::int AS n FROM user_achievements WHERE student_id=$1",
+      [studentId]
+    );
+    const badgeCount = badgeRs.rows[0]?.n || 0;
+
+    res.json({
+      success: true,
+      data: {
+        streak: currentStreak,
+        totalClaims,
+        ugcBalance,
+        badgeCount
+      }
+    });
+  } catch (e) {
+    console.error("training-points/quick-stats error:", e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ==================================================================================
+// PROFILE PAGE APIs
+// ==================================================================================
+
+app.get("/profile", authRequired, requireRole("student"), async (req, res) => {
+  try {
+    const studentId = req.user.id;
+    // Basic Info
+    const rs = await pool.query(
+      "SELECT id, username, full_name, email, avatar_url, student_id, class_name, cohort, created_at, wallet_address FROM users WHERE id=$1", 
+      [studentId]
+    );
+    const user = rs.rows[0];
+
+    // Total Earned for Member Level
+    const claimRs = await pool.query(
+      `SELECT COALESCE(SUM(a.credit_amount), 0)::int as total_earned
+       FROM claims c
+       JOIN events e ON e.id = c.event_id
+       JOIN activity_types a ON a.id = e.activity_type_id
+       WHERE c.student_id = $1 AND c.status = 'approved'`, 
+      [studentId]
+    );
+    const totalEarned = claimRs.rows[0].total_earned;
+
+    let rankName = 'Xanh Mầm';
+    let rankProgress = totalEarned;
+    let rankMax = 100;
+    
+    if (totalEarned >= 500) { rankName = 'Xanh Kim Cương'; rankProgress = totalEarned; rankMax = totalEarned; }
+    else if (totalEarned >= 300) { rankName = 'Xanh Rừng'; rankProgress = totalEarned; rankMax = 500; }
+    else if (totalEarned >= 200) { rankName = 'Xanh Cây'; rankProgress = totalEarned; rankMax = 300; }
+    else if (totalEarned >= 100) { rankName = 'Xanh Lá'; rankProgress = totalEarned; rankMax = 200; }
+
+    res.json({ success: true, data: { ...user, rankName, rankProgress, rankMax, totalEarned } });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.put("/profile", authRequired, requireRole("student"), async (req, res) => {
+  try {
+    const { full_name, email } = req.body;
+    await pool.query(
+      "UPDATE users SET full_name = COALESCE($1, full_name), email = COALESCE($2, email) WHERE id = $3",
+      [full_name, email, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post("/profile/avatar", authRequired, upload.single("avatar"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No image file provided" });
+    const filename = req.file.filename;
+    const url = `http://localhost:8080/uploads/${filename}`;
+    const rs = await pool.query(
+      "UPDATE users SET avatar_url=$1 WHERE id=$2 RETURNING *",
+      [url, req.user.id]
+    );
+    const updatedUser = { ...rs.rows[0] };
+    delete updatedUser.password_hash;
+    res.json({ success: true, user: updatedUser });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get("/profile/wallet", authRequired, requireRole("student"), async (req, res) => {
+  try {
+    const userRs = await pool.query("SELECT wallet_address FROM users WHERE id=$1", [req.user.id]);
+    const walletAddress = userRs.rows[0]?.wallet_address;
+    let balance = 0;
+    if (walletAddress) {
+      try { balance = Number(await ugcContract.balanceOf(walletAddress)); } catch(e) { console.error("Blockchain read error", e); }
+    }
+    res.json({ success: true, data: { walletAddress, balance } });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get("/profile/stats", authRequired, requireRole("student"), async (req, res) => {
+  try {
+    const studentId = req.user.id;
+    
+    // Total Earned
+    const claimRs = await pool.query(
+      `SELECT COALESCE(SUM(a.credit_amount), 0)::int as total
+       FROM claims c JOIN events e ON e.id = c.event_id JOIN activity_types a ON a.id = e.activity_type_id
+       WHERE c.student_id = $1 AND c.status = 'approved'`, [studentId]
+    );
+    
+    // Total Events
+    const eventsRs = await pool.query(
+      `SELECT COUNT(*)::int as count FROM checkins WHERE student_id = $1`, [studentId]
+    );
+    
+    // Streak
+    let longestStreak = 0;
+    try {
+      const streakRs = await pool.query(`
+        WITH user_dates AS (SELECT DISTINCT date_trunc('day', created_at)::date AS checkin_date FROM claims WHERE student_id=$1),
+        groups AS (SELECT checkin_date, checkin_date - (DENSE_RANK() OVER (ORDER BY checkin_date))::int AS grp FROM user_dates),
+        streaks AS (SELECT grp, COUNT(*) AS streak_length FROM groups GROUP BY grp)
+        SELECT MAX(streak_length)::int AS max_streak FROM streaks
+      `, [studentId]);
+      longestStreak = streakRs.rows[0]?.max_streak || 0;
+    } catch(e) {}
+    
+    // School Rank
+    const rankRs = await pool.query(`
+      WITH student_scores AS (
+        SELECT c.student_id, COALESCE(SUM(a.credit_amount), 0) AS total
+        FROM claims c JOIN events e ON e.id = c.event_id JOIN activity_types a ON a.id = e.activity_type_id
+        WHERE c.status = 'approved' GROUP BY c.student_id
+      ), ranked AS (
+        SELECT student_id, RANK() OVER (ORDER BY total DESC) as rnk FROM student_scores
+      )
+      SELECT rnk FROM ranked WHERE student_id = $1
+    `, [studentId]);
+    const schoolRank = rankRs.rows[0]?.rnk || 0;
+    
+    const totalStudentsRs = await pool.query("SELECT COUNT(*) FROM users WHERE role='student'");
+    const schoolTotal = parseInt(totalStudentsRs.rows[0].count);
+
+    res.json({ success: true, data: { 
+      totalEarned: claimRs.rows[0].total, 
+      totalEvents: eventsRs.rows[0].count, 
+      longestStreak, 
+      schoolRank, 
+      schoolTotal 
+    }});
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get("/profile/badges", authRequired, requireRole("student"), async (req, res) => {
+  try {
+    const studentId = req.user.id;
+    // Lấy thành tựu đã đạt
+    const achievedRs = await pool.query(`
+      SELECT a.id, a.label AS name, a.description, a.icon, ua.unlocked_at
+      FROM user_achievements ua
+      JOIN achievements a ON a.id = ua.achievement_id
+      WHERE ua.student_id = $1
+      ORDER BY ua.unlocked_at DESC
+    `, [studentId]);
+
+    // Các thành tựu chưa đạt - giả lập in-progress dựa vào logic
+    const allAchiRs = await pool.query(`
+      SELECT id, label AS name, description, icon, target_value AS requirements 
+      FROM achievements 
+      WHERE id NOT IN (SELECT achievement_id FROM user_achievements WHERE student_id=$1)
+    `, [studentId]);
+
+    const achieved = achievedRs.rows.map(r => ({ ...r, date: r.unlocked_at, color: "#29A646" }));
+    const inProgress = allAchiRs.rows.map((r, i) => {
+      // Giả lập tiến độ (hiện tại logic track tiến độ chi tiết chưa có sẵn trong DB, nên tính random nhẹ hoặc từ event count)
+      const max = (r.requirements?.count || 10);
+      const current = Math.min(Math.floor(max * (i + 1) * 0.2), max - 1);
+      return { ...r, max, current };
+    });
+
+    res.json({ success: true, data: { achieved, inProgress } });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get("/profile/history", authRequired, requireRole("student"), async (req, res) => {
+  try {
+    const studentId = req.user.id;
+    
+    // Claims (Receive)
+    const claimsRs = await pool.query(`
+      SELECT c.id, c.created_at as time, e.title, 'Nhận UGC' as category, 'Sự kiện' as type_desc, 
+             a.credit_amount as amount, 'Đã duyệt' as status, 'eco' as icon, 
+             'profile-history__activity-icon--green' as icon_class, 
+             'profile-history__amount--positive' as amount_class, 
+             'profile-history__status--approved' as status_class
+      FROM claims c JOIN events e ON e.id = c.event_id JOIN activity_types a ON a.id = e.activity_type_id
+      WHERE c.student_id=$1 AND c.status='approved'
+    `, [studentId]);
+
+    // Redemptions (Spend/Redeem)
+    const redemptionsRs = await pool.query(`
+      SELECT rd.id, rd.created_at as time, r.title, 'Đổi quà' as category, 'Đổi quà' as type_desc, 
+             rd.cost_credits as amount, 'Thành công' as status, 'card_giftcard' as icon, 
+             'profile-history__activity-icon--blue' as icon_class, 
+             'profile-history__amount--negative' as amount_class, 
+             'profile-history__status--success' as status_class
+      FROM redemptions rd JOIN rewards r ON r.id = rd.reward_id
+      WHERE rd.student_id=$1
+    `, [studentId]);
+
+    let combined = [];
+    claimsRs.rows.forEach(r => combined.push({ ...r, is_positive: true }));
+    redemptionsRs.rows.forEach(r => combined.push({ ...r, is_positive: false }));
+
+    combined.sort((a,b) => new Date(b.time) - new Date(a.time));
+    
+    res.json({ success: true, data: combined });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ==================================================================================
+// END TRAINING POINTS APIs
+// ==================================================================================
 
 // -------------------- start --------------------
 async function main() {

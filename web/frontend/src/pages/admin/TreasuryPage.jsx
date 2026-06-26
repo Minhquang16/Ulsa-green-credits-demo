@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '../../auth.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import '../../styles/admin/treasury.css'
 
 // ethers loaded from CDN (window.ethers)
 const getEthers = () => window.ethers
@@ -16,12 +18,29 @@ const TREASURY_ABI = [
   "event ProposalCreated(uint256 indexed id, address indexed proposer, address targetAddress, uint256 amount, uint8 transactionType)"
 ]
 
+function getRelativeTime(dateStr) {
+  if (!dateStr) return '---';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'vừa xong';
+  if (diffMins < 60) return `${diffMins} phút trước`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} giờ trước`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} ngày trước`;
+}
+
 export default function TreasuryPage() {
   const { api } = useAuth()
   const { showToast } = useToast()
 
   const [config, setConfig] = useState(null)
   const [proposals, setProposals] = useState([])
+  const [admins, setAdmins] = useState([])
+  const [hasPending, setHasPending] = useState(false)
+  const [stats, setStats] = useState({ totalMinted: 0, totalBurned: 0, totalSupply: 0 })
   const [wallet, setWallet] = useState(null)          // địa chỉ ví đang dùng
   const [privKey, setPrivKey] = useState('')          // Private key nếu dùng ví nội bộ
   const [isInternal, setIsInternal] = useState(false) // Đang dùng ví nội bộ hay Metamask
@@ -32,10 +51,13 @@ export default function TreasuryPage() {
   const [form, setForm] = useState({ target_address: '', amount: '', transaction_type: '0', reason: '' })
   const [addrTouched, setAddrTouched] = useState(false)
   const [showKeyModal, setShowKeyModal] = useState(false)
+  const [activeTab, setActiveTab] = useState('pending')
 
   const ETH_ADDR_REGEX = /^0x[a-fA-F0-9]{40}$/
   const isAddrValid  = ETH_ADDR_REGEX.test(form.target_address)
   const isFormValid  = isAddrValid && Number(form.amount) > 0 && form.reason.trim().length > 0
+
+  const [cashflowData, setCashflowData] = useState([])
 
   // ─── helpers ──────────────────────────────────────────────
   async function getSigner() {
@@ -57,6 +79,18 @@ export default function TreasuryPage() {
     setLoadingData(true)
     try {
       const props = await api('/treasury/proposals')
+      
+      // Load stats, cashflow, and all users parallel
+      const [statsRes, cashflowRes, allUsers] = await Promise.all([
+        api('/treasury/stats').catch(() => ({ totalMinted: 0, totalBurned: 0, totalSupply: 0 })),
+        api('/treasury/cashflow').catch(() => []),
+        api('/admin/users').catch(() => [])
+      ])
+      
+      setStats(statsRes)
+      setCashflowData(cashflowRes)
+      
+      const adminUsers = allUsers.filter(u => u.role === 'admin')
       const effectiveCfg = cfg || config
       
       if (effectiveCfg?.treasuryAddress) {
@@ -69,23 +103,76 @@ export default function TreasuryPage() {
         } catch(e) { console.error("Threshold error", e) }
 
         const enriched = await Promise.all(props.map(async p => {
+          let proposerAddr = ''
           try {
             const od = await contract.proposals(p.onchain_id)
             p.signatureCount = Number(od.signatureCount)
             p.executed       = od.executed
+            proposerAddr     = od.proposer
+            p.proposer       = od.proposer
           } catch {
             p.signatureCount = 0
             p.executed       = false
+            p.proposer       = ''
           }
+          
+          // Match proposer to admin name
+          const matchedCreator = adminUsers.find(u => u.wallet_address?.toLowerCase() === proposerAddr?.toLowerCase())
+          if (matchedCreator) {
+            p.creatorName = matchedCreator.full_name
+            p.creatorAddress = matchedCreator.wallet_address
+          } else {
+            p.creatorName = 'Admin ULSA'
+            p.creatorAddress = proposerAddr || '0x'
+          }
+
           const addr = walletAddr || wallet
           if (addr && p.onchain_id !== null) {
             try {
               p.currentAdminSigned = await contract.isConfirmed(p.onchain_id, addr)
             } catch { p.currentAdminSigned = false }
           }
+
+          // Check signature status for all admin slots
+          p.adminSignatures = await Promise.all(adminUsers.map(async (u, idx) => {
+            let hasSigned = false
+            if (p.onchain_id !== null && u.wallet_address) {
+              try {
+                hasSigned = await contract.isConfirmed(p.onchain_id, u.wallet_address)
+              } catch {}
+            }
+            return {
+              id: u.id,
+              name: u.full_name,
+              address: u.wallet_address,
+              avatarIndex: idx + 1,
+              hasSigned
+            }
+          }))
+
           return p
         }))
+        
         setProposals(enriched)
+        
+        const pendingProps = enriched.filter(p => !p.executed)
+        const latestPendingId = pendingProps.length > 0 ? pendingProps[0].onchain_id : null
+        setHasPending(pendingProps.length > 0)
+        
+        const mappedAdmins = await Promise.all(adminUsers.map(async (u, idx) => {
+          let signed = false
+          if (latestPendingId !== null && u.wallet_address) {
+            try { signed = await contract.isConfirmed(latestPendingId, u.wallet_address) } catch {}
+          }
+          return {
+            id: u.id,
+            name: u.full_name,
+            address: u.wallet_address || 'Chưa liên kết',
+            signed,
+            avatar: (idx + 1).toString()
+          }
+        }))
+        setAdmins(mappedAdmins)
       } else {
         setProposals(props)
       }
@@ -199,6 +286,7 @@ export default function TreasuryPage() {
       })
       showToast('✅ Đề xuất thành công')
       setForm({ target_address: '', amount: '', transaction_type: '0', reason: '' })
+      setAddrTouched(false)
       loadData(wallet, config)
     } catch (e) {
       showToast('❌ Lỗi: ' + (e.reason || e.message))
@@ -233,225 +321,479 @@ export default function TreasuryPage() {
     finally { setBusy(false) }
   }
 
+  const pendingProposals = proposals.filter(p => !p.executed)
+  const executedProposals = proposals.filter(p => p.executed)
+  const displayedProposals = activeTab === 'pending' ? pendingProposals : executedProposals
+
   return (
-    <div className="min-h-screen bg-surface-bright p-4 md:p-8 font-body text-on-surface">
+    <main className="treasury-page">
       {/* Header */}
-      <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
+      <header className="treasury-header">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2 py-1 rounded">Kho quỹ hội đồng</span>
+          <p className="treasury-header__subtitle">KHO QUỸ HỘI ĐỒNG</p>
+          <div className="treasury-header__title-row">
+            <h1 className="treasury-header__title">Multi-Sig Treasury</h1>
+            <span className="material-symbols-outlined treasury-header__badge">verified_user</span>
           </div>
-          <h1 className="text-4xl font-black tracking-tight">Multi-Sig Treasury</h1>
-          <p className="text-on-surface-variant text-sm font-medium mt-1">
-            Yêu cầu đa chữ ký (ngưỡng: {threshold}) để quản lý UGC.
-          </p>
+          <p className="treasury-header__desc">Ví đa chữ ký (ngưỡng: {threshold}/3) để quản lý và vận hành nguồn cung UGC.</p>
         </div>
 
-        <div>
+        <div className="treasury-header__actions">
           {wallet ? (
-            <div className="flex items-center gap-3 bg-white p-2 pr-4 rounded-full shadow-sm border border-outline-variant">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-[10px] ${isInternal ? 'bg-purple-600' : 'bg-orange-500'}`}>
-                {isInternal ? 'KEY' : 'MM'}
+            <div className="treasury-wallet-info">
+              <div className="treasury-wallet-card">
+                <div className={`treasury-wallet-icon ${isInternal ? 'treasury-wallet-icon--internal' : 'treasury-wallet-icon--metamask'}`}>
+                  {isInternal ? 'KEY' : 'MM'}
+                </div>
+                <div>
+                  <p className="treasury-wallet-type">{isInternal ? 'Ví nội bộ' : 'Metamask'}</p>
+                  <p className="treasury-wallet-address">{wallet.slice(0,6)}...{wallet.slice(-4)}</p>
+                </div>
+                <button onClick={disconnectWallet} className="treasury-wallet-disconnect">
+                  <span className="material-symbols-outlined text-[18px]">logout</span>
+                </button>
               </div>
-              <div>
-                <p className="text-[9px] font-black text-on-surface-variant leading-none uppercase">{isInternal ? 'Ví nội bộ' : 'Metamask'}</p>
-                <p className="text-sm font-mono font-bold">{wallet.slice(0,6)}...{wallet.slice(-4)}</p>
-              </div>
-              <button onClick={disconnectWallet} className="ml-2 text-red-400 hover:text-red-600">
-                <span className="material-symbols-outlined text-lg">logout</span>
-              </button>
             </div>
           ) : (
-            <button onClick={() => setShowKeyModal(true)} className="px-6 py-3 rounded-2xl bg-primary text-white font-bold shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-2">
-              <span className="material-symbols-outlined">account_balance_wallet</span>
-              Kết nối Ví Admin
-            </button>
+            <>
+              <button onClick={() => setShowKeyModal(true)} className="treasury-connect-btn">
+                <span className="material-symbols-outlined text-[18px]">account_balance_wallet</span> Kết nối Ví Admin <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+              </button>
+              <p className="treasury-connect-note"><span className="material-symbols-outlined text-[12px]">lock</span> Chỉ Admin mới có quyền đề xuất và gửi</p>
+            </>
           )}
         </div>
       </header>
 
+      {/* 4 Stat Cards */}
+      <div className="treasury-stats-grid">
+        <div className="treasury-stat-card">
+          <div className="treasury-stat-card__main">
+            <div className="treasury-stat-card__icon treasury-stat-card__icon--emerald">
+              <span className="material-symbols-outlined text-base">layers</span>
+            </div>
+            <div className="treasury-stat-card__content">
+              <p className="treasury-stat-card__label">TỔNG CUNG (TOTAL SUPPLY)</p>
+              <p className="treasury-stat-card__value treasury-stat-card__value--emerald">{stats.totalSupply.toLocaleString()} <span className="treasury-stat-card__unit">UGC</span></p>
+            </div>
+          </div>
+          <div className="treasury-stat-card__footer">
+            <span className="treasury-stat-card__trend"><span className="material-symbols-outlined text-[12px]">arrow_upward</span> +12.5%</span>
+            <span className="treasury-stat-card__trend-desc">So với 30 ngày trước</span>
+          </div>
+          <div className="treasury-stat-card__bg">
+            <svg viewBox="0 0 100 30" preserveAspectRatio="none"><path d="M0,25 Q10,28 20,20 T40,15 T60,20 T80,5 T100,2" fill="none" stroke="#10b981" strokeWidth="2" /></svg>
+          </div>
+        </div>
+
+        <div className="treasury-stat-card">
+          <div className="treasury-stat-card__main">
+            <div className="treasury-stat-card__icon treasury-stat-card__icon--blue">
+              <span className="material-symbols-outlined text-base">arrow_upward</span>
+            </div>
+            <div className="treasury-stat-card__content">
+              <p className="treasury-stat-card__label">TỔNG ĐÃ CẤP PHÁT (MINTED)</p>
+              <p className="treasury-stat-card__value treasury-stat-card__value--blue">{stats.totalMinted.toLocaleString()} <span className="treasury-stat-card__unit">UGC</span></p>
+            </div>
+          </div>
+          <div className="treasury-stat-card__footer">
+            <span className="treasury-stat-card__trend"><span className="material-symbols-outlined text-[12px]">arrow_upward</span> +8.6%</span>
+            <span className="treasury-stat-card__trend-desc">So với 30 ngày trước</span>
+          </div>
+          <div className="treasury-stat-card__bg">
+            <svg viewBox="0 0 100 30" preserveAspectRatio="none"><path d="M0,25 Q10,22 20,20 T40,10 T60,15 T80,5 T100,2" fill="none" stroke="#3b82f6" strokeWidth="2" /></svg>
+          </div>
+        </div>
+
+        <div className="treasury-stat-card">
+          <div className="treasury-stat-card__main">
+            <div className="treasury-stat-card__icon treasury-stat-card__icon--purple">
+              <span className="material-symbols-outlined text-base">arrow_downward</span>
+            </div>
+            <div className="treasury-stat-card__content">
+              <p className="treasury-stat-card__label">TỔNG ĐÃ THU HỒI (BURNED)</p>
+              <p className="treasury-stat-card__value treasury-stat-card__value--purple">{stats.totalBurned.toLocaleString()} <span className="treasury-stat-card__unit">UGC</span></p>
+            </div>
+          </div>
+          <div className="treasury-stat-card__footer">
+            <span className="treasury-stat-card__trend"><span className="material-symbols-outlined text-[12px]">arrow_upward</span> +3.2%</span>
+            <span className="treasury-stat-card__trend-desc">So với 30 ngày trước</span>
+          </div>
+          <div className="treasury-stat-card__bg">
+            <svg viewBox="0 0 100 30" preserveAspectRatio="none"><path d="M0,28 Q10,25 20,26 T40,20 T60,25 T80,10 T100,12" fill="none" stroke="#a855f7" strokeWidth="2" /></svg>
+          </div>
+        </div>
+
+        <div className="treasury-stat-card">
+          <div className="treasury-stat-card__main">
+            <div className="treasury-stat-card__icon treasury-stat-card__icon--orange">
+              <span className="material-symbols-outlined text-base">pie_chart</span>
+            </div>
+            <div className="treasury-stat-card__content">
+              <p className="treasury-stat-card__label">TỔNG ĐỀ XUẤT</p>
+              <p className="treasury-stat-card__value treasury-stat-card__value--slate">{proposals.length}</p>
+            </div>
+          </div>
+          <div className="treasury-stat-proposals">
+            <div className="treasury-stat-proposals__row">
+              <span>Đang chờ duyệt</span>
+              <span className="treasury-stat-proposals__count--orange">{pendingProposals.length}</span>
+            </div>
+            <div className="treasury-stat-proposals__row">
+              <span>Đã thực thi</span>
+              <span className="treasury-stat-proposals__count--emerald">{executedProposals.length}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Layout */}
+      <div className="treasury-layout">
+        
+        {/* Top Row: Chart & Admin List */}
+        <div className="treasury-row">
+          
+          {/* Chart (8 columns) */}
+          <div className="treasury-chart-section">
+            <div className="treasury-section-header">
+              <h2 className="treasury-section-title">DÒNG TIỀN UGC (30 ngày gần nhất)</h2>
+              <button className="treasury-filter-btn">
+                30 ngày <span className="material-symbols-outlined text-[14px]">expand_more</span>
+              </button>
+            </div>
+            <div className="treasury-chart-legend">
+              <div className="treasury-chart-legend__item"><span className="treasury-chart-legend__dot treasury-chart-legend__dot--minted"></span> Minted</div>
+              <div className="treasury-chart-legend__item"><span className="treasury-chart-legend__dot treasury-chart-legend__dot--burned"></span> Burned</div>
+            </div>
+            <div className="treasury-chart-container">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={cashflowData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorMinted" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorBurned" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#94a3b8' }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#94a3b8' }} />
+                  <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} labelStyle={{ fontSize: '12px', color: '#64748b' }}/>
+                  <Area type="monotone" dataKey="minted" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorMinted)" />
+                  <Area type="monotone" dataKey="burned" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#colorBurned)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Admin List (4 columns) */}
+          <div className="treasury-admin-section">
+            <h2 className="treasury-section-title mb-6">HỘI ĐỒNG QUẢN TRỊ ({threshold}/3)</h2>
+            <div className="treasury-admin-list">
+              {admins.map(admin => (
+                <div key={admin.id} className="treasury-admin-item">
+                  <div className="treasury-admin-item__info">
+                    <div className="treasury-admin-item__avatar">
+                      {admin.avatar}
+                    </div>
+                    <div>
+                      <p className="treasury-admin-item__name">{admin.name}</p>
+                      <p className="treasury-admin-item__address">{admin.address.slice(0,6)}...{admin.address.slice(-4)}</p>
+                    </div>
+                  </div>
+                  {hasPending ? (
+                    <span className={`treasury-admin-item__status ${admin.signed ? 'treasury-admin-item__status--signed' : 'treasury-admin-item__status--unsigned'}`}>
+                      {admin.signed ? 'Đã ký' : 'Chưa ký'}
+                    </span>
+                  ) : (
+                    <span className="treasury-admin-item__status treasury-admin-item__status--ready">
+                      Sẵn sàng
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button className="treasury-admin-btn">
+              Xem và quản lý thành viên <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom Row: Form & Proposals */}
+        <div className="treasury-row">
+          
+          {/* Create Proposal Form (4 columns) */}
+          <div className="treasury-form-section">
+            
+            <div className="treasury-form-header">
+              <div className="treasury-form-header__info">
+                <div className="treasury-form-header__icon">
+                  <span className="material-symbols-outlined text-[20px]">note_add</span>
+                </div>
+                <div>
+                  <h2 className="treasury-section-title">TẠO ĐỀ XUẤT</h2>
+                  <p className="treasury-form-header__desc">Chỉ Admin mới có quyền đề xuất.</p>
+                </div>
+              </div>
+              <div className="treasury-form-badge">
+                UGC
+              </div>
+            </div>
+
+            <form onSubmit={submitProposal} className="treasury-form">
+              <div className="treasury-form-group">
+                <label className="treasury-form-label">LOẠI GIAO DỊCH</label>
+                <div className="treasury-form-type-grid">
+                  <button type="button" onClick={() => setForm({ ...form, transaction_type: '0' })}
+                    className={`treasury-type-btn ${form.transaction_type === '0' ? 'treasury-type-btn--mint-active' : ''}`}>
+                    <span className="treasury-type-dot"></span>
+                    Cấp phát (MINT)
+                  </button>
+                  <button type="button" onClick={() => setForm({ ...form, transaction_type: '1' })}
+                    className={`treasury-type-btn ${form.transaction_type === '1' ? 'treasury-type-btn--burn-active' : ''}`}>
+                    <span className="treasury-type-dot"></span>
+                    Thu hồi (BURN)
+                  </button>
+                </div>
+              </div>
+
+              <div className="treasury-form-group">
+                <label className="treasury-form-label">VÍ NHẬN / BỊ THU HỒI</label>
+                <div className="treasury-input-wrapper">
+                  <input
+                    className={`treasury-input treasury-input--mono ${!addrTouched || form.target_address === '' ? '' : isAddrValid ? 'treasury-input--valid' : 'treasury-input--invalid'}`}
+                    placeholder="0x..."
+                    value={form.target_address}
+                    onChange={e => { setAddrTouched(true); setForm({ ...form, target_address: e.target.value }) }}
+                  />
+                  <span className="material-symbols-outlined treasury-input-icon">contact_mail</span>
+                </div>
+              </div>
+
+              <div className="treasury-form-group">
+                <label className="treasury-form-label">SỐ LƯỢNG UGC</label>
+                <div className="treasury-input-wrapper">
+                  <input type="number" className="treasury-input treasury-input--bold"
+                    placeholder="Nhập số lượng" required value={form.amount}
+                    onChange={e => setForm({ ...form, amount: e.target.value })} />
+                  <span className="treasury-input-suffix">UGC</span>
+                </div>
+              </div>
+
+              <div className="treasury-textarea-wrapper">
+                <label className="treasury-form-label">LÝ DO</label>
+                <div className="treasury-textarea-container">
+                  <textarea className="treasury-textarea"
+                    placeholder="Mô tả lý do..." required value={form.reason} maxLength={200}
+                    onChange={e => setForm({ ...form, reason: e.target.value })}></textarea>
+                  <span className="treasury-textarea-counter">
+                    {form.reason.length} / 200
+                  </span>
+                </div>
+              </div>
+
+              <button type="submit" disabled={busy === 'submit' || !wallet || !isFormValid}
+                className="treasury-submit-btn">
+                {busy === 'submit' ? <span className="animate-spin material-symbols-outlined">progress_activity</span> : <span className="material-symbols-outlined">send</span>}
+                Gửi Đề Xuất
+              </button>
+            </form>
+          </div>
+
+          {/* Right Column (Proposals 8 columns) */}
+          <div className="treasury-proposals-section">
+            <div className="treasury-section-header mb-6">
+              <div className="treasury-section-title-wrapper">
+                <span className="material-symbols-outlined text-[16px] text-emerald-600">list_alt</span>
+                <h2 className="treasury-section-title">DANH SÁCH ĐỀ XUẤT</h2>
+              </div>
+              <div className="treasury-proposals-actions">
+                <button onClick={() => loadData(wallet)} className="treasury-refresh-btn">
+                  <span className={`material-symbols-outlined ${loadingData ? 'animate-spin' : ''}`}>refresh</span>
+                </button>
+                <div className="treasury-filter-btn">
+                  Tất cả loại <span className="material-symbols-outlined text-[14px]">expand_more</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="treasury-tabs">
+              <button 
+                className={`treasury-tab ${activeTab === 'pending' ? 'treasury-tab--active' : ''}`}
+                onClick={() => setActiveTab('pending')}
+              >
+                Đang chờ duyệt ({pendingProposals.length})
+                {activeTab === 'pending' && <span className="treasury-tab__indicator"></span>}
+              </button>
+              <button 
+                className={`treasury-tab ${activeTab === 'executed' ? 'treasury-tab--active-dark' : ''}`}
+                onClick={() => setActiveTab('executed')}
+              >
+                Lịch sử đã thực thi ({executedProposals.length})
+                {activeTab === 'executed' && <span className="treasury-tab__indicator treasury-tab__indicator--dark"></span>}
+              </button>
+            </div>
+
+            <div className="treasury-table-container">
+              {loadingData ? (
+                <div className="treasury-empty-state">
+                  <span className="material-symbols-outlined animate-spin treasury-empty-icon">progress_activity</span>
+                </div>
+              ) : displayedProposals.length === 0 ? (
+                <div className="treasury-empty-state">
+                  <span className="material-symbols-outlined treasury-empty-icon">inventory_2</span>
+                  <p className="treasury-empty-text">Chưa có đề xuất nào</p>
+                </div>
+              ) : (
+                <div className="treasury-table-wrapper">
+                  <table className="treasury-table">
+                    <thead>
+                      <tr>
+                        <th>ĐỀ XUẤT</th>
+                        <th>LOẠI</th>
+                        <th>SỐ LƯỢNG</th>
+                        <th>NGƯỜI TẠO</th>
+                        <th>TRẠNG THÁI</th>
+                        <th>CHỮ KÝ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayedProposals.map(p => (
+                        <tr key={p.id}>
+                          <td>
+                            <div className="treasury-proposal-info">
+                              <span className="treasury-proposal-id">#{p.onchain_id}</span>
+                              <div>
+                                <p className="treasury-proposal-reason">{p.reason}</p>
+                                <p className="treasury-proposal-target">
+                                  {p.target_address.slice(0,6)}...{p.target_address.slice(-4)}
+                                  <span className="mx-1.5">•</span>
+                                  {getRelativeTime(p.created_at)}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <span className={`treasury-tx-type ${p.transaction_type === 'MINT' ? 'treasury-tx-type--mint' : 'treasury-tx-type--burn'}`}>
+                              {p.transaction_type}
+                            </span>
+                          </td>
+                          <td>
+                            <p className="treasury-amount-val">{p.amount.toLocaleString()} <span className="treasury-amount-unit">UGC</span></p>
+                            <p className="treasury-amount-usd">≈ ${(p.amount).toLocaleString()}</p>
+                          </td>
+                          <td>
+                            <p className="treasury-creator-name">{p.creatorName}</p>
+                            <p className="treasury-creator-address">
+                              {p.creatorAddress && p.creatorAddress !== '0x' 
+                                ? `${p.creatorAddress.slice(0,6)}...${p.creatorAddress.slice(-4)}` 
+                                : '0x...'}
+                            </p>
+                          </td>
+                          <td>
+                            {p.executed ? (
+                              <div className="treasury-status-done">
+                                <span className="material-symbols-outlined">verified</span>
+                                <p className="treasury-status-done-text">Hoàn thành</p>
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="treasury-status-pending">Đang chờ</span>
+                                <p className="treasury-status-sigs">{p.signatureCount}/{threshold} chữ ký</p>
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            <div className="treasury-signatures">
+                              {(p.adminSignatures || []).map((sig) => (
+                                <div 
+                                  key={sig.id} 
+                                  className={`treasury-sig-avatar ${sig.hasSigned ? 'treasury-sig-avatar--signed' : 'treasury-sig-avatar--pending'}`}
+                                  title={sig.name}
+                                >
+                                  U{sig.avatarIndex}
+                                </div>
+                              ))}
+                              {p.signatureCount < threshold && !p.executed && !p.currentAdminSigned && (
+                                <button onClick={() => handleConfirm(p.onchain_id)} className="treasury-sig-btn treasury-sig-btn--sign" title="Ký duyệt">
+                                  +
+                                </button>
+                              )}
+                              {p.signatureCount >= threshold && !p.executed && (
+                                <button onClick={() => handleExecute(p.onchain_id)} className="treasury-sig-btn treasury-sig-btn--execute" title="Thực thi">
+                                  <span className="material-symbols-outlined">play_arrow</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          {activeTab === 'pending' && pendingProposals.length > 0 && (
+            <button className="treasury-view-all-btn">
+              Xem tất cả đề xuất chờ duyệt <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </button>
+          )}
+        </div>
+      </div>
+      </div>
+
       {/* Modal Chọn ví */}
       {showKeyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black text-on-surface">Kết nối ví quản trị</h3>
-              <button onClick={() => setShowKeyModal(false)} className="text-on-surface-variant hover:text-on-surface">
+        <div className="treasury-modal-overlay">
+          <div className="treasury-modal">
+            <div className="treasury-modal-header">
+              <h3 className="treasury-modal-title">Kết nối ví quản trị</h3>
+              <button onClick={() => setShowKeyModal(false)} className="treasury-modal-close">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
             
-            <div className="space-y-4">
-              <button onClick={connectMetamask} className="w-full p-4 rounded-2xl border-2 border-orange-100 hover:border-orange-500 hover:bg-orange-50 transition-all flex items-center gap-4 text-left">
-                <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center">
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" className="w-8 h-8" alt="Metamask" />
+            <div className="treasury-modal-body">
+              <button onClick={connectMetamask} className="treasury-wallet-option">
+                <div className="treasury-wallet-option__icon">
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" alt="Metamask" />
                 </div>
                 <div>
-                  <p className="font-bold">MetaMask</p>
-                  <p className="text-xs text-on-surface-variant">Browser Extension</p>
+                  <p className="treasury-wallet-option__name">MetaMask</p>
+                  <p className="treasury-wallet-option__desc">Browser Extension</p>
                 </div>
               </button>
 
-              <div className="relative py-2 text-center">
-                <span className="bg-white px-4 text-[10px] font-black text-on-surface-variant uppercase relative z-10">Hoặc dùng ví nội bộ</span>
-                <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-outline-variant"></div>
+              <div className="treasury-modal-divider">
+                <span className="treasury-modal-divider__text">Hoặc dùng ví nội bộ</span>
+                <div className="treasury-modal-divider__line"></div>
               </div>
 
-              <div className="p-4 rounded-2xl border-2 border-purple-100 bg-purple-50/30">
-                <p className="text-[10px] font-black text-purple-600 uppercase mb-3 flex items-center gap-1">
+              <div className="treasury-internal-box">
+                <p className="treasury-internal-box__title">
                   <span className="material-symbols-outlined text-sm">lock</span> Nhập Private Key
                 </p>
                 <input 
                   type="password"
                   id="internal_key_field"
                   placeholder="0x..."
-                  className="w-full bg-white border border-purple-200 rounded-xl py-2.5 px-3 text-sm font-mono outline-none focus:ring-2 focus:ring-purple-400"
+                  className="treasury-internal-box__input"
                 />
                 <button 
                   onClick={() => connectInternalWallet(document.getElementById('internal_key_field').value)}
-                  className="w-full mt-3 py-3 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 shadow-md transition-all"
+                  className="treasury-internal-box__btn"
                 >
                   Kích hoạt bằng Private Key
                 </button>
-                <p className="text-[9px] text-purple-400 mt-2 text-center italic">Key chỉ được lưu tạm thời trong phiên làm việc này.</p>
+                <p className="treasury-internal-box__note">Key chỉ được lưu tạm thời trong phiên làm việc này.</p>
               </div>
             </div>
           </div>
         </div>
       )}
-
-      <main className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Form bên trái */}
-        <section className="lg:col-span-4 bg-white rounded-[2.5rem] p-8 shadow-sm border border-outline-variant">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-              <span className="material-symbols-outlined">add_task</span>
-            </div>
-            <div>
-              <h2 className="text-xl font-black">Tạo Yêu Cầu</h2>
-              <p className="text-xs text-on-surface-variant font-medium mt-1">Chỉ Admin mới có quyền đề xuất.</p>
-            </div>
-          </div>
-
-          <form onSubmit={submitProposal} className="space-y-6">
-            <div>
-              <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block mb-1">Loại giao dịch</label>
-              <div className="grid grid-cols-2 gap-2 p-1 bg-surface-container rounded-2xl border border-outline-variant/30">
-                <button type="button" onClick={() => setForm({ ...form, transaction_type: '0' })}
-                  className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${form.transaction_type === '0' ? 'bg-white shadow-sm text-emerald-600' : 'text-on-surface-variant'}`}>
-                  <span className={`w-2 h-2 rounded-full ${form.transaction_type === '0' ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
-                  Cấp phát (MINT)
-                </button>
-                <button type="button" onClick={() => setForm({ ...form, transaction_type: '1' })}
-                  className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${form.transaction_type === '1' ? 'bg-white shadow-sm text-red-600' : 'text-on-surface-variant'}`}>
-                  <span className={`w-2 h-2 rounded-full ${form.transaction_type === '1' ? 'bg-red-500' : 'bg-gray-300'}`}></span>
-                  Thu hồi (BURN)
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block mb-1">Ví nhận / bị thu hồi</label>
-              <input
-                className={`w-full bg-surface-container-high rounded-xl py-3 px-4 text-sm font-mono text-on-surface outline-none transition-all
-                  ${!addrTouched || form.target_address === '' ? 'focus:ring-2 focus:ring-primary/40 border border-transparent'
-                    : isAddrValid ? 'border border-emerald-500 ring-2 ring-emerald-200' : 'border border-red-500 ring-2 ring-red-200'}`}
-                placeholder="0x..."
-                value={form.target_address}
-                onChange={e => { setAddrTouched(true); setForm({ ...form, target_address: e.target.value }) }}
-              />
-              {addrTouched && !isAddrValid && form.target_address !== '' && (
-                <p className="text-[10px] text-red-500 font-bold mt-1">❌ Địa chỉ ví không hợp lệ</p>
-              )}
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block mb-1">Số lượng UGC</label>
-              <input type="number" className="w-full bg-surface-container-high rounded-xl py-3 px-4 text-sm font-bold text-on-surface outline-none focus:ring-2 focus:ring-primary/40"
-                placeholder="VD: 1000" required value={form.amount}
-                onChange={e => setForm({ ...form, amount: e.target.value })} />
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block mb-1">Lý do</label>
-              <textarea rows="3" className="w-full bg-surface-container-high rounded-xl py-3 px-4 text-sm font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/40 resize-none"
-                placeholder="Mô tả lý do..." required value={form.reason}
-                onChange={e => setForm({ ...form, reason: e.target.value })}></textarea>
-            </div>
-
-            <button type="submit" disabled={busy === 'submit' || !wallet || !isFormValid}
-              className="w-full py-4 rounded-2xl bg-primary text-white font-black text-sm hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 shadow-lg shadow-primary/20 flex items-center justify-center gap-2">
-              {busy === 'submit' ? <span className="animate-spin material-symbols-outlined">progress_activity</span> : <span className="material-symbols-outlined">send</span>}
-              Gửi Đề Xuất
-            </button>
-          </form>
-        </section>
-
-        {/* Danh sách bên phải */}
-        <section className="lg:col-span-8">
-          <div className="flex items-center justify-between mb-6 px-4">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">view_list</span>
-              <h2 className="text-xl font-black uppercase tracking-tight text-on-surface">Danh sách Đề xuất</h2>
-            </div>
-            <button onClick={() => loadData(wallet)} className="p-2 rounded-full hover:bg-surface-container-high text-on-surface-variant transition-colors">
-              <span className={`material-symbols-outlined ${loadingData ? 'animate-spin' : ''}`}>refresh</span>
-            </button>
-          </div>
-
-          {loadingData ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[1, 2, 3, 4].map(i => <div key={i} className="h-48 bg-white rounded-[2rem] animate-pulse border border-outline-variant"></div>)}
-            </div>
-          ) : proposals.length === 0 ? (
-            <div className="bg-white rounded-[2.5rem] p-20 text-center border border-outline-variant border-dashed">
-              <span className="material-symbols-outlined text-5xl text-outline-variant mb-4">inventory_2</span>
-              <h3 className="text-xl font-black">Chưa có đề xuất nào</h3>
-              <p className="text-sm text-on-surface-variant">Mọi đề xuất on-chain sẽ hiển thị tại đây.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {proposals.map(p => (
-                <div key={p.id} className={`bg-white rounded-3xl p-6 border transition-all ${p.executed ? 'border-emerald-100 bg-emerald-50/10' : 'border-outline-variant hover:border-primary'}`}>
-                  <div className="flex justify-between items-start mb-4">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest ${p.transaction_type === 'MINT' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                      {p.transaction_type}
-                    </span>
-                    {p.executed ? <span className="text-emerald-600 text-[10px] font-black uppercase flex items-center gap-1"><span className="material-symbols-outlined text-sm">verified</span> Hoàn thành</span>
-                      : <span className="text-orange-500 text-[10px] font-black uppercase flex items-center gap-1"><span className="material-symbols-outlined text-sm">pending</span> Chờ duyệt</span>}
-                  </div>
-                  
-                  <h3 className="text-2xl font-black mb-1">{p.amount.toLocaleString()} <span className="text-xs font-medium text-on-surface-variant uppercase">UGC</span></h3>
-                  <p className="text-xs text-on-surface-variant font-medium mb-5 line-clamp-2">{p.reason}</p>
-
-                  <div className="space-y-4">
-                    <div className="flex justify-between text-[10px] font-bold text-on-surface-variant uppercase">
-                      <span>Xác thực</span>
-                      <span>{p.signatureCount} / {threshold} chữ ký</span>
-                    </div>
-                    <div className="h-1.5 bg-surface-container rounded-full overflow-hidden">
-                      <div className={`h-full transition-all duration-700 ${p.signatureCount >= threshold ? 'bg-emerald-500' : 'bg-primary'}`} style={{ width: `${(p.signatureCount/threshold)*100}%` }}></div>
-                    </div>
-
-                    {!p.executed && (
-                      <div className="flex gap-2 pt-2">
-                        {p.currentAdminSigned ? (
-                          <button disabled className="flex-1 py-2.5 bg-surface-container text-on-surface-variant rounded-xl text-xs font-bold opacity-60">Đã ký</button>
-                        ) : (
-                          <button onClick={() => handleConfirm(p.onchain_id)} disabled={busy} className="flex-1 py-2.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50">Ký duyệt</button>
-                        )}
-                        {p.signatureCount >= threshold && (
-                          <button onClick={() => handleExecute(p.onchain_id)} disabled={busy} className="flex-1 py-2.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl text-xs font-bold shadow-lg shadow-emerald-100 transition-all">Thực thi</button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </main>
-    </div>
+    </main>
   )
 }
